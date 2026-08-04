@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <RootNamespace>OptimizationXY.Charger</RootNamespace>
+    <AssemblyName>OptimizationXY.Charger</AssemblyName>
+    <VersionPrefix>5.0.0</VersionPrefix>
+    <AssemblyVersion>5.0.0.0</AssemblyVersion>
+    <FileVersion>5.0.0.0</FileVersion>
+    <InformationalVersion>5.0.0-production-hardened</InformationalVersion>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Deterministic>true</Deterministic>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+
+    <UseSapera Condition="'$(UseSapera)' == ''">true</UseSapera>
+    <RequireSapera Condition="'$(RequireSapera)' == ''">false</RequireSapera>
+    <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(SAPERA_SDK_DIR)</SaperaSdkDir>
+    <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(ProgramFiles)\Teledyne DALSA\Sapera\Components\NET\Bin</SaperaSdkDir>
+    <SaperaAssemblyPath Condition="'$(UseSapera)' == 'true'">$(SaperaSdkDir)\DALSA.SaperaLT.SapClassBasic.Core.dll</SaperaAssemblyPath>
+    <XyRestrictedLibDir>$(MSBuildThisFileDirectory)..\..\lib\XYRestricted</XyRestrictedLibDir>
+    <XyRestrictedAssemblyPath>$(XyRestrictedLibDir)\XYRestricted.dll</XyRestrictedAssemblyPath>
+    <AsCommAssemblyPath>$(XyRestrictedLibDir)\AutomatedSolutions.ASCommStd.dll</AsCommAssemblyPath>
+    <HasSaperaSdk Condition="'$(UseSapera)' == 'true' and Exists('$(SaperaAssemblyPath)')">true</HasSaperaSdk>
+    <HasSaperaSdk Condition="'$(HasSaperaSdk)' == ''">false</HasSaperaSdk>
+    <DefineConstants Condition="'$(HasSaperaSdk)' == 'true'">$(DefineConstants);SAPERA</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="NLog.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Emgu.CV" Version="4.13.0.5924" />
+    <PackageReference Include="Emgu.CV.Bitmap" Version="4.13.0.5924" />
+    <PackageReference Include="Emgu.CV.runtime.windows" Version="4.13.0.5924" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+    <PackageReference Include="NLog" Version="6.1.3" />
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+    <Reference Include="XYRestricted">
+      <HintPath>$(XyRestrictedAssemblyPath)</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="AutomatedSolutions.ASCommStd">
+      <HintPath>$(AsCommAssemblyPath)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(HasSaperaSdk)' == 'true'">
+    <Reference Include="DALSA.SaperaLT.SapClassBasic.Core">
+      <HintPath>$(SaperaAssemblyPath)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ValidateProductionDependencies" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(XyRestrictedAssemblyPath)')" Text="XYRestricted.dll was not found at $(XyRestrictedAssemblyPath)." />
+    <Error Condition="!Exists('$(AsCommAssemblyPath)')" Text="AutomatedSolutions.ASCommStd.dll was not found at $(AsCommAssemblyPath)." />
+  </Target>
+
+  <Target Name="ReportSaperaBuildMode" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(RequireSapera)' == 'true' and '$(HasSaperaSdk)' != 'true'" Text="A hardware build was requested, but the Sapera SDK assembly was not found. Set SAPERA_SDK_DIR or SaperaSdkDir, or explicitly build with UseSapera=false." />
+    <Message Condition="'$(HasSaperaSdk)' == 'true'" Importance="high" Text="Building with Sapera camera support from $(SaperaAssemblyPath)." />
+    <Message Condition="'$(UseSapera)' != 'true'" Importance="high" Text="Sapera support was explicitly disabled. Building with the non-hardware camera stub." />
+    <Warning Condition="'$(UseSapera)' == 'true' and '$(HasSaperaSdk)' != 'true'" Text="Sapera SDK was not found. Building with the non-hardware camera stub. Set SAPERA_SDK_DIR or SaperaSdkDir for production hardware builds." />
+  </Target>
+
+</Project>

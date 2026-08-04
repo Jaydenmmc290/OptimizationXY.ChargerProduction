@@ -1,0 +1,432 @@
+using System.Reflection;
+using System.Security.Cryptography;
+using Emgu.CV;
+using OptimizationXY.Charger.Models.Calibration;
+using OptimizationXY.Charger.Models.Settings;
+using OptimizationXY.Charger.Services.Preprocessing;
+
+namespace OptimizationXY.Charger.Services.Calibration;
+
+public static class ScannerCalibrationBuilder
+{
+    public static CalibrationReferenceCapture ExtractReference(
+        CalibrationCaptureBatch batch,
+        string referenceName,
+        double measuredDiameterMM,
+        int radiusBandId)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+
+        if (string.IsNullOrWhiteSpace(referenceName))
+        {
+            throw new ArgumentException(
+                "A reference name is required.",
+                nameof(referenceName));
+        }
+
+        if (!double.IsFinite(measuredDiameterMM) || measuredDiameterMM <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(measuredDiameterMM),
+                "The measured diameter must be a positive finite value.");
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radiusBandId);
+
+        if (batch.ConcatenatedFrames.Count < 3)
+        {
+            throw new InvalidOperationException(
+                "At least three concatenated frames are required for calibration extraction.");
+        }
+
+        int imageWidth = batch.ConcatenatedFrames[0].Width;
+        int imageHeight = batch.ConcatenatedFrames[0].Height;
+
+        if (imageWidth <= 0 || imageHeight <= 0 ||
+            batch.ConcatenatedFrames.Any(frame =>
+                frame.Width != imageWidth || frame.Height != imageHeight))
+        {
+            throw new InvalidOperationException(
+                "All calibration frames must have the same positive concatenated image dimensions.");
+        }
+
+        double knownRadiusMM = measuredDiameterMM / 2.0;
+        var profiles = new List<IReadOnlyDictionary<int, double>>();
+
+        foreach (Mat frame in batch.ConcatenatedFrames)
+        {
+            using Mat binary = ImagePreprocessingService.BuildBinary(frame);
+            var profile = LaserStripeDetector.Detect(binary)
+                .ToDictionary(point => point.X, point => point.LaserCenterY);
+
+            if (profile.Count >= 30)
+            {
+                profiles.Add(profile);
+            }
+        }
+
+        if (profiles.Count < 3)
+        {
+            throw new InvalidOperationException(
+                "Laser detection succeeded on fewer than three calibration frames. Check laser brightness, exposure, focus, and obstruction.");
+        }
+
+        int trainingCount = Math.Max(2, (int)Math.Ceiling(profiles.Count * 0.75));
+        trainingCount = Math.Min(trainingCount, profiles.Count - 1);
+
+        List<IReadOnlyDictionary<int, double>> trainingProfiles = [.. profiles.Take(trainingCount)];
+
+        IReadOnlyList<IReadOnlyDictionary<int, double>> heldOutProfiles =
+            [.. profiles.Skip(trainingCount)];
+
+        int minimumSamplesPerColumn = Math.Max(
+            2,
+            (int)Math.Ceiling(trainingProfiles.Count * 0.5));
+
+        var allColumns = trainingProfiles
+            .SelectMany(profile => profile.Keys)
+            .Distinct()
+            .OrderBy(x => x);
+
+        var points = new List<LookupPoint>();
+        var acceptedLaserYValues = new List<double>();
+
+        foreach (int x in allColumns)
+        {
+            double[] values = [.. trainingProfiles
+                .Where(profile => profile.ContainsKey(x))
+                .Select(profile => profile[x])];
+
+            if (values.Length < minimumSamplesPerColumn)
+            {
+                continue;
+            }
+
+            double[] filtered = RejectOutliers(values);
+            if (filtered.Length < minimumSamplesPerColumn)
+            {
+                continue;
+            }
+
+            double laserY = filtered.Average();
+            acceptedLaserYValues.Add(laserY);
+
+            points.Add(new LookupPoint
+            {
+                X = x,
+                LaserY = laserY,
+                RadiusMM = knownRadiusMM,
+                RadiusBandId = radiusBandId,
+                SourceName = referenceName.Trim()
+            });
+        }
+
+        if (points.Count < 30)
+        {
+            throw new InvalidOperationException(
+                $"Only {points.Count} stable laser columns were extracted. At least 30 are required.");
+        }
+
+        var heldOutSamples = heldOutProfiles
+            .SelectMany(profile => profile.Select(pair => new CalibrationLaserSample
+            {
+                X = pair.Key,
+                LaserY = pair.Value
+            }))
+            .Where(sample => double.IsFinite(sample.LaserY))
+            .ToList();
+
+        double meanLaserY = acceptedLaserYValues.Average();
+        double standardDeviation = StandardDeviation(acceptedLaserYValues);
+
+        return new CalibrationReferenceCapture
+        {
+            Summary = new CalibrationReferenceSummary
+            {
+                RadiusBandId = radiusBandId,
+                Name = referenceName.Trim(),
+                DiameterMM = measuredDiameterMM,
+                RadiusMM = knownRadiusMM,
+                ImageWidth = imageWidth,
+                ImageHeight = imageHeight,
+                CapturedFrameCount = profiles.Count,
+                AcceptedPointCount = points.Count,
+                MeanDetectedLaserY = meanLaserY,
+                LaserYStandardDeviation = standardDeviation,
+                CapturedUtc = batch.CapturedUtc
+            },
+            Points = points,
+            HeldOutSamples = heldOutSamples
+        };
+    }
+
+    public static ScannerLookupTable BuildTable(
+        AppSettings settings,
+        string operatorName,
+        double lengthPixelsPerMM,
+        IReadOnlyList<CalibrationReferenceCapture> references,
+        byte[] headCameraSnapshot,
+        byte[] tailCameraSnapshot,
+        bool independentValidationCompleted,
+        double? independentValidationMeanErrorMM,
+        double? independentValidationMaximumErrorMM,
+        string notes)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(references);
+
+        if (string.IsNullOrWhiteSpace(operatorName))
+        {
+            throw new ArgumentException(
+                "The calibration operator name is required.",
+                nameof(operatorName));
+        }
+
+        if (!double.IsFinite(lengthPixelsPerMM) || lengthPixelsPerMM <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(lengthPixelsPerMM),
+                "Length pixels per millimeter must be positive and finite.");
+        }
+
+        if (headCameraSnapshot is not { Length: > 0 } ||
+            tailCameraSnapshot is not { Length: > 0 })
+        {
+            throw new InvalidOperationException(
+                "The exact loaded head and tail camera-configuration snapshots are required to build a production calibration.");
+        }
+
+        if (references.Count < 2)
+        {
+            throw new InvalidOperationException(
+                "At least two different known diameters are required to create a radial lookup table.");
+        }
+
+        int[] widths = [.. references
+            .Select(reference => reference.Summary.ImageWidth)
+            .Distinct()];
+        int[] heights = [.. references
+            .Select(reference => reference.Summary.ImageHeight)
+            .Distinct()];
+
+        if (widths.Length != 1 || heights.Length != 1 ||
+            widths[0] <= 0 || heights[0] <= 0)
+        {
+            throw new InvalidOperationException(
+                "All known-reference captures must use identical positive concatenated image dimensions.");
+        }
+
+        double[] distinctRadii = [.. references
+            .Select(reference => reference.Summary.RadiusMM)
+            .DistinctBy(radius => Math.Round(radius, 4))];
+
+        if (distinctRadii.Length < 2)
+        {
+            throw new InvalidOperationException(
+                "The calibration references must contain at least two different known radii.");
+        }
+
+        string calibrationId =
+            $"CAL-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}"[..32];
+
+        var table = new ScannerLookupTable
+        {
+            CalibrationId = calibrationId,
+            CreatedUtc = DateTime.UtcNow,
+            OperatorName = operatorName.Trim(),
+            MachineName = Environment.MachineName,
+            SoftwareVersion = Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion ??
+                Assembly.GetExecutingAssembly().GetName().Version?.ToString() ??
+                "unknown",
+            HeadCameraServerName = settings.Acquisition.HeadCamera.ServerName,
+            TailCameraServerName = settings.Acquisition.TailCamera.ServerName,
+            HeadCameraConfigurationSha256 = ComputeSha256(headCameraSnapshot),
+            TailCameraConfigurationSha256 = ComputeSha256(tailCameraSnapshot),
+            AcquisitionGeometrySha256 =
+                ScannerCalibrationCompatibility.ComputeAcquisitionGeometrySha256(
+                    settings.Acquisition),
+            ImageWidth = widths[0],
+            ImageHeight = heights[0],
+            LengthPixelsPerMM = lengthPixelsPerMM,
+            MinimumCalibratedRadiusMM = distinctRadii.Min(),
+            MaximumCalibratedRadiusMM = distinctRadii.Max(),
+            References = [.. references.Select(reference => reference.Summary)],
+            Points = [.. references.SelectMany(reference => reference.Points)]
+        };
+
+        (double meanRepeatability, double maxRepeatability) =
+            EvaluateHeldOutRepeatability(table, references);
+
+        table.Quality = new CalibrationQualitySummary
+        {
+            ReferenceCount = references.Count,
+            LookupPointCount = table.Points.Count,
+            MinimumRadiusMM = table.MinimumCalibratedRadiusMM,
+            MaximumRadiusMM = table.MaximumCalibratedRadiusMM,
+            MeanRepeatabilityErrorMM = meanRepeatability,
+            MaximumRepeatabilityErrorMM = maxRepeatability,
+            IndependentValidationCompleted = independentValidationCompleted,
+            IndependentValidationMeanErrorMM = independentValidationMeanErrorMM,
+            IndependentValidationMaximumErrorMM = independentValidationMaximumErrorMM,
+            Status = independentValidationCompleted
+                ? "ValidatedPendingEngineeringApproval"
+                : "CommissioningOnly",
+            Notes = notes?.Trim() ?? string.Empty
+        };
+
+        if (!table.IsValid)
+        {
+            throw new InvalidDataException(
+                "The generated lookup table failed structural validation.");
+        }
+
+        return table;
+    }
+
+    public static LaserDetectionSummary AnalyzeLaser(
+        CalibrationCaptureBatch batch)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+
+        var columnCounts = new List<int>();
+        var yValues = new List<double>();
+        int validFrames = 0;
+        int width = 0;
+        int height = 0;
+
+        foreach (Mat frame in batch.ConcatenatedFrames)
+        {
+            width = frame.Width;
+            height = frame.Height;
+
+            try
+            {
+                using Mat binary = ImagePreprocessingService.BuildBinary(frame);
+                var profile = LaserStripeDetector.Detect(binary);
+                columnCounts.Add(profile.Count);
+                yValues.AddRange(profile.Select(point => point.LaserCenterY));
+                validFrames++;
+            }
+            catch (InvalidOperationException)
+            {
+                // Invalid frames are reported in the summary rather than
+                // terminating the entire hardware-verification capture.
+            }
+        }
+
+        if (validFrames == 0 || yValues.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No usable laser line was detected in the verification capture.");
+        }
+
+        return new LaserDetectionSummary
+        {
+            CapturedFrameCount = batch.ConcatenatedFrames.Count,
+            ValidLaserFrameCount = validFrames,
+            ImageWidth = width,
+            ImageHeight = height,
+            AverageDetectedColumns = columnCounts.Average(),
+            MinimumLaserY = yValues.Min(),
+            MaximumLaserY = yValues.Max(),
+            MeanLaserY = yValues.Average()
+        };
+    }
+
+    private static (double Mean, double Maximum) EvaluateHeldOutRepeatability(
+        ScannerLookupTable table,
+        IReadOnlyList<CalibrationReferenceCapture> references)
+    {
+        var errors = new List<double>();
+
+        foreach (CalibrationReferenceCapture reference in references)
+        {
+            if (reference.HeldOutSamples.Count == 0)
+            {
+                continue;
+            }
+
+            double expectedRadius = reference.Summary.RadiusMM;
+
+            foreach (CalibrationLaserSample sample in reference.HeldOutSamples)
+            {
+                double predicted = LookupTableInterpolator.GetRadiusMM(
+                    table,
+                    sample.X,
+                    sample.LaserY);
+
+                errors.Add(Math.Abs(predicted - expectedRadius));
+            }
+        }
+
+        return errors.Count == 0
+            ? (double.NaN, double.NaN)
+            : (errors.Average(), errors.Max());
+    }
+
+    private static double[] RejectOutliers(double[] values)
+    {
+        if (values.Length < 3)
+        {
+            return values;
+        }
+
+        double median = Median(values);
+        double[] deviations = [.. values
+            .Select(value => Math.Abs(value - median))];
+
+        double medianAbsoluteDeviation = Median(deviations);
+        double tolerance = Math.Max(1.5, 3.5 * 1.4826 * medianAbsoluteDeviation);
+
+        return [.. values
+            .Where(value => Math.Abs(value - median) <= tolerance)];
+    }
+
+    private static double Median(IEnumerable<double> values)
+    {
+        double[] sorted = [.. values.OrderBy(value => value)];
+        int middle = sorted.Length / 2;
+
+        return sorted.Length % 2 == 0
+            ? (sorted[middle - 1] + sorted[middle]) / 2.0
+            : sorted[middle];
+    }
+
+    private static double StandardDeviation(List<double> values)
+    {
+        if (values.Count < 2)
+        {
+            return 0.0;
+        }
+
+        double mean = values.Average();
+        double variance = values.Sum(value =>
+            (value - mean) * (value - mean)) / (values.Count - 1);
+
+        return Math.Sqrt(variance);
+    }
+
+    private static string ComputeSha256(byte[] data)
+    {
+        if (data.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return Convert.ToHexString(SHA256.HashData(data));
+    }
+}
+
+public sealed class LaserDetectionSummary
+{
+    public int CapturedFrameCount { get; set; }
+    public int ValidLaserFrameCount { get; set; }
+    public int ImageWidth { get; set; }
+    public int ImageHeight { get; set; }
+    public double AverageDetectedColumns { get; set; }
+    public double MinimumLaserY { get; set; }
+    public double MaximumLaserY { get; set; }
+    public double MeanLaserY { get; set; }
+}

@@ -1,0 +1,14 @@
+// ScanStart
+bool start = true/false;
+
+// ScanComplete
+bool complete = true/false;
+
+// Carriage retract
+float[] cr = new float[] { largestRadius + carriageRetractBuffer, 0, 0, 0, blockCount };
+
+// Roundup complete
+float[] rc = new float[] { smallestRadius, 0, 0, 0, blockCount };
+
+// Scanned Block Data
+float[] sbd = new float[] { Hx, Hy, Tx, Ty, smallDiameter, largeDiameter, largestRadius + carriageRetractBuffer, smallestRadius, 0, blockCount };

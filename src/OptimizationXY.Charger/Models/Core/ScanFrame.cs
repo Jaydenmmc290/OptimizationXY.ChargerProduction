@@ -1,0 +1,31 @@
+
+using Emgu.CV;
+using OptimizationXY.Charger.Models.Geometry;
+
+namespace OptimizationXY.Charger.Models.Core;
+
+public class ScanFrame
+{
+    public int FrameIndex { get; set; }
+
+    // Rotation angle of the log when this image was taken
+    public double AngleDeg { get; set; }
+
+    // Original file path when the frame came from disk.
+    public string ImagePath { get; set; } = "";
+
+    // Immutable copy written into the saved Scan_#### result folder.
+    public string SavedImagePath { get; set; } = "";
+
+    // Profile extracted from this one image
+    public List<LogProfileColumn> Profile { get; set; } = [];
+
+    // Diagnostics
+    public bool IsValid { get; set; } = true;
+    public string StatusMessage { get; set; } = "";
+
+    // Optional images for debugging
+    public Mat? GrayImage { get; set; }
+    public Mat? BinaryImage { get; set; }
+    public Mat? OverlayImage { get; set; }
+}
