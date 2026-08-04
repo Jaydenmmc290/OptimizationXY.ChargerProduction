@@ -36,16 +36,6 @@ public sealed class ProductionSetupWizardForm : Form
     private readonly NumericUpDown _tailDeviceIndex = new();
     private readonly TextBox _headExpectedSerial = new();
     private readonly TextBox _tailExpectedSerial = new();
-    private readonly TextBox _headPixelFormat = new();
-    private readonly TextBox _tailPixelFormat = new();
-    private readonly NumericUpDown _headExposure = new();
-    private readonly NumericUpDown _tailExposure = new();
-    private readonly NumericUpDown _headGain = new();
-    private readonly NumericUpDown _tailGain = new();
-    private readonly TextBox _headTriggerSource = new();
-    private readonly TextBox _tailTriggerSource = new();
-    private readonly TextBox _headTriggerActivation = new();
-    private readonly TextBox _tailTriggerActivation = new();
     private readonly ComboBox _headAcquisitionMode = new();
     private readonly ComboBox _tailAcquisitionMode = new();
     private readonly CheckBox _physicalPositionConfirmed = new();
@@ -247,36 +237,27 @@ public sealed class ProductionSetupWizardForm : Form
         page.Controls.Add(panel);
 
         panel.Controls.Add(NewWrappedLabel(
-            "Production cameras connect directly through Sapera by server name and device/resource index. The application then applies Mono8, exposure, gain, and trigger settings programmatically; no CCF file is loaded in the normal production mode. Confirm the physical head/tail assignment using the previews."));
+            "Connect each production camera directly through Sapera. The program does not load a CCF file " +
+            "and does not change exposure, gain, pixel format, frame rate, image geometry, camera user sets, " +
+            "or trigger activation. It writes and verifies only TriggerSource: Line1 for Encoder mode or " +
+            "FixedRate for FrameRate mode."));
 
         ConfigureNumeric(_headDeviceIndex, 0M, 32M, 0, 0M);
         ConfigureNumeric(_tailDeviceIndex, 0M, 32M, 0, 0M);
-        ConfigureNumeric(_headExposure, 1M, 10000000M, 1, 15017M);
-        ConfigureNumeric(_tailExposure, 1M, 10000000M, 1, 15017M);
-        ConfigureNumeric(_headGain, 0M, 1000M, 3, 1M);
-        ConfigureNumeric(_tailGain, 0M, 1000M, 3, 1M);
         ConfigureModeCombo(_headAcquisitionMode);
         ConfigureModeCombo(_tailAcquisitionMode);
 
-        panel.Controls.Add(NewLabeledControl("Head Sapera server", _headServer, 500));
-        panel.Controls.Add(NewLabeledControl("Head device index", _headDeviceIndex, 160));
-        panel.Controls.Add(NewLabeledControl("Head expected serial (blank to learn)", _headExpectedSerial, 360));
-        panel.Controls.Add(NewLabeledControl("Head acquisition mode", _headAcquisitionMode, 240));
-        panel.Controls.Add(NewLabeledControl("Head pixel format", _headPixelFormat, 240));
-        panel.Controls.Add(NewLabeledControl("Head exposure (microseconds)", _headExposure, 220));
-        panel.Controls.Add(NewLabeledControl("Head gain", _headGain, 220));
-        panel.Controls.Add(NewLabeledControl("Head trigger source", _headTriggerSource, 240));
-        panel.Controls.Add(NewLabeledControl("Head trigger activation", _headTriggerActivation, 240));
+        panel.Controls.Add(NewHeading("Head / Dog Camera"));
+        panel.Controls.Add(NewLabeledControl("Sapera server", _headServer, 500));
+        panel.Controls.Add(NewLabeledControl("Device index", _headDeviceIndex, 160));
+        panel.Controls.Add(NewLabeledControl("Expected serial (blank to learn)", _headExpectedSerial, 360));
+        panel.Controls.Add(NewLabeledControl("Acquisition mode", _headAcquisitionMode, 240));
 
-        panel.Controls.Add(NewLabeledControl("Tail Sapera server", _tailServer, 500));
-        panel.Controls.Add(NewLabeledControl("Tail device index", _tailDeviceIndex, 160));
-        panel.Controls.Add(NewLabeledControl("Tail expected serial (blank to learn)", _tailExpectedSerial, 360));
-        panel.Controls.Add(NewLabeledControl("Tail acquisition mode", _tailAcquisitionMode, 240));
-        panel.Controls.Add(NewLabeledControl("Tail pixel format", _tailPixelFormat, 240));
-        panel.Controls.Add(NewLabeledControl("Tail exposure (microseconds)", _tailExposure, 220));
-        panel.Controls.Add(NewLabeledControl("Tail gain", _tailGain, 220));
-        panel.Controls.Add(NewLabeledControl("Tail trigger source", _tailTriggerSource, 240));
-        panel.Controls.Add(NewLabeledControl("Tail trigger activation", _tailTriggerActivation, 240));
+        panel.Controls.Add(NewHeading("Tail Camera"));
+        panel.Controls.Add(NewLabeledControl("Sapera server", _tailServer, 500));
+        panel.Controls.Add(NewLabeledControl("Device index", _tailDeviceIndex, 160));
+        panel.Controls.Add(NewLabeledControl("Expected serial (blank to learn)", _tailExpectedSerial, 360));
+        panel.Controls.Add(NewLabeledControl("Acquisition mode", _tailAcquisitionMode, 240));
 
         _physicalPositionConfirmed.Text =
             "I verified that the head preview shows the head/dog side and the tail preview shows the tail side.";
@@ -286,6 +267,7 @@ public sealed class ProductionSetupWizardForm : Form
             _settings.Setup.CameraPhysicalPositionsConfirmed =
                 _physicalPositionConfirmed.Checked;
             SaveSettings();
+            RefreshOverallStatus();
         };
         panel.Controls.Add(_physicalPositionConfirmed);
 
@@ -296,12 +278,12 @@ public sealed class ProductionSetupWizardForm : Form
             WrapContents = true
         };
 
-        var saveReconnect = new Button
+        var reconnect = new Button
         {
-            Text = "Save Camera Settings and Reconnect",
+            Text = "Reconnect Cameras",
             AutoSize = true
         };
-        saveReconnect.Click += async (_, _) => await SaveAndReconnectCamerasAsync();
+        reconnect.Click += async (_, _) => await SaveAndReconnectCamerasAsync();
 
         var showHead = new Button
         {
@@ -319,20 +301,22 @@ public sealed class ProductionSetupWizardForm : Form
 
         var verifyLaser = new Button
         {
-            Text = "Capture Verification Frames and Detect Laser",
+            Text = "Verify Laser",
             AutoSize = true
         };
         verifyLaser.Click += async (_, _) => await VerifyLaserAsync();
 
-        buttons.Controls.Add(saveReconnect);
+        buttons.Controls.Add(reconnect);
         buttons.Controls.Add(showHead);
         buttons.Controls.Add(showTail);
         buttons.Controls.Add(verifyLaser);
         panel.Controls.Add(buttons);
 
+        panel.Controls.Add(NewHeading("Status"));
         _cameraStatus.AutoSize = true;
         _cameraStatus.MaximumSize = new Size(980, 0);
         panel.Controls.Add(_cameraStatus);
+
         _laserStatus.AutoSize = true;
         _laserStatus.MaximumSize = new Size(980, 0);
         panel.Controls.Add(_laserStatus);
@@ -546,16 +530,6 @@ public sealed class ProductionSetupWizardForm : Form
         _tailExpectedSerial.Text = tailCamera.ExpectedSerialNumber;
         _headAcquisitionMode.SelectedItem = headCamera.Mode;
         _tailAcquisitionMode.SelectedItem = tailCamera.Mode;
-        _headPixelFormat.Text = headCamera.PixelFormat;
-        _tailPixelFormat.Text = tailCamera.PixelFormat;
-        _headExposure.Value = ClampDecimal(headCamera.ExposureTimeMicroseconds, _headExposure.Minimum, _headExposure.Maximum);
-        _tailExposure.Value = ClampDecimal(tailCamera.ExposureTimeMicroseconds, _tailExposure.Minimum, _tailExposure.Maximum);
-        _headGain.Value = ClampDecimal(headCamera.Gain, _headGain.Minimum, _headGain.Maximum);
-        _tailGain.Value = ClampDecimal(tailCamera.Gain, _tailGain.Minimum, _tailGain.Maximum);
-        _headTriggerSource.Text = headCamera.TriggerSource;
-        _tailTriggerSource.Text = tailCamera.TriggerSource;
-        _headTriggerActivation.Text = headCamera.TriggerActivation;
-        _tailTriggerActivation.Text = tailCamera.TriggerActivation;
         _physicalPositionConfirmed.Checked =
             _settings.Setup.CameraPhysicalPositionsConfirmed;
 
@@ -601,6 +575,7 @@ public sealed class ProductionSetupWizardForm : Form
 
         RefreshCameraStatus();
         RefreshReferenceGrid();
+
     }
 
     private async Task TestDatabaseAsync()
@@ -663,62 +638,92 @@ public sealed class ProductionSetupWizardForm : Form
 
     private async Task SaveAndReconnectCamerasAsync()
     {
-        await RunBusyAsync("Saving camera settings and reconnecting...", async () =>
-        {
-            // Any camera identity or feature change can change the pixel coordinate
-            // system, so all dependent calibration approvals are invalidated.
-            InvalidateCalibrationDependentSetup();
-
-            CameraDeviceSettings head = _settings.Acquisition.HeadCamera;
-            CameraDeviceSettings tail = _settings.Acquisition.TailCamera;
-            head.InitializationMode = CameraInitializationMode.Programmatic;
-            tail.InitializationMode = CameraInitializationMode.Programmatic;
-            head.ServerName = _headServer.Text.Trim();
-            tail.ServerName = _tailServer.Text.Trim();
-            head.DeviceIndex = decimal.ToInt32(_headDeviceIndex.Value);
-            tail.DeviceIndex = decimal.ToInt32(_tailDeviceIndex.Value);
-            head.ExpectedSerialNumber = _headExpectedSerial.Text.Trim();
-            tail.ExpectedSerialNumber = _tailExpectedSerial.Text.Trim();
-            head.Mode = _headAcquisitionMode.SelectedItem is AcquisitionMode headMode
-                ? headMode
-                : AcquisitionMode.Encoder;
-            tail.Mode = _tailAcquisitionMode.SelectedItem is AcquisitionMode tailMode
-                ? tailMode
-                : AcquisitionMode.Encoder;
-            head.PixelFormat = _headPixelFormat.Text.Trim();
-            tail.PixelFormat = _tailPixelFormat.Text.Trim();
-            head.ExposureTimeMicroseconds = decimal.ToDouble(_headExposure.Value);
-            tail.ExposureTimeMicroseconds = decimal.ToDouble(_tailExposure.Value);
-            head.Gain = decimal.ToDouble(_headGain.Value);
-            tail.Gain = decimal.ToDouble(_tailGain.Value);
-            head.TriggerSource = _headTriggerSource.Text.Trim();
-            tail.TriggerSource = _tailTriggerSource.Text.Trim();
-            head.TriggerActivation = _headTriggerActivation.Text.Trim();
-            tail.TriggerActivation = _tailTriggerActivation.Text.Trim();
-
-            SaveSettings();
-            CameraHardwareStatus status = await _context.ReconnectCamerasAsync();
-
-            if (status.HeadConnected && !string.IsNullOrWhiteSpace(status.HeadSerialNumber))
+        await RunBusyAsync(
+            "Saving camera connection and applying TriggerSource only...",
+            async () =>
             {
-                head.ExpectedSerialNumber = status.HeadSerialNumber;
-                _headExpectedSerial.Text = status.HeadSerialNumber;
-            }
-            if (status.TailConnected && !string.IsNullOrWhiteSpace(status.TailSerialNumber))
-            {
-                tail.ExpectedSerialNumber = status.TailSerialNumber;
-                _tailExpectedSerial.Text = status.TailSerialNumber;
-            }
+                CameraDeviceSettings head = _settings.Acquisition.HeadCamera;
+                CameraDeviceSettings tail = _settings.Acquisition.TailCamera;
 
-            _settings.Setup.CameraConfigurationVerified =
-                status.HeadConnected &&
-                status.TailConnected &&
-                status.HeadConfigurationLoaded &&
-                status.TailConfigurationLoaded;
-            SaveSettings();
-            RefreshCameraStatus(status);
-            RefreshOverallStatus();
-        });
+                string previousHeadServer = head.ServerName;
+                string previousTailServer = tail.ServerName;
+                int previousHeadIndex = head.DeviceIndex;
+                int previousTailIndex = tail.DeviceIndex;
+                string previousHeadSerial = head.ExpectedSerialNumber;
+                string previousTailSerial = tail.ExpectedSerialNumber;
+
+                string headServer = _headServer.Text.Trim();
+                string tailServer = _tailServer.Text.Trim();
+                if (string.IsNullOrWhiteSpace(headServer) ||
+                    string.IsNullOrWhiteSpace(tailServer))
+                {
+                    throw new InvalidOperationException(
+                        "Enter a Sapera server name for both the head and tail cameras.");
+                }
+
+                head.InitializationMode = CameraInitializationMode.Programmatic;
+                tail.InitializationMode = CameraInitializationMode.Programmatic;
+                head.ServerName = headServer;
+                tail.ServerName = tailServer;
+                head.DeviceIndex = decimal.ToInt32(_headDeviceIndex.Value);
+                tail.DeviceIndex = decimal.ToInt32(_tailDeviceIndex.Value);
+                head.ExpectedSerialNumber = _headExpectedSerial.Text.Trim();
+                tail.ExpectedSerialNumber = _tailExpectedSerial.Text.Trim();
+                head.Mode = _headAcquisitionMode.SelectedItem is AcquisitionMode headMode
+                    ? headMode
+                    : AcquisitionMode.Encoder;
+                tail.Mode = _tailAcquisitionMode.SelectedItem is AcquisitionMode tailMode
+                    ? tailMode
+                    : AcquisitionMode.Encoder;
+                head.TriggerSource = head.Mode == AcquisitionMode.Encoder
+                    ? "Line1"
+                    : "FixedRate";
+                tail.TriggerSource = tail.Mode == AcquisitionMode.Encoder
+                    ? "Line1"
+                    : "FixedRate";
+
+                bool connectionIdentityChanged =
+                    !string.Equals(previousHeadServer, head.ServerName, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(previousTailServer, tail.ServerName, StringComparison.OrdinalIgnoreCase) ||
+                    previousHeadIndex != head.DeviceIndex ||
+                    previousTailIndex != tail.DeviceIndex ||
+                    !string.Equals(previousHeadSerial, head.ExpectedSerialNumber, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(previousTailSerial, tail.ExpectedSerialNumber, StringComparison.OrdinalIgnoreCase);
+
+                if (connectionIdentityChanged)
+                    InvalidateCalibrationDependentSetup();
+
+                SaveSettings();
+                CameraHardwareStatus status = await _context.ReconnectCamerasAsync();
+
+                if (status.HeadConnected &&
+                    !string.IsNullOrWhiteSpace(status.HeadSerialNumber))
+                {
+                    head.ExpectedSerialNumber = status.HeadSerialNumber;
+                    _headExpectedSerial.Text = status.HeadSerialNumber;
+                }
+
+                if (status.TailConnected &&
+                    !string.IsNullOrWhiteSpace(status.TailSerialNumber))
+                {
+                    tail.ExpectedSerialNumber = status.TailSerialNumber;
+                    _tailExpectedSerial.Text = status.TailSerialNumber;
+                }
+
+                _settings.Setup.CameraConfigurationVerified =
+                    status.HeadConnected &&
+                    status.TailConnected &&
+                    status.HeadConfigurationLoaded &&
+                    status.TailConfigurationLoaded;
+
+                SaveSettings();
+                RefreshCameraStatus(status);
+                RefreshOverallStatus();
+
+                Append(
+                    $"Camera reconnect complete. Head TriggerSource={head.TriggerSource}; " +
+                    $"Tail TriggerSource={tail.TriggerSource}. No other camera features were written.");
+            });
     }
 
     private async Task VerifyLaserAsync()
@@ -1310,13 +1315,16 @@ public sealed class ProductionSetupWizardForm : Form
     {
         status ??= _context.GetCameraStatus();
 
+        CameraDeviceSettings head = _settings.Acquisition.HeadCamera;
+        CameraDeviceSettings tail = _settings.Acquisition.TailCamera;
+
         _cameraStatus.Text =
-            $"Head: {(status.HeadConnected ? "connected" : "not connected")} | " +
-            $"{status.HeadServerName} | serial {DisplaySerial(status.HeadSerialNumber)} | " +
-            $"{status.HeadConfigurationPath}\r\n" +
-            $"Tail: {(status.TailConnected ? "connected" : "not connected")} | " +
-            $"{status.TailServerName} | serial {DisplaySerial(status.TailSerialNumber)} | " +
-            $"{status.TailConfigurationPath}";
+            $"HEAD / DOG CAMERA: {(status.HeadConnected ? "CONNECTED" : "NOT CONNECTED")}\r\n" +
+            $"Server: {status.HeadServerName} | Serial: {DisplaySerial(status.HeadSerialNumber)}\r\n" +
+            $"Mode: {head.Mode} | TriggerSource: {head.TriggerSource}\r\n\r\n" +
+            $"TAIL CAMERA: {(status.TailConnected ? "CONNECTED" : "NOT CONNECTED")}\r\n" +
+            $"Server: {status.TailServerName} | Serial: {DisplaySerial(status.TailSerialNumber)}\r\n" +
+            $"Mode: {tail.Mode} | TriggerSource: {tail.TriggerSource}";
     }
 
     private void RefreshOverallStatus()

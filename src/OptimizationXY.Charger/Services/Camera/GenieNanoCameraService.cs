@@ -8,8 +8,8 @@ namespace OptimizationXY.Charger.Services.Camera;
 
 /// <summary>
 /// Production Genie Nano service. In programmatic mode it opens the Sapera
-/// acquisition device directly by server name/resource index and applies the
-/// required GenICam features before creating the transfer buffers.
+/// acquisition device directly by server name/resource index, verifies camera
+/// identity, and writes only the TriggerSource feature before creating buffers.
 /// </summary>
 public sealed class GenieNanoCameraService : IDisposable
 {
@@ -124,8 +124,16 @@ public sealed class GenieNanoCameraService : IDisposable
             };
             if (settings.InitializationMode == CameraInitializationMode.Programmatic)
             {
-                ApplyProgrammaticFeatures(_acqDevice, settings, appliedFeatures);
-                CaptureGeometryReadback(_acqDevice, appliedFeatures);
+                ApplyTriggerSourceOnly(
+                    _acqDevice,
+                    settings,
+                    appliedFeatures);
+
+                // This only reads camera information.
+                // It does not write or change the camera.
+                CaptureGeometryReadback(
+                    _acqDevice,
+                    appliedFeatures);
             }
 
             _buffer = new SapBufferWithTrash(
@@ -259,168 +267,74 @@ public sealed class GenieNanoCameraService : IDisposable
         }
     }
 
-    private void ApplyProgrammaticFeatures(
-        SapAcqDevice device,
-        CameraDeviceSettings settings,
-        IDictionary<string, object?> applied)
+    private void ApplyTriggerSourceOnly(
+    SapAcqDevice device,
+    CameraDeviceSettings settings,
+    IDictionary<string, object?> applied)
     {
-        SetFeature(device, ["PixelFormat"], settings.PixelFormat, required: true, settings, applied);
-        SetFeature(device, ["AcquisitionMode"], "Continuous", required: false, settings, applied);
-        SetFeature(device, ["ExposureMode"], "Timed", required: false, settings, applied);
-        SetFeature(
-            device,
-            ["ExposureAlignment", "exposureAlignment"],
-            "Synchronous",
-            required: false,
-            settings,
-            applied);
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(applied);
 
-        if (settings.DisableAutomaticExposure)
-        {
-            SetFeature(device, ["ExposureAuto"], "Off", required: false, settings, applied);
-            SetFeature(device, ["autoBrightnessMode"], "Off", required: false, settings, applied);
-        }
-        SetFeature(
-            device,
-            ["ExposureTime", "ExposureTimeAbs"],
-            settings.ExposureTimeMicroseconds,
-            required: true,
-            settings,
-            applied);
+        string requestedSource =
+            settings.Mode == AcquisitionMode.Encoder
+                ? "Line1"
+                : "FixedRate";
 
-        SetFeature(device, ["GainSelector"], "SensorAll", required: false, settings, applied);
-        if (settings.DisableAutomaticGain)
-            SetFeature(device, ["GainAuto"], "Off", required: false, settings, applied);
-        SetFeature(device, ["Gain", "GainRaw"], settings.Gain, required: true, settings, applied);
+        LogDiagnostics(
+            $"{settings.Position} camera: applying only " +
+            $"TriggerSource={requestedSource}.");
 
-        if (settings.Mode == AcquisitionMode.Encoder)
+        if (!device.IsFeatureAvailable("TriggerSource"))
         {
-            SetFeature(device, ["TriggerSelector"], "FrameStart", required: false, settings, applied);
-            SetFeature(device, ["TriggerMode"], "Off", required: true, settings, applied);
-            SetFeature(device, ["TriggerSource"], settings.TriggerSource, required: true, settings, applied);
-            SetFeature(device, ["TriggerActivation"], settings.TriggerActivation, required: false, settings, applied);
-            SetFeature(device, ["TriggerMode"], "On", required: true, settings, applied);
+            throw new InvalidOperationException(
+                $"{settings.Position} camera does not expose " +
+                "the TriggerSource feature.");
         }
-        else
+
+        if (!device.SetFeatureValue(
+                "TriggerSource",
+                requestedSource))
         {
-            SetFeature(device, ["TriggerMode"], "Off", required: true, settings, applied);
-            SetFeature(
-                device,
-                ["AcquisitionFrameRateControlMode", "acquisitionFrameRateControlMode"],
-                "Programmable",
-                required: false,
-                settings,
-                applied);
-            SetFeature(device, ["AcquisitionFrameRateEnable"], true, required: false, settings, applied);
-            SetFeature(
-                device,
-                ["AcquisitionFrameRate", "AcquisitionFrameRateAbs"],
-                settings.AcquisitionFrameRate,
-                required: true,
-                settings,
-                applied);
+            throw new InvalidOperationException(
+                $"{settings.Position} camera rejected " +
+                $"TriggerSource={requestedSource}.");
         }
+
+        if (!device.GetFeatureValue(
+                "TriggerSource",
+                out string actualSource))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera TriggerSource " +
+                "could not be read back.");
+        }
+
+        actualSource =
+            actualSource?.Trim() ?? string.Empty;
+
+        if (!string.Equals(
+                actualSource,
+                requestedSource,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} trigger verification failed. " +
+                $"Requested '{requestedSource}', but camera reports " +
+                $"'{actualSource}'.");
+        }
+
+        applied["TriggerSource"] = actualSource;
+        applied["CameraWritePolicy"] =
+            "TriggerSourceOnly";
+
+        LogDiagnostics(
+            $"{settings.Position} camera verified as " +
+            $"TriggerSource={actualSource}. No exposure, gain, " +
+            "pixel format, frame-rate, geometry, or user-set " +
+            "features were written.");
     }
 
-    private void SetFeature(
-        SapAcqDevice device,
-        IReadOnlyList<string> candidateNames,
-        object value,
-        bool required,
-        CameraDeviceSettings settings,
-        IDictionary<string, object?> applied)
-    {
-        bool foundAvailable = false;
-
-        foreach (string name in candidateNames)
-        {
-            if (!device.IsFeatureAvailable(name))
-                continue;
-
-            foundAvailable = true;
-            if (!TryWriteFeature(device, name, value))
-            {
-                LogDiagnostics($"Camera rejected {name} = {value}; trying the next compatible feature name.");
-                continue;
-            }
-
-            object actual = ReadFeatureValue(device, name, value) ?? value;
-            applied[name] = actual;
-            LogDiagnostics($"Applied camera feature {name} = {actual}.");
-            return;
-        }
-
-        string reason = foundAvailable
-            ? $"Camera rejected every compatible feature for {string.Join(" or ", candidateNames)}."
-            : $"Feature not available: {string.Join(" or ", candidateNames)}.";
-
-        if (required && settings.RequireConfiguredFeatures)
-            throw new InvalidOperationException(reason);
-
-        LogDiagnostics(reason + " Camera default retained.");
-        applied[candidateNames[0]] = foundAvailable ? "REJECTED" : "NOT_AVAILABLE";
-    }
-
-    private static bool TryWriteFeature(
-        SapAcqDevice device,
-        string name,
-        object value)
-    {
-        try
-        {
-            return value switch
-            {
-                string stringValue => device.SetFeatureValue(name, stringValue),
-                bool boolValue => device.SetFeatureValue(name, boolValue),
-                int intValue => device.SetFeatureValue(name, intValue),
-                float floatValue =>
-                    device.SetFeatureValue(name, floatValue) ||
-                    device.SetFeatureValue(name, (double)floatValue),
-                double doubleValue =>
-                    device.SetFeatureValue(name, doubleValue) ||
-                    device.SetFeatureValue(name, (float)doubleValue) ||
-                    device.SetFeatureValue(name, checked((int)Math.Round(doubleValue))),
-                _ => false
-            };
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    private static object? ReadFeatureValue(
-        SapAcqDevice device,
-        string name,
-        object requested)
-    {
-        try
-        {
-            if (requested is string && device.GetFeatureValue(name, out string stringValue))
-                return stringValue;
-            if (requested is bool && device.GetFeatureValue(name, out bool boolValue))
-                return boolValue;
-            if (requested is int && device.GetFeatureValue(name, out int intValue))
-                return intValue;
-            if (requested is float && device.GetFeatureValue(name, out float floatValue))
-                return floatValue;
-            if (requested is double)
-            {
-                if (device.GetFeatureValue(name, out double doubleValue))
-                    return doubleValue;
-                if (device.GetFeatureValue(name, out float exposureFloatValue))
-                    return exposureFloatValue;
-                if (device.GetFeatureValue(name, out int integerValue))
-                    return integerValue;
-            }
-        }
-        catch (Exception)
-        {
-            // Readback is included when supported; successful write remains authoritative.
-        }
-
-        return null;
-    }
 
     private static byte[] BuildProgrammaticSnapshot(
         CameraDeviceSettings settings,
@@ -428,22 +342,30 @@ public sealed class GenieNanoCameraService : IDisposable
     {
         var snapshot = new
         {
-            Schema = "OptimizationXY.CameraConfiguration.v1",
+            Schema = "OptimizationXY.CameraConnection.v2",
             settings.Position,
             settings.ServerName,
             settings.DeviceIndex,
-            ConnectedSerialNumber = appliedFeatures.GetValueOrDefault("Identity.DeviceSerialNumber"),
-            ConnectedModelName = appliedFeatures.GetValueOrDefault("Identity.DeviceModelName"),
+            ConnectedSerialNumber =
+                appliedFeatures.GetValueOrDefault("Identity.DeviceSerialNumber"),
+            ConnectedModelName =
+                appliedFeatures.GetValueOrDefault("Identity.DeviceModelName"),
             settings.InitializationMode,
             settings.BufferCount,
             settings.Mode,
-            settings.PixelFormat,
-            settings.AcquisitionFrameRate,
-            settings.ExposureTimeMicroseconds,
-            settings.Gain,
-            settings.TriggerSource,
-            settings.TriggerActivation,
-            AppliedFeatures = appliedFeatures
+            TriggerSource = appliedFeatures.GetValueOrDefault("TriggerSource"),
+            CameraWritePolicy =
+                appliedFeatures.GetValueOrDefault("CameraWritePolicy"),
+            ReadbackWidth =
+                appliedFeatures.GetValueOrDefault("Readback.Width"),
+            ReadbackHeight =
+                appliedFeatures.GetValueOrDefault("Readback.Height"),
+            ReadbackOffsetX =
+                appliedFeatures.GetValueOrDefault("Readback.OffsetX"),
+            ReadbackOffsetY =
+                appliedFeatures.GetValueOrDefault("Readback.OffsetY"),
+            ReadbackPixelFormat =
+                appliedFeatures.GetValueOrDefault("Readback.PixelFormat")
         };
 
         return JsonSerializer.SerializeToUtf8Bytes(
