@@ -36,7 +36,7 @@ public sealed class GenieNanoCameraService : IDisposable
     public event EventHandler<CameraFrameEventArgs>? FrameAcquired;
     public event EventHandler<string>? DiagnosticsMessage;
 
-    public void Connect(CameraDeviceSettings settings, Exception argumentOutOfRangeException)
+    public void Connect(CameraDeviceSettings settings, Exception argumentOutOfRangeException, Exception argumentOutOfRangeException1)
     {
         ArgumentNullException.ThrowIfNull(settings);
         Panel hiddenViewHost = new()
@@ -49,7 +49,7 @@ public sealed class GenieNanoCameraService : IDisposable
 
         try
         {
-            Connect(settings, hiddenViewHost, argumentOutOfRangeException);
+            Connect(settings, hiddenViewHost, argumentOutOfRangeException, argumentOutOfRangeException1);
             _ownsCameraViewHost = true;
         }
         catch
@@ -59,7 +59,7 @@ public sealed class GenieNanoCameraService : IDisposable
         }
     }
 
-    public void Connect(CameraDeviceSettings settings, Control panelCameraView, Exception argumentOutOfRangeException)
+    public void Connect(CameraDeviceSettings settings, Control panelCameraView, Exception argumentOutOfRangeException, Exception argumentOutOfRangeException1)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(panelCameraView);
@@ -122,15 +122,16 @@ public sealed class GenieNanoCameraService : IDisposable
                 ["Identity.DeviceSerialNumber"] = ConnectedSerialNumber,
                 ["Identity.DeviceModelName"] = ConnectedModelName
             };
-            if (settings.InitializationMode == CameraInitializationMode.Programmatic)
+
+
+            if (settings.InitializationMode ==
+        CameraInitializationMode.Programmatic)
             {
                 ApplyAcquisitionMode(
                     _acqDevice,
                     settings,
-                    appliedFeatures, argumentOutOfRangeException);
+                    appliedFeatures, argumentOutOfRangeException1);
 
-                // This only reads camera information.
-                // It does not write or change the camera.
                 CaptureGeometryReadback(
                     _acqDevice,
                     appliedFeatures);
@@ -175,7 +176,227 @@ public sealed class GenieNanoCameraService : IDisposable
             throw;
         }
     }
+    private void ApplyAcquisitionMode(
+        SapAcqDevice device,
+        CameraDeviceSettings settings,
+        IDictionary<string, object?> applied, Exception argumentOutOfRangeException)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(applied);
 
+        switch (settings.Mode)
+        {
+            case AcquisitionMode.FrameRate:
+                ConfigureFrameRateMode(
+                    device,
+                    settings,
+                    applied);
+                break;
+
+            case AcquisitionMode.Encoder:
+                ConfigureEncoderMode(
+                    device,
+                    settings,
+                    applied);
+                break;
+
+            default:
+                throw argumentOutOfRangeException;
+        }
+    }
+
+    private void ConfigureFrameRateMode(
+        SapAcqDevice device,
+        CameraDeviceSettings settings,
+        IDictionary<string, object?> applied)
+    {
+        LogDiagnostics(
+            $"{settings.Position} camera: switching to FrameRate mode.");
+
+        if (!device.IsFeatureAvailable("TriggerMode"))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera does not expose TriggerMode.");
+        }
+
+        // FrameRate/free-running mode only requires TriggerMode=Off.
+        // TriggerSource becomes unavailable while TriggerMode is Off,
+        // so do not attempt to write TriggerSource here.
+        if (!device.SetFeatureValue("TriggerMode", "Off"))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera rejected TriggerMode=Off.");
+        }
+
+        string actualMode =
+            ReadStringFeature(device, "TriggerMode").Trim();
+
+        if (!string.Equals(
+                actualMode,
+                "Off",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera could not verify TriggerMode=Off. " +
+                $"Actual value: '{DisplayFeatureValue(actualMode)}'.");
+        }
+
+        applied["TriggerMode"] = actualMode;
+        applied["TriggerSource"] = "NotEnabled";
+        applied["AcquisitionMode"] = "FrameRate";
+        applied["CameraWritePolicy"] = "TriggerModeOnly";
+
+        LogDiagnostics(
+            $"{settings.Position} camera configured for FrameRate mode: " +
+            $"TriggerMode={actualMode}.");
+    }
+
+    private void ConfigureEncoderMode(
+        SapAcqDevice device,
+        CameraDeviceSettings settings,
+        IDictionary<string, object?> applied)
+    {
+        LogDiagnostics(
+            $"{settings.Position} camera: switching to Encoder mode.");
+
+        if (!device.IsFeatureAvailable("TriggerMode"))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera does not expose TriggerMode.");
+        }
+
+        /*
+         * On this Nano-M1920, TriggerSource is unavailable while
+         * TriggerMode is Off. TriggerMode must be turned On first.
+         */
+        if (!device.SetFeatureValue("TriggerMode", "On"))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera rejected TriggerMode=On.");
+        }
+
+        string actualMode =
+            ReadStringFeature(device, "TriggerMode").Trim();
+
+        if (!string.Equals(
+                actualMode,
+                "On",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera could not verify TriggerMode=On. " +
+                $"Actual value: '{DisplayFeatureValue(actualMode)}'.");
+        }
+
+        if (device.IsFeatureAvailable("TriggerSelector"))
+        {
+            string selector =
+                ReadStringFeature(device, "TriggerSelector").Trim();
+
+            if (!string.Equals(
+                    selector,
+                    "FrameStart",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (!device.SetFeatureValue(
+                        "TriggerSelector",
+                        "FrameStart"))
+                {
+                    throw new InvalidOperationException(
+                        $"{settings.Position} camera rejected " +
+                        "TriggerSelector=FrameStart.");
+                }
+            }
+
+            applied["TriggerSelector"] =
+                ReadStringFeature(device, "TriggerSelector").Trim();
+        }
+
+        if (!device.IsFeatureAvailable("TriggerSource"))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera did not enable TriggerSource " +
+                "after TriggerMode was turned On.");
+        }
+
+        string source =
+            ReadStringFeature(device, "TriggerSource").Trim();
+
+        if (!string.Equals(
+                source,
+                "Line1",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            if (!device.SetFeatureValue(
+                    "TriggerSource",
+                    "Line1"))
+            {
+                throw new InvalidOperationException(
+                    $"{settings.Position} camera rejected TriggerSource=Line1.");
+            }
+
+            source =
+                ReadStringFeature(device, "TriggerSource").Trim();
+        }
+
+        if (!string.Equals(
+                source,
+                "Line1",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera could not verify TriggerSource=Line1. " +
+                $"Actual value: '{DisplayFeatureValue(source)}'.");
+        }
+
+        string activation = string.Empty;
+
+        if (device.IsFeatureAvailable("TriggerActivation"))
+        {
+            activation =
+                ReadStringFeature(device, "TriggerActivation").Trim();
+
+            if (!string.Equals(
+                    activation,
+                    "RisingEdge",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                if (!device.SetFeatureValue(
+                        "TriggerActivation",
+                        "RisingEdge"))
+                {
+                    throw new InvalidOperationException(
+                        $"{settings.Position} camera rejected " +
+                        "TriggerActivation=RisingEdge.");
+                }
+
+                activation =
+                    ReadStringFeature(
+                        device,
+                        "TriggerActivation").Trim();
+            }
+        }
+
+        applied["TriggerMode"] = actualMode;
+        applied["TriggerSource"] = source;
+        applied["TriggerActivation"] = activation;
+        applied["AcquisitionMode"] = "Encoder";
+        applied["CameraWritePolicy"] =
+            "TriggerModeSourceAndActivationOnly";
+
+        LogDiagnostics(
+            $"{settings.Position} camera configured for Encoder mode: " +
+            $"TriggerMode={actualMode}, " +
+            $"TriggerSource={source}, " +
+            $"TriggerActivation={DisplayFeatureValue(activation)}.");
+    }
+    private static string DisplayFeatureValue(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "<unavailable>"
+            : value;
+    }
     private static string ReadCameraSerialNumber(
         SapAcqDevice device,
         SapLocation location)
@@ -267,186 +488,6 @@ public sealed class GenieNanoCameraService : IDisposable
         }
     }
 
-    private void ApplyAcquisitionMode(
-    SapAcqDevice device,
-    CameraDeviceSettings settings,
-    IDictionary<string, object?> applied, Exception argumentOutOfRangeException)
-    {
-        ArgumentNullException.ThrowIfNull(device);
-        ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(applied);
-
-        switch (settings.Mode)
-        {
-            case AcquisitionMode.FrameRate:
-                ConfigureFrameRateMode(device, settings, applied);
-                break;
-
-            case AcquisitionMode.Encoder:
-                ConfigureEncoderMode(device, settings, applied);
-                break;
-
-            default:
-                throw argumentOutOfRangeException;
-        }
-    }
-
-    private void ConfigureFrameRateMode(
-        SapAcqDevice device,
-        CameraDeviceSettings settings,
-        IDictionary<string, object?> applied)
-    {
-        LogDiagnostics(
-            $"{settings.Position} camera: configuring free-running frame-rate mode.");
-
-        if (device.IsFeatureAvailable("TriggerMode"))
-        {
-            if (!device.SetFeatureValue("TriggerMode", "Off"))
-            {
-                throw new InvalidOperationException(
-                    $"{settings.Position} camera rejected TriggerMode=Off.");
-            }
-
-            if (!device.GetFeatureValue("TriggerMode", out string actualMode) ||
-                !string.Equals(
-                    actualMode?.Trim(),
-                    "Off",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"{settings.Position} camera could not verify TriggerMode=Off.");
-            }
-
-            applied["TriggerMode"] = "Off";
-        }
-
-        applied["AcquisitionMode"] = "FrameRate";
-        applied["CameraWritePolicy"] = "TriggerModeOnly";
-
-        LogDiagnostics(
-            $"{settings.Position} camera configured for free-running frame-rate acquisition.");
-    }
-
-    private void ConfigureEncoderMode(
-        SapAcqDevice device,
-        CameraDeviceSettings settings,
-        IDictionary<string, object?> applied)
-    {
-        LogDiagnostics(
-            $"{settings.Position} camera: configuring Line1 encoder triggering.");
-
-        if (!device.IsFeatureAvailable("TriggerMode"))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera does not expose TriggerMode.");
-        }
-
-        if (!device.SetFeatureValue("TriggerMode", "Off"))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera rejected TriggerMode=Off.");
-        }
-
-        if (device.IsFeatureAvailable("TriggerSelector"))
-        {
-            if (!device.SetFeatureValue("TriggerSelector", "FrameStart"))
-            {
-                throw new InvalidOperationException(
-                    $"{settings.Position} camera rejected TriggerSelector=FrameStart.");
-            }
-
-            applied["TriggerSelector"] = "FrameStart";
-        }
-
-        if (!device.IsFeatureAvailable("TriggerSource"))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera does not expose TriggerSource.");
-        }
-
-        if (!device.SetFeatureValue("TriggerSource", "Line1"))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera rejected TriggerSource=Line1.");
-        }
-
-        if (!device.GetFeatureValue(
-                "TriggerSource",
-                out string actualSource) ||
-            !string.Equals(
-                actualSource?.Trim(),
-                "Line1",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera could not verify TriggerSource=Line1.");
-        }
-
-        if (!device.SetFeatureValue("TriggerMode", "On"))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera rejected TriggerMode=On.");
-        }
-
-        if (!device.GetFeatureValue(
-                "TriggerMode",
-                out string actualMode) ||
-            !string.Equals(
-                actualMode?.Trim(),
-                "On",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"{settings.Position} camera could not verify TriggerMode=On.");
-        }
-
-        applied["TriggerSource"] = "Line1";
-        applied["TriggerMode"] = "On";
-        applied["AcquisitionMode"] = "Encoder";
-        applied["CameraWritePolicy"] =
-            "TriggerModeTriggerSelectorAndTriggerSource";
-
-        LogDiagnostics(
-            $"{settings.Position} camera configured for Line1 encoder triggering.");
-    }
-
-    private static string ReadOptionalStringFeature(
-        SapAcqDevice device,
-        string featureName)
-    {
-        try
-        {
-            if (device.IsFeatureAvailable(featureName) &&
-                device.GetFeatureValue(featureName, out string value))
-            {
-                return value?.Trim() ?? string.Empty;
-            }
-        }
-        catch
-        {
-            // Diagnostic read only.
-        }
-
-        return string.Empty;
-    }
-
-    private static string ValueOrUnknown(string value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? "<unavailable>"
-            : value;
-    }
-
-    private static void HandleTriggerConfigurationFailure(
-        CameraDeviceSettings settings,
-        string message)
-    {
-        if (settings.RequireConfiguredFeatures)
-            throw new InvalidOperationException(message);
-
-        // When strict configuration is disabled, allow connection
-        // to continue using the camera's current configuration.
-    }
 
     private static JsonSerializerOptions GetOptions()
     {

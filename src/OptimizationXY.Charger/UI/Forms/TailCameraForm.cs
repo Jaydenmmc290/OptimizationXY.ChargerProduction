@@ -28,25 +28,26 @@ public partial class TailCameraForm : Form
 
     public void UpdatePreview(Bitmap bitmap)
     {
-        if (InvokeRequired)
+        ArgumentNullException.ThrowIfNull(bitmap);
+
+        if (IsDisposed || Disposing)
         {
-            BeginInvoke(() => UpdatePreview(bitmap));
+            bitmap.Dispose();
             return;
         }
 
-        Image? oldImage = pictureBoxTail.Image;
+        Image? previous = pictureBoxTail.Image;
         pictureBoxTail.Image = bitmap;
-        oldImage?.Dispose();
+        previous?.Dispose();
     }
 
-    protected override void Dispose(bool disposing)
+    protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        if (disposing)
-        {
-            pictureBoxTail?.Image?.Dispose();
-            pictureBoxTail?.Dispose();
-        }
-        base.Dispose(disposing);
+        Image? previous = pictureBoxTail.Image;
+        pictureBoxTail.Image = null;
+        previous?.Dispose();
+
+        base.OnFormClosed(e);
     }
 
     public sealed class DoubleBufferedPictureBox : PictureBox

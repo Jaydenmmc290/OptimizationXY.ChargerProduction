@@ -28,25 +28,26 @@ public partial class HeadCameraForm : Form
 
     public void UpdatePreview(Bitmap bitmap)
     {
-        if (InvokeRequired)
+        ArgumentNullException.ThrowIfNull(bitmap);
+
+        if (IsDisposed || Disposing)
         {
-            BeginInvoke(() => UpdatePreview(bitmap));
+            bitmap.Dispose();
             return;
         }
 
-        Image? oldImage = pictureBoxHead.Image;
+        Image? previous = pictureBoxHead.Image;
         pictureBoxHead.Image = bitmap;
-        oldImage?.Dispose();
+        previous?.Dispose();
     }
 
-    protected override void Dispose(bool disposing)
+    protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        if (disposing)
-        {
-            pictureBoxHead?.Image?.Dispose();
-            pictureBoxHead?.Dispose();
-        }
-        base.Dispose(disposing);
+        Image? previous = pictureBoxHead.Image;
+        pictureBoxHead.Image = null;
+        previous?.Dispose();
+
+        base.OnFormClosed(e);
     }
 
     public sealed class DoubleBufferedPictureBox : PictureBox

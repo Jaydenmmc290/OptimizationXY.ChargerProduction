@@ -162,20 +162,18 @@ public partial class MainForm : Form
     // ================================================================
     // FORM LIFECYCLE
     // ================================================================
-    private void InitializeCameraPreviewForms()
+   /* private void InitializeCameraPreviewForms()
     {
         _headCameraForm = new HeadCameraForm();
         _tailCameraForm = new TailCameraForm();
 
-        // Comment in and out to show them on start up
-        //_headCameraForm.Show(this);
-        //_tailCameraForm.Show(this);
+        
 
         _headCameraForm.EnsureCameraViewReady();
         _tailCameraForm.EnsureCameraViewReady();
 
     }
-
+*/
     private void InitializeOperatorView()
     {
         OperatorViewSettings settings = PipelineState.Instance.Settings.OperatorView;
@@ -235,7 +233,7 @@ public partial class MainForm : Form
             AppendDiagnostics($"Runtime data root: {ApplicationPaths.RootDirectory}");
             AppendDiagnostics("Initializing camera services...");
 
-            InitializeCameraPreviewForms();
+            //InitializeCameraPreviewForms();
             InitializeOperatorView();
             InitializeCameraServices();
             InitializePlcIntegration();
@@ -362,20 +360,32 @@ public partial class MainForm : Form
             _tailCameraService.FrameAcquired += TailCameraService_FrameAcquired;
 
             if (_headCameraForm == null || _headCameraForm.IsDisposed)
-                throw new InvalidOperationException("Head camera preview form is unavailable.");
-            if (_tailCameraForm == null || _tailCameraForm.IsDisposed)
-                throw new InvalidOperationException("Tail camera preview form is unavailable.");
+            {
+                _headCameraForm = new HeadCameraForm();
+                _headCameraForm.EnsureCameraViewReady();
+            }
 
+            if (_tailCameraForm == null || _tailCameraForm.IsDisposed)
+            {
+                _tailCameraForm = new TailCameraForm();
+                _tailCameraForm.EnsureCameraViewReady();
+            }
             _headCameraForm.EnsureCameraViewReady();
             _tailCameraForm.EnsureCameraViewReady();
 
             _headCameraService.Connect(headSettings, _headCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
                     nameof(headSettings.Mode),
 headSettings.Mode,
+                    "Unsupported camera acquisition mode."), new ArgumentOutOfRangeException(
+                    nameof(headSettings.Mode),
+headSettings.Mode,
                     "Unsupported camera acquisition mode."));
             AppendDiagnostics($"Head camera connected: {headSettings.ServerName} [{headSettings.DeviceIndex}]");
 
             _tailCameraService.Connect(tailSettings, _tailCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
+                    nameof(tailSettings.Mode),
+tailSettings.Mode,
+                    "Unsupported camera acquisition mode."), new ArgumentOutOfRangeException(
                     nameof(tailSettings.Mode),
 tailSettings.Mode,
                     "Unsupported camera acquisition mode."));

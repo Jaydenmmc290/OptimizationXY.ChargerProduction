@@ -639,7 +639,7 @@ public sealed class ProductionSetupWizardForm : Form
     private async Task SaveAndReconnectCamerasAsync()
     {
         await RunBusyAsync(
-            "Saving camera connection and applying TriggerSource only...",
+            "Saving camera connection and applying the selected acquisition mode...",
             async () =>
             {
                 CameraDeviceSettings head = _settings.Acquisition.HeadCamera;
