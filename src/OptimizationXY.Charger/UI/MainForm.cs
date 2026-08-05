@@ -168,8 +168,8 @@ public partial class MainForm : Form
         _tailCameraForm = new TailCameraForm();
 
         // Comment in and out to show them on start up
-        // _headCameraForm.Show(this);
-        // _tailCameraForm.Show(this);
+        //_headCameraForm.Show(this);
+        //_tailCameraForm.Show(this);
 
         _headCameraForm.EnsureCameraViewReady();
         _tailCameraForm.EnsureCameraViewReady();
@@ -369,10 +369,16 @@ public partial class MainForm : Form
             _headCameraForm.EnsureCameraViewReady();
             _tailCameraForm.EnsureCameraViewReady();
 
-            _headCameraService.Connect(headSettings, _headCameraForm.CameraViewHost);
+            _headCameraService.Connect(headSettings, _headCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
+                    nameof(headSettings.Mode),
+headSettings.Mode,
+                    "Unsupported camera acquisition mode."));
             AppendDiagnostics($"Head camera connected: {headSettings.ServerName} [{headSettings.DeviceIndex}]");
 
-            _tailCameraService.Connect(tailSettings, _tailCameraForm.CameraViewHost);
+            _tailCameraService.Connect(tailSettings, _tailCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
+                    nameof(tailSettings.Mode),
+tailSettings.Mode,
+                    "Unsupported camera acquisition mode."));
             AppendDiagnostics($"Tail camera connected: {tailSettings.ServerName} [{tailSettings.DeviceIndex}]");
 
             // Managed capture also runs while idle so each acquired

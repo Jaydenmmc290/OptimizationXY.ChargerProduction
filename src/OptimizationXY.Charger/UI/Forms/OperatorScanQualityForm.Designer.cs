@@ -4,7 +4,7 @@ namespace OptimizationXY.Charger.UI.Forms;
 
 partial class OperatorScanQualityForm
 {
-    private System.ComponentModel.IContainer? components;
+    private System.ComponentModel.IContainer components;
     private TableLayoutPanel mainLayout = null!;
     private Panel statusPanel = null!;
     private Label lblScanStatus = null!;
