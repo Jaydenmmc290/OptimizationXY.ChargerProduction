@@ -57,10 +57,10 @@ For each camera the application:
 1. creates `SapLocation(server, resourceIndex)`;
 2. creates `SapAcqDevice` without a CCF in programmatic mode;
 3. calls `SapAcqDevice.Create()`;
-4. checks Trigger Source 
-5. creates the buffer, transfer, and view;
-6. starts acquisition.
-
+4. checks feature availability and applies pixel format, exposure, gain, and trigger/frame-rate features;
+5. reads back supported values and creates an immutable snapshot;
+6. creates the buffer, transfer, and view;
+7. starts acquisition.
 
 A required feature that is missing or rejected blocks connection when `RequireConfiguredFeatures` is true.
 

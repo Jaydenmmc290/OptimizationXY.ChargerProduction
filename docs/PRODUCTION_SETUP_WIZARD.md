@@ -21,7 +21,7 @@ Open both previews and physically confirm:
 - Head preview = head/dog side.
 - Tail preview = tail side.
 - Laser stripe is visible and stable.
-- Both images are Mono8 and have the expected dimensions.
+
 
 ## Calibration snapshot
 
@@ -32,7 +32,7 @@ A camera feature or identity mismatch blocks processing until the calibrated set
 ## Calibration workflow
 
 1. Put the machine in calibration-safe state: motion inhibited, knife retracted, reference secured, guarded area clear.
-2. Connect both cameras using their final production settings.
+2. Connect both cameras using their Server name and Device index.
 3. Confirm physical head/tail assignment.
 4. Capture laser-verification frames.
 5. Measure and save the axial pixels-per-millimeter scale.
