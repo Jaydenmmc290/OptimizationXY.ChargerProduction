@@ -1,7 +1,16 @@
+
+/// <summary>
+/// Represents the optimized spindle movement in millimeters for the tail, head, and center of
+/// the log, as well as any sweep correction needed to achieve the optimal cutting path.
 namespace OptimizationXY.Charger.Models.Optimization.Spindle
 {
     public class OptimizedSpindleMovement
     {
+
+        /// <summary>
+        /// Gets or sets the optimized spindle movement in millimeters for the tail, head, and center of the log,
+        /// as well as any sweep correction needed to achieve the optimal cutting path.
+        /// </summary>
         public double TailMoveXMM { get; set; }
         public double TailMoveYMM { get; set; }
 

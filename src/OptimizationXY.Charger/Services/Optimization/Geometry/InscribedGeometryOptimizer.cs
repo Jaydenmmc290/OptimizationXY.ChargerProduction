@@ -19,6 +19,15 @@ namespace OptimizationXY.Charger.Services.Optimization.Geometry;
 /// </summary>
 public static class InscribedGeometryOptimizer
 {
+    /// <summary>
+    /// Find the largest inscribed cylinder that fits within the measured log envelope.
+    /// </summary>
+    /// <param name="field">The binned radius field points representing the measured log envelope.</param>
+    /// <param name="optimizationSettings">The optimization settings.</param>
+    /// <param name="geometrySettings">The inscribed geometry settings.</param>
+    /// <param name="machineLimits">The machine limit settings.</param>
+    /// <param name="token">The cancellation token.</param>
+    /// <returns>The result of the inscribed geometry optimization. </returns>
     public static InscribedGeometryResult FindLargestCylinder(
         List<BinnedRadiusFieldPoint> field,
         OptimizationSettings optimizationSettings,
@@ -35,6 +44,15 @@ public static class InscribedGeometryOptimizer
             token);
     }
 
+    /// <summary>
+    /// Find the largest inscribed oval that fits within the measured log envelope.
+    /// </summary>
+    /// <param name="field">The binned radius field points representing the measured log envelope.</param>
+    /// <param name="optimizationSettings">The optimization settings.</param>
+    /// <param name="geometrySettings">The inscribed geometry settings.</param>
+    /// <param name="machineLimits">The machine limit settings.</param>
+    /// <param name="token">The cancellation token.</param>
+    /// <returns>The result of the inscribed geometry optimization. </returns>
     public static InscribedGeometryResult FindLargestOval(
         List<BinnedRadiusFieldPoint> field,
         OptimizationSettings optimizationSettings,
@@ -51,6 +69,17 @@ public static class InscribedGeometryOptimizer
             token);
     }
 
+    /// <summary>
+    /// Find the best inscribed geometry (cylinder or oval) that fits within the measured log envelope.
+    /// </summary>
+    /// <param name="field">The binned radius field points representing the measured log envelope.</param>
+    /// <param name="optimizationSettings">The optimization settings.</param>
+    /// <param name="geometrySettings">The inscribed geometry settings.</param>
+    /// <param name="machineLimits">The machine limit settings.</param>
+    /// <param name="kind">The kind of inscribed geometry to find (cylinder or oval).</param>
+    /// <param name="token">The cancellation token.</param>
+    /// <returns>The result of the inscribed geometry optimization. </returns>
+    /// <exception cref="InvalidOperationException">Thrown if the search does not produce a valid geometry.</exception>
     private static InscribedGeometryResult FindBest(
         List<BinnedRadiusFieldPoint> field,
         OptimizationSettings optimizationSettings,
@@ -121,6 +150,22 @@ public static class InscribedGeometryOptimizer
         return result;
     }
 
+    /// <summary>
+    /// Perform a single search pass over the specified range of offsets and sweeps, evaluating candidates and returning the best one found.
+    /// </summary>
+    /// <param name="samples">The array of surface samples to evaluate.</param>
+    /// <param name="kind">The kind of inscribed geometry to optimize.</param>
+    /// <param name="settings">The inscribed geometry settings.</param>
+    /// <param name="machineLimits">The machine limit settings.</param>
+    /// <param name="centerOffsetXMM">The center offset in the X direction, in millimeters.</param>
+    /// <param name="centerOffsetYMM">The center offset in the Y direction, in millimeters.</param>
+    /// <param name="centerSweepXMM">The center sweep in the X direction, in millimeters.</param>
+    /// <param name="centerSweepYMM">The center sweep in the Y direction, in millimeters.</param>
+    /// <param name="radiusMM">The radius of the search area, in millimeters.</param>
+    /// <param name="stepMM">The step size for the search, in millimeters.</param>
+    /// <param name="token">The cancellation token to observe.</param>
+    /// <returns>The result of the search pass.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no valid candidate is found.</exception>
     private static SearchPassResult Search(
         SurfaceSample[] samples,
         InscribedGeometryKind kind,
@@ -193,6 +238,19 @@ public static class InscribedGeometryOptimizer
         };
     }
 
+    /// <summary>
+    /// Evaluate a single candidate inscribed geometry based on the provided offsets and sweeps, returning the resulting geometry if valid.
+    /// </summary>
+    /// <param name="samples">The array of surface samples to evaluate.</param>
+    /// <param name="kind">The kind of inscribed geometry to optimize.</param>
+    /// <param name="settings">The inscribed geometry settings.</param>
+    /// <param name="machineLimits">The machine limit settings.</param>
+    /// <param name="offsetXMM">The offset in the X direction, in millimeters.</param>
+    /// <param name="offsetYMM">The offset in the Y direction, in millimeters.</param>
+    /// <param name="sweepXMM">The sweep in the X direction, in millimeters.</param>
+    /// <param name="sweepYMM">The sweep in the Y direction, in millimeters.</param>
+    /// <returns>The resulting candidate geometry if valid; otherwise, null.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when an unsupported inscribed geometry kind is provided.</exception>
     private static Candidate? EvaluateCandidate(
         SurfaceSample[] samples,
         InscribedGeometryKind kind,
@@ -259,6 +317,14 @@ public static class InscribedGeometryOptimizer
         };
     }
 
+    /// <summary>
+    /// Evaluate the inscribed cylinder geometry based on the provided envelope and spindle movement, returning the resulting geometry.
+    /// </summary>
+    /// <param name="envelope">The array of envelope values representing the available radius at each angular bin.</param>
+    /// <param name="movement">The optimized spindle movement.</param>
+    /// <param name="validAngularBins">The number of valid angular bins.</param>
+    /// <param name="settings">The inscribed geometry settings.</param>
+    /// <returns>The resulting inscribed geometry result.</returns>
     private static InscribedGeometryResult EvaluateCylinder(
         double[] envelope,
         OptimizedSpindleMovement movement,
@@ -284,6 +350,14 @@ public static class InscribedGeometryOptimizer
         };
     }
 
+    /// <summary>
+    /// Evaluate the inscribed oval geometry based on the provided envelope and spindle movement, returning the resulting geometry.
+    /// </summary>
+    /// <param name="envelope">The array of envelope values representing the available radius at each angular bin.</param>
+    /// <param name="movement">The optimized spindle movement.</param>
+    /// <param name="validAngularBins">The number of valid angular bins.</param>
+    /// <param name="settings">The inscribed geometry settings.</param>
+    /// <returns>The resulting inscribed geometry result.</returns>
     private static InscribedGeometryResult EvaluateOval(
         double[] envelope,
         OptimizedSpindleMovement movement,
@@ -388,6 +462,15 @@ public static class InscribedGeometryOptimizer
         };
     }
 
+    /// <summary>
+    /// Build an angular envelope of available radii from the provided surface samples and spindle movement,
+    /// returning the envelope and the count of valid angular bins.
+    /// </summary>
+    /// <param name="samples">The array of surface samples.</param>
+    /// <param name="movement">The optimized spindle movement.</param>
+    /// <param name="angularBins">The number of angular bins.</param>
+    /// <param name="validAngularBins">The number of valid angular bins.</param>
+    /// <returns>The array of envelope values representing the available radius at each angular bin.</returns>
     private static double[] BuildAngularEnvelope(
         SurfaceSample[] samples,
         OptimizedSpindleMovement movement,
@@ -395,10 +478,9 @@ public static class InscribedGeometryOptimizer
         out int validAngularBins)
     {
         double[] envelope =
-            Enumerable.Repeat(
+            [.. Enumerable.Repeat(
                 double.PositiveInfinity,
-                angularBins)
-            .ToArray();
+                angularBins)];
 
         foreach (SurfaceSample sample in samples)
         {
@@ -441,10 +523,11 @@ public static class InscribedGeometryOptimizer
     }
 
     /// <summary>
-    /// Missing angular bins are filled with the smaller of the nearest
-    /// measured neighbors. This is deliberately conservative: an unmeasured
-    /// direction can never make the reported geometry larger.
+    /// Fill missing values in the envelope conservatively by using the nearest finite neighbors or the global
+    /// minimum if no neighbors are available.
     /// </summary>
+    /// <param name="envelope">The array of envelope values representing the available radius at each angular bin.</param>
+    /// <returns>True if any missing values were filled; otherwise, false.</returns>
     private static bool FillMissingEnvelopeConservatively(
         double[] envelope)
     {
@@ -499,6 +582,12 @@ public static class InscribedGeometryOptimizer
         return true;
     }
 
+    /// <summary>
+    /// Build an array of surface samples from the provided binned radius field points, normalizing the
+    /// Z values and converting polar coordinates to Cartesian coordinates.
+    /// </summary>
+    /// <param name="field">The list of binned radius field points to convert into surface samples.</param>
+    /// <returns>An array of surface samples.</returns>
     private static SurfaceSample[] BuildSamples(
         List<BinnedRadiusFieldPoint> field)
     {
@@ -506,7 +595,7 @@ public static class InscribedGeometryOptimizer
         double maxZ = field.Max(point => point.ZBinMM);
         double length = Math.Max(0.001, maxZ - minZ);
 
-        return field
+        return [.. field
             .Select(point =>
             {
                 // An inscribed result must not cross the measured surface.
@@ -545,10 +634,16 @@ public static class InscribedGeometryOptimizer
                         Math.Cos(item.AngleRad),
                     YMM:
                         item.RadiusMM *
-                        Math.Sin(item.AngleRad)))
-            .ToArray();
+                        Math.Sin(item.AngleRad)))];
     }
 
+    /// <summary>
+    /// Determine if the candidate geometry is better than the current best geometry based on the inscribed geometry settings.
+    /// </summary>
+    /// <param name="candidate">The candidate geometry to evaluate.</param>
+    /// <param name="current">The current best geometry to compare against.</param>
+    /// <param name="settings">The inscribed geometry settings used for comparison.</param>
+    /// <returns>True if the candidate geometry is better than the current best geometry; otherwise, false.</returns>
     private static bool IsBetter(
         Candidate candidate,
         Candidate current,
@@ -598,6 +693,12 @@ public static class InscribedGeometryOptimizer
                right.MaxSpindleMovementMM;
     }
 
+    /// <summary>
+    /// Determine if the optimized spindle movement is within the machine limits specified in the settings.
+    /// </summary>
+    /// <param name="movement">The optimized spindle movement to evaluate.</param>
+    /// <param name="limits">The machine limit settings to compare against.</param>
+    /// <returns>True if the optimized spindle movement is within the machine limits; otherwise, false.</returns>
     private static bool IsWithinMachineLimits(
         OptimizedSpindleMovement movement,
         MachineLimitSettings limits)
@@ -609,6 +710,12 @@ public static class InscribedGeometryOptimizer
             Math.Abs(movement.HeadMoveYMM) <= limits.MaxHeadMoveYMM;
     }
 
+    /// <summary>
+    /// Calculate the maximum spindle movement in millimeters based on the optimized spindle movement,
+    /// considering both tail and head movements.
+    /// </summary>
+    /// <param name="movement">The optimized spindle movement to evaluate.</param>
+    /// <returns>The maximum spindle movement in millimeters.</returns>
     private static double MaxSpindleMovementMM(
         OptimizedSpindleMovement movement)
     {
@@ -623,6 +730,13 @@ public static class InscribedGeometryOptimizer
         return Math.Max(tail, head);
     }
 
+    /// <summary>
+    /// Generate a range of double values centered around a specified value, with a given radius and step size.
+    /// </summary>
+    /// <param name="center">The center value around which to generate the range.</param>
+    /// <param name="radius">The radius around the center value to define the range.</param>
+    /// <param name="step">The step size between consecutive values in the range.</param>
+    /// <returns>An enumerable of double values within the specified range.</returns>
     private static IEnumerable<double> Range(
         double center,
         double radius,
@@ -635,6 +749,16 @@ public static class InscribedGeometryOptimizer
             yield return Math.Round(value, 4);
         }
     }
+
+    /// <summary>
+    /// Validate the input parameters for the inscribed geometry optimization, ensuring that they meet
+    /// the required constraints and throwing exceptions for invalid inputs.
+    /// </summary>
+    /// <param name="field">The binned radius field points to validate.</param>
+    /// <param name="optimizationSettings">The optimization settings to validate.</param>
+    /// <param name="geometrySettings">The inscribed geometry settings to validate.</param>
+    /// <param name="machineLimits">The machine limit settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown when any of the input parameters are invalid.</exception>
 
     private static void ValidateInputs(
         List<BinnedRadiusFieldPoint> field,
@@ -700,11 +824,20 @@ public static class InscribedGeometryOptimizer
         }
     }
 
+    /// <summary>
+    /// Represents a sample point on the surface of the log, including its normalized Z position and Cartesian coordinates in millimeters.
+    /// </summary>
+    /// <param name="NormalizedZ">The normalized Z position of the sample point.</param>
+    /// <param name="XMM">The X coordinate of the sample point in millimeters.</param>
+    /// <param name="YMM">The Y coordinate of the sample point in millimeters.</param>
     private sealed record SurfaceSample(
         double NormalizedZ,
         double XMM,
         double YMM);
 
+    /// <summary>
+    /// Represents a candidate inscribed geometry configuration, including its offsets, sweeps, and the resulting geometry evaluation.
+    /// </summary>
     private sealed class Candidate
     {
         public double OffsetXMM { get; init; }
@@ -714,6 +847,9 @@ public static class InscribedGeometryOptimizer
         public InscribedGeometryResult Geometry { get; init; } = new();
     }
 
+    /// <summary>
+    /// Represents the result of a search pass, including the best offsets, sweeps, resulting geometry, and the number of tested candidates.
+    /// </summary>
     private sealed class SearchPassResult
     {
         public double OffsetXMM { get; init; }

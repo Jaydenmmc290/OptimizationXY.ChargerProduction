@@ -7,26 +7,67 @@ namespace OptimizationXY.Charger.Models.Calibration;
 /// </summary>
 public sealed class ScannerLookupTable
 {
-    public int SchemaVersion { get; set; } = 3;
-    public string CalibrationId { get; set; } = string.Empty;
-    public DateTime CreatedUtc { get; set; }
-    public string OperatorName { get; set; } = string.Empty;
-    public string MachineName { get; set; } = string.Empty;
-    public string SoftwareVersion { get; set; } = string.Empty;
-    public string HeadCameraServerName { get; set; } = string.Empty;
-    public string TailCameraServerName { get; set; } = string.Empty;
-    public string HeadCameraConfigurationSha256 { get; set; } = string.Empty;
-    public string TailCameraConfigurationSha256 { get; set; } = string.Empty;
-    public string AcquisitionGeometrySha256 { get; set; } = string.Empty;
-    public int ImageWidth { get; set; }
-    public int ImageHeight { get; set; }
-    public double LengthPixelsPerMM { get; set; }
-    public double MinimumCalibratedRadiusMM { get; set; }
-    public double MaximumCalibratedRadiusMM { get; set; }
-    public List<CalibrationReferenceSummary> References { get; set; } = new();
-    public CalibrationQualitySummary Quality { get; set; } = new();
-    public List<LookupPoint> Points { get; set; } = new();
 
+    //SchemaVersion indicates the version of the schema used for the scanner lookup table.
+    public int SchemaVersion { get; set; } = 3;
+
+    // CalibrationId is the unique identifier for the calibration.  
+    public string CalibrationId { get; set; } = string.Empty;
+
+    // CreatedUtc is the UTC timestamp when the scanner lookup table was created.
+    public DateTime CreatedUtc { get; set; }
+
+    // OperatorName is the name of the operator who performed the calibration.
+    public string OperatorName { get; set; } = string.Empty;
+
+    // MachineName is the name of the machine on which the calibration was performed.
+    public string MachineName { get; set; } = string.Empty;
+
+    //  SoftwareVersion is the version of the software used for the calibration.
+    public string SoftwareVersion { get; set; } = string.Empty;
+
+    // HeadCameraSerialNumber is the serial number of the head camera used in the calibration.
+    public string HeadCameraServerName { get; set; } = string.Empty;
+
+    // TailCameraSerialNumber is the serial number of the tail camera used in the calibration.
+    public string TailCameraServerName { get; set; } = string.Empty;
+
+    // HeadCameraSerialNumber is the serial number of the head camera used in the calibration.
+    public string HeadCameraConfigurationSha256 { get; set; } = string.Empty;
+
+    // TailCameraSerialNumber is the serial number of the tail camera used in the calibration.
+    public string TailCameraConfigurationSha256 { get; set; } = string.Empty;
+
+    // AcquisitionGeometrySha256 is the SHA-256 hash of the acquisition geometry used in the calibration.
+    public string AcquisitionGeometrySha256 { get; set; } = string.Empty;
+
+    // ImageWidth is the width of the image captured during calibration.
+    public int ImageWidth { get; set; }
+
+    // ImageHeight is the height of the image captured during calibration.
+    public int ImageHeight { get; set; }
+
+    // LengthPixelsPerMM is the calibrated length in pixels per millimeter.
+    public double LengthPixelsPerMM { get; set; }
+
+    // MinimumCalibratedRadiusMM is the minimum calibrated radius in millimeters.
+    public double MinimumCalibratedRadiusMM { get; set; }
+
+    // MaximumCalibratedRadiusMM is the maximum calibrated radius in millimeters.
+    public double MaximumCalibratedRadiusMM { get; set; }
+
+    // References is a list of calibration reference summaries used in the calibration process.
+    public List<CalibrationReferenceSummary> References { get; set; } = [];
+
+    // Quality is a summary of the calibration quality, including various metrics and statistics.
+    public CalibrationQualitySummary Quality { get; set; } = new();
+
+    // Points is a list of lookup points that map scanner image columns and detected laser Y positions to known physical radii.
+    public List<LookupPoint> Points { get; set; } = [];
+
+
+    /// IsValid checks if the scanner lookup table is valid based on various criteria,
+    /// including schema version, calibration ID, SHA-256 hashes, image dimensions, and point data.
     public bool IsValid
     {
         get
@@ -83,6 +124,8 @@ public sealed class ScannerLookupTable
         }
     }
 
+    // IsSha256 checks if the given string is a valid SHA-256 hash by verifying its length and ensuring
+    // all characters are hexadecimal digits.
     private static bool IsSha256(string value) =>
         value is { Length: 64 } && value.All(Uri.IsHexDigit);
 }

@@ -12,4 +12,4 @@ public enum SpindleOptimizationMode
     LargestInscribedOval = 2,
     CompareInscribedGeometry = 3,
     RecoveryOptimized = 4
-}
+} 

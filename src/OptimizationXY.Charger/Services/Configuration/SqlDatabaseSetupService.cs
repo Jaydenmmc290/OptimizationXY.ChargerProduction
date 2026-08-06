@@ -3,12 +3,21 @@ using Microsoft.Data.SqlClient;
 
 namespace OptimizationXY.Charger.Services.Configuration;
 
+/// <summary>
+/// Provides methods to set up and validate the SQL Server database schema for the OptimizationXY application.
+/// </summary>
 public sealed class SqlDatabaseSetupService
 {
     public const int ExpectedSchemaVersion = 1;
     public const string DefaultConnectionString =
         "Server=.\\SQLEXPRESS;Database=OptimizationXY;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;Connect Timeout=10;";
 
+
+    /// <summary>
+    /// Tests the SQL Server connection and retrieves information about the server, database, and schema version.
+    /// </summary>
+    /// <param name="connectionString">The connection string to the SQL Server database.</param>
+    /// <returns>A <see cref="DatabaseSetupResult"/> containing information about the server, database, and schema version.</returns>
     public static DatabaseSetupResult TestConnection(string connectionString)
     {
         SqlConnectionStringBuilder targetBuilder = ValidateAndNormalize(
@@ -71,7 +80,12 @@ public sealed class SqlDatabaseSetupService
             SchemaVersion = schemaVersion
         };
     }
-
+    
+    /// <summary>
+    /// Creates or upgrades the SQL Server database schema for the OptimizationXY application.
+    /// </summary>
+    /// <param name="connectionString">The connection string to the SQL Server database.</param>
+    /// <returns>A <see cref="DatabaseSetupResult"/> containing information about the server, database, and schema version.</returns>
     public static DatabaseSetupResult CreateOrUpgrade(string connectionString)
     {
         SqlConnectionStringBuilder targetBuilder = ValidateAndNormalize(
@@ -175,6 +189,11 @@ END;
         return result;
     }
 
+    /// <summary>
+    /// Validates the SQL Server database schema for the OptimizationXY application.
+    /// </summary>
+    /// <param name="connectionString">The connection string to the SQL Server database.</param>
+    /// <returns>The schema version if it matches the expected version; otherwise, an exception is thrown.</returns>
     public static int? ValidateSchema(string connectionString)
     {
         SqlConnectionStringBuilder builder = ValidateAndNormalize(
@@ -195,6 +214,14 @@ END;
         return version;
     }
 
+    /// <summary>
+    /// Validates and normalizes the provided SQL Server connection string.
+    /// </summary>
+    /// <param name="connectionString">The connection string to validate and normalize.</param>
+    /// <param name="requireDatabase">Whether a database must be specified in the connection string.</param>
+    /// <returns>A <see cref="SqlConnectionStringBuilder"/> representing the validated and normalized connection string.</returns>
+    /// <exception cref="ArgumentException">Thrown when the connection string is null or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the connection string is missing required components or does not meet security requirements.</exception>
     private static SqlConnectionStringBuilder ValidateAndNormalize(
         string connectionString,
         bool requireDatabase)
@@ -233,6 +260,11 @@ END;
         return builder;
     }
 
+    /// <summary>
+    /// Attempts to read the schema version from the database. Returns null if the SchemaVersion table does not exist or if no version is found.
+    /// </summary>
+    /// <param name="connection">The open SQL connection to use for the query.</param>
+    /// <returns>The schema version number, or null if the SchemaVersion table does not exist or no version is found.</returns>
     private static int? TryReadSchemaVersion(SqlConnection connection)
     {
         const string sql = """
@@ -251,6 +283,10 @@ ELSE
     }
 }
 
+/// <summary>
+/// Represents the result of a database setup operation, including success status, server description, SQL version,
+/// login identity, database name, and schema version.
+/// </summary>
 public sealed class DatabaseSetupResult
 {
     public bool Success { get; set; }

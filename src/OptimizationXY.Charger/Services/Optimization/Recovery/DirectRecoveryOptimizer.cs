@@ -13,6 +13,15 @@ namespace OptimizationXY.Charger.Services.Optimization.Recovery;
 /// </summary>
 public static class DirectRecoveryOptimizer
 {
+    /// <summary>
+    /// Finds the best spindle movement within a bounded XY search space around the provided seed movements.
+    /// </summary>
+    /// <param name="radiusField">The list of binned radius field points used for evaluation.</param>
+    /// <param name="seedMovements">The list of seed spindle movements to refine.</param>
+    /// <param name="settings">The application settings containing machine limits and optimization parameters.</param>
+    /// <param name="token">A cancellation token to observe while performing the search.</param>
+    /// <returns>The result of the direct recovery search, including the best movement and associated metrics.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no seed movements are provided.</exception>
     public static DirectRecoverySearchResult FindBest(
         IReadOnlyList<BinnedRadiusFieldPoint> radiusField,
         IReadOnlyList<OptimizedSpindleMovement> seedMovements,
@@ -127,6 +136,12 @@ public static class DirectRecoveryOptimizer
         return best;
     }
 
+    /// <summary>
+    /// Builds an array of delta values for the search space based on the specified radius and step size.
+    /// </summary>
+    /// <param name="radiusMM">The radius of the search space in millimeters.</param>
+    /// <param name="stepMM">The step size for generating delta values in millimeters.</param>
+    /// <returns>An array of delta values for the search space.</returns>
     private static double[] BuildDeltas(double radiusMM, double stepMM)
     {
         radiusMM = Math.Max(0.0, radiusMM);
@@ -152,13 +167,18 @@ public static class DirectRecoveryOptimizer
         if (!values.Any(value => Math.Abs(value + radiusMM) <= 0.000001))
             values.Add(-radiusMM);
 
-        return values
+        return [.. values
             .DistinctBy(value => Math.Round(value, 6))
             .OrderBy(value => Math.Abs(value))
-            .ThenBy(value => value)
-            .ToArray();
+            .ThenBy(value => value)];
     }
 
+    /// <summary>
+    /// Determines whether the specified spindle movement is within the machine limits defined in the settings.
+    /// </summary>
+    /// <param name="movement">The spindle movement to evaluate.</param>
+    /// <param name="limits">The machine limit settings to compare against.</param>
+    /// <returns>True if the movement is within the machine limits; otherwise, false.</returns>
     private static bool WithinMachineLimits(
         OptimizedSpindleMovement movement,
         MachineLimitSettings limits) =>
@@ -167,6 +187,11 @@ public static class DirectRecoveryOptimizer
         Math.Abs(movement.HeadMoveXMM) <= limits.MaxHeadMoveXMM &&
         Math.Abs(movement.HeadMoveYMM) <= limits.MaxHeadMoveYMM;
 
+    /// <summary>
+    /// Calculates the maximum absolute movement in any direction for the given spindle movement.
+    /// </summary>
+    /// <param name="movement">The spindle movement to evaluate.</param>
+    /// <returns>The maximum absolute movement in any direction.</returns>
     private static double MaxMovement(OptimizedSpindleMovement movement) =>
         new[]
         {
@@ -176,6 +201,11 @@ public static class DirectRecoveryOptimizer
             Math.Abs(movement.HeadMoveYMM)
         }.Max();
 
+    /// <summary>
+    /// Builds a unique key string for the given spindle movement, used to track tested candidates and avoid duplicates.
+    /// </summary>
+    /// <param name="movement">The spindle movement for which to build the key.</param>
+    /// <returns>A unique key string representing the spindle movement.</returns>
     private static string BuildMovementKey(OptimizedSpindleMovement movement) =>
         string.Create(
             System.Globalization.CultureInfo.InvariantCulture,

@@ -5,18 +5,19 @@ namespace OptimizationXY.Charger.Services.Geometry;
 public static class RadiusFieldGenerator
 {
     /// <summary>
-    /// Generates a radius field from a point cloud and fitted centerline.
-    /// Each point contains the original XY coordinates, source Z position,
-    /// scanner-plane circumferential angle, and distance from the fitted centerline.
-    /// The scanner-plane angle basis must be verified during commissioning.
+    /// Builds a radius field from a point cloud and a fitted centerline.
     /// </summary>
+    /// <param name="pointCloud">The list of 3D points representing the point cloud.</param>
+    /// <param name="centerline">The fitted centerline result.</param>
+    /// <returns>A list of RadiusFieldPoint objects representing the radius field.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the centerline is null or has an invalid direction.</exception>
     public static List<RadiusFieldPoint> Build(
         List<Point3D> pointCloud,
         CenterlineResult centerline)
     {
         if (pointCloud == null || pointCloud.Count == 0)
         {
-            return new List<RadiusFieldPoint>();
+            return [];
         }
 
         if (centerline == null)
@@ -24,7 +25,7 @@ public static class RadiusFieldGenerator
             throw new InvalidOperationException("Fit centerline first.");
         }
 
-        List<RadiusFieldPoint> field = new();
+        List<RadiusFieldPoint> field = [];
 
         double ox = centerline.OriginX;
         double oy = centerline.OriginY;

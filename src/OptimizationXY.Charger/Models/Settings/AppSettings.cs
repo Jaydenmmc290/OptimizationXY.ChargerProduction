@@ -2,238 +2,649 @@ using OptimizationXY.Charger.Models.Acquisition;
 using OptimizationXY.Charger.Models.Optimization;
 
 
-
+/// <summary>
+/// Represents the application settings for the OptimizationXY Charger application.
+/// </summary>
 namespace OptimizationXY.Charger.Models.Settings;
 
 public sealed class AppSettings
 {
-    public int SettingsVersion { get; set; } = 10; // Version of the settings schema. Increment this value when making changes to the settings
-                                                  // structure to ensure compatibility with saved settings files.
+    /// <summary>
+    /// The version of the settings schema. This is used to determine if the settings file is
+    /// compatible with the current application version.
+    /// </summary>
+    public int SettingsVersion { get; set; } = 10;
 
+
+    /// <summary>
+    /// Settings related to camera acquisition, including exposure, gain, and other camera parameters.
+    /// </summary>
     public CameraAcquisitionSettings Acquisition { get; set; } = new();
 
+
+    /// <summary>
+    /// Settings related to the operator view, including display preferences and user interface settings.
+    /// </summary>
     public OperatorViewSettings OperatorView { get; set; } = new();
 
-    public UnitSettings Units { get; set; } = new(); //  Unit settings for the application, including internal math units and display preferences.
-    public RotatingScanSettings RotatingScan { get; set; } = new(); // Settings related to the rotating scan process, including minimum and preferred valid frames, expected angle step, and tolerances.
+    /// <summary>
+    /// Unit settings for the application, including internal math units and display preferences.
+    /// </summary>
+    public UnitSettings Units { get; set; } = new(); 
+    /// <summary>
+    /// Settings related to the rotating scan process, including minimum and preferred valid frames, expected angle step, and tolerances.
+    /// </summary>
+    public RotatingScanSettings RotatingScan { get; set; } = new(); 
 
-    public PeelViewSettings PeelView { get; set; } = new();  // Settings for the peel view display, including maximum linear gap and angular neighbor frames for display fill.
+    /// <summary>
+    /// Settings for the peel view display, including maximum linear gap and angular neighbor frames for display fill.
+    /// </summary>
+    public PeelViewSettings PeelView { get; set; } = new();  
 
-    public GeometrySettings Geometry { get; set; } = new();  // Settings related to geometry analysis, including local centerline slice thickness, minimum points per slice, radius field bin sizes, and minimum points per radius bin.
-    public SweepSettings Sweep { get; set; } = new(); // Settings for sweep analysis, including end trim fraction and thresholds for good, warning, and bad sweep measurements.
+    /// <summary>
+    /// Settings related to geometry analysis, including local centerline slice thickness, minimum points per slice, radius field bin sizes, and minimum points per radius bin.
+    /// </summary>
+    public GeometrySettings Geometry { get; set; } = new(); 
+    /// <summary>
+    /// Settings for sweep analysis, including end trim fraction and thresholds for good, warning, and bad sweep measurements.
+    /// </summary>
+    public SweepSettings Sweep { get; set; } = new(); 
 
-    public WaneSettings Wane { get; set; } = new(); // Settings for wane analysis, including thresholds for good, warning, and bad wane measurements.
-    public UsableRadiusSettings UsableRadius { get; set; } = new(); // Settings for usable radius analysis, including thresholds for good, warning, and bad usable radius measurements.
+    /// <summary>
+    /// Settings for wane analysis, including thresholds for good, warning, and bad wane measurements.
+    /// </summary>
+    public WaneSettings Wane { get; set; } = new(); 
+    /// <summary>
+    /// Settings for usable radius analysis, including thresholds for good, warning, and bad usable radius measurements.
+    /// </summary>
+    public UsableRadiusSettings UsableRadius { get; set; } = new(); 
 
-    public DefectSettings Defects { get; set; } = new(); // Settings for defect analysis, including thresholds for good, warning, and bad defect measurements.
-    public OptimizationSettings Optimization { get; set; } = new(); // Settings for optimization analysis, including parameters for optimization algorithms and criteria.
+    /// <summary>
+    /// Settings for defect analysis, including thresholds for good, warning, and bad defect measurements.
+    /// </summary>
+    public DefectSettings Defects { get; set; } = new(); 
+    /// <summary>
+    /// Settings for optimization analysis, including parameters for optimization algorithms and criteria.
+    /// </summary>
+    public OptimizationSettings Optimization { get; set; } = new(); 
+    /// <summary>
+    /// The mode for spindle optimization.
+    /// </summary>
     public SpindleOptimizationMode OptimizationMode { get; set; } = SpindleOptimizationMode.RecoveryOptimized;
+    /// <summary>
+    /// Settings for inscribed geometry analysis.
+    /// </summary>
     public InscribedGeometrySettings InscribedGeometry { get; set; } = new();
-    public ScoringSettings Scoring { get; set; } = new(); // Settings for scoring analysis, including weights and thresholds for different scoring metrics.
+    /// <summary>
+    /// Settings for scoring analysis, including weights and thresholds for different scoring metrics.
+    /// </summary>
+    public ScoringSettings Scoring { get; set; } = new(); 
 
-    public AdaptiveScoringSettings AdaptiveScoring { get; set; } = new(); // Settings for adaptive scoring, including parameters for adaptive scoring algorithms and criteria.
-    public MachineLimitSettings MachineLimits { get; set; } = new(); // Settings for machine limits, including maximum and minimum operational parameters.
-    public ProductionSettings Production { get; set; } = new();
-    public PlcIntegrationSettings Plc { get; set; } = new();
-    public SafetySettings Safety { get; set; } = new();
-    public RecoveryOptimizationSettings RecoveryOptimization { get; set; } = new();
-    public DiagnosticsSettings Diagnostics { get; set; } = new(); // Settings for diagnostics, including thresholds and parameters for diagnostic checks.
+    /// <summary>
+    /// Settings for adaptive scoring, including parameters for adaptive scoring algorithms and criteria.
+    /// </summary>
+    public AdaptiveScoringSettings AdaptiveScoring { get; set; } = new(); 
+    /// <summary>
+    /// Settings for machine limits, including maximum and minimum operational parameters.
+    /// </summary>
+    public MachineLimitSettings MachineLimits { get; set; } = new(); 
+    /// <summary>
+    /// Settings for production, including parameters for production processes and criteria.
+    /// </summary>
+    public ProductionSettings Production { get; set; } = new(); 
+    /// <summary>
+    /// Settings for PLC integration, including parameters for PLC communication and control.
+    /// </summary>
+    public PlcIntegrationSettings Plc { get; set; } = new(); 
+    /// <summary>
+    /// Settings for safety, including parameters for safety checks and criteria.
+    /// </summary>
+    public SafetySettings Safety { get; set; } = new(); 
+    /// <summary>
+    /// Settings for recovery optimization, including parameters for recovery optimization algorithms and criteria.
+    /// </summary>
+    public RecoveryOptimizationSettings RecoveryOptimization { get; set; } = new(); 
+    /// <summary>
+    /// Settings for diagnostics, including thresholds and parameters for diagnostic checks.
+    /// </summary>
+    public DiagnosticsSettings Diagnostics { get; set; } = new();
 
+    /// <summary>
+    /// Settings for scan folder information, including year, month, day, block number, and scan number.
+    /// </summary>
     public ScanFolderInfo Scan { get; set; } = new();
 
+
+    /// <summary>
+    /// Settings for database configuration, including connection strings and parameters for database access.
+    /// </summary>
     public DatabaseSettings Database { get; set; } = new();
+
+    /// <summary>
+    /// Settings for production setup, including parameters for production readiness and commissioning checks.
+    /// </summary>
     public ProductionSetupSettings Setup { get; set; } = new();
+
+    /// <summary>
+    /// Settings for scan storage, including parameters for scan data storage and management.
+    /// </summary>
     public ScanStorageSettings Storage { get; set; } = new();
 }
 
+/// <summary>
+/// Represents the unit settings for the application, including internal math units and display preferences.
+/// </summary>
 public sealed class UnitSettings
 {
-    // Keep math in mm. Only final/operator output should be inches-first.
-    public bool InternalMathUsesMM { get; set; } = true;  // Indicates whether internal calculations use millimeters (true) or inches (false).
-    public bool DisplayInchesFirst { get; set; } = true;  // Indicates whether to display measurements in inches first (true) or millimeters first (false).
-    public int InchesDecimals { get; set; } = 3;  // Number of decimal places to display for inch measurements.
-    public int MillimetersDecimals { get; set; } = 2;  // Number of decimal places to display for millimeter measurements.
+    /// <summary>
+    /// Indicates whether internal calculations use millimeters (true) or inches (false). This setting affects how measurements are processed and displayed throughout the application.
+    /// </summary>
+    public bool InternalMathUsesMM { get; set; } = true;
+
+    /// <summary>
+    /// Indicates whether to display inch measurements before millimeter measurements in the user interface. If true, inch measurements will be shown first; if false, millimeter measurements will be shown first.
+    /// </summary>
+    public bool DisplayInchesFirst { get; set; } = true; 
+    /// <summary>
+    /// Number of decimal places to display for inch measurements.
+    /// </summary>
+    public int InchesDecimals { get; set; } = 3;  
+    /// <summary>
+    /// Number of decimal places to display for millimeter measurements.
+    /// </summary>
+    public int MillimetersDecimals { get; set; } = 2;  
 }
 
+
+/// <summary>
+/// Represents the settings for the rotating scan process, including minimum and preferred valid frames, expected angle step, and tolerances.
+/// </summary>
 public sealed class RotatingScanSettings
 {
-    public int MinimumValidFrames { get; set; } = 12;  // Minimum number of valid frames required for a successful rotating scan.
-    public int PreferredValidFrames { get; set; } = 36;  // Preferred number of valid frames for optimal rotating scan results.
+    /// <summary>
+    /// Minimum number of valid frames required for a successful rotating scan.
+    /// </summary>
+    public int MinimumValidFrames { get; set; } = 12;  
+    /// <summary>
+    /// Preferred number of valid frames for optimal rotating scan results.
+    /// </summary>
+    public int PreferredValidFrames { get; set; } = 36;  
 
-    public double ExpectedAngleStepDeg { get; set; } = 10.0;  // Expected angle step in degrees between consecutive frames during the rotating scan.
+    /// <summary>
+    /// Expected angle step in degrees between consecutive frames during the rotating scan.
+    /// </summary>
+    public double ExpectedAngleStepDeg { get; set; } = 10.0;  
 
-    public int MinimumProfilePointsPerFrame { get; set; } = 50; //  Minimum number of profile points required per frame for a valid rotating scan.
+    /// <summary>
+    /// Minimum number of profile points required per frame for a valid rotating scan.
+    /// </summary>
+    public int MinimumProfilePointsPerFrame { get; set; } = 50;
 
+    /// <summary>
+    /// Tolerance in degrees for the angle step between consecutive frames during the rotating scan.
+    /// This value defines the acceptable range of variation from the expected angle step.
+    /// </summary>
     public int DisplayFillMaxLinearGapPixels { get; set; } = 20;
+
+    /// <summary>
+    /// Maximum number of angular neighbor frames to consider for display fill during the rotating scan.
+    /// This value defines how many adjacent frames can be used to fill in missing data for display purposes.
+    /// </summary>
     public int DisplayFillMaxAngularNeighborFrames { get; set; } = 2;
 
+    /// <summary>
+    /// Minimum valid end diameter fraction for the rotating scan. This value defines
+    /// the minimum acceptable ratio of the end diameter to the overall diameter of the scanned object.
+    /// </summary>
+
     public double MinValidEndDiameterFraction { get; set; } = 0.18;
+
+    /// <summary>
+    /// Indicates whether to fill in missing points during the rotating scan process. If true, the application will attempt to
+    /// interpolate or estimate missing data points based on available information; if false, missing points will remain unfilled.
+    /// </summary>
     public bool FillMissingPoints { get; internal set; }
 }
 
+
+/// <summary>
+/// Represents the settings for geometry analysis, including local centerline slice thickness, minimum points per slice, radius field bin sizes, and minimum points per radius bin.
+/// </summary>
 public sealed class GeometrySettings
 {
-    public double LocalCenterlineSliceThicknessMM { get; set; } = 10.0;  // Thickness of each slice used for local centerline analysis in millimeters.
-    public int MinPointsPerLocalCenterlineSlice { get; set; } = 8;  //  Minimum number of points required per local centerline slice for valid analysis.
 
-    public double RadiusFieldZBinSizeMM { get; set; } = 10.0;  // Size of the Z-axis bins used for radius field analysis in millimeters.
-    public double RadiusFieldAngleBinSizeDeg { get; set; } = 10.0;  // Size of the angle bins used for radius field analysis in degrees.
-    public int MinPointsPerRadiusBin { get; set; } = 1;  //     Minimum number of points required per radius bin for valid analysis.
+    /// <summary>
+    /// Thickness of each slice used for local centerline analysis in millimeters. This value defines how thick each slice of the log will be when analyzing the local centerline geometry.
+    /// </summary>
+    public double LocalCenterlineSliceThicknessMM { get; set; } = 10.0;
+
+
+    /// <summary>
+    /// Minimum number of points required per local centerline slice for valid analysis.
+    /// </summary>
+    public int MinPointsPerLocalCenterlineSlice { get; set; } = 8;  
+
+    /// <summary>
+    /// Size of the Z-axis bins used for radius field analysis in millimeters.
+    /// </summary>
+    public double RadiusFieldZBinSizeMM { get; set; } = 10.0;  
+
+    /// <summary>
+    /// Size of the angle bins used for radius field analysis in degrees.
+    /// </summary>
+    public double RadiusFieldAngleBinSizeDeg { get; set; } = 10.0;  
+
+    /// <summary>
+    /// Minimum number of points required per radius bin for valid analysis.
+    /// </summary>
+    public int MinPointsPerRadiusBin { get; set; } = 1;  
 
 }
 
+/// <summary>
+/// Represents the settings for sweep analysis, including end trim fraction and thresholds for good, warning, and bad sweep measurements.
+/// </summary>
 public sealed class SweepSettings
 {
-    public double EndTrimFraction { get; set; } = 0.03; // Fraction of the log length to trim from each end for sweep analysis.
 
-    public int MinimumEndSlices { get; set; } = 3; // Minimum number of slices to consider at each end of the log for sweep analysis.
-    public double EndSliceFraction { get; set; } = 0.05; // Fraction of the log length to consider for end slices in sweep analysis.
+    /// <summary>
+    /// Fraction of the log length to trim from each end for sweep analysis. This value defines how much of the log's ends
+    /// will be excluded from the sweep analysis to avoid edge effects and ensure accurate measurements.
+    /// </summary>
+    public double EndTrimFraction { get; set; } = 0.03;
+
+    /// <summary>
+    /// Minimum number of slices to consider at each end of the log for sweep analysis.
+    /// </summary>
+    public int MinimumEndSlices { get; set; } = 3;
+
+    /// <summary>
+    /// Fraction of the log length to consider at the end for sweep analysis. This value defines how much of the log's ends
+    /// </summary>
+    public double EndSliceFraction { get; set; } = 0.05; 
 
 }
 
+
+/// <summary>
+/// Represents the settings for wane analysis, including thresholds for good, warning, and bad wane measurements.
+/// </summary>
 public sealed class WaneSettings
 {
-    public double WaneToleranceMM { get; set; } = 1.0;  // Tolerance for wane measurements in millimeters. Wane measurements within this tolerance are considered acceptable.
-    public double SevereWaneMM { get; set; } = 3.0;  // Threshold for severe wane measurements in millimeters. Wane measurements exceeding this threshold are considered severe.
+    /// <summary>
+    /// Tolerance for wane measurements in millimeters. Wane measurements within this tolerance are considered acceptable.
+    /// </summary>
+    public double WaneToleranceMM { get; set; } = 1.0;
 
-    public int MinAngleBinsPerWaneSlice { get; set; } = 12; // Minimum number of angle bins required per wane slice for valid analysis.
+    /// <summary>
+    /// Threshold for severe wane measurements in millimeters. Wane measurements exceeding this threshold are considered severe.
+    /// </summary>
+    public double SevereWaneMM { get; set; } = 3.0;
+
+    /// <summary>
+    /// Minimum number of angle bins required per wane slice for valid analysis.
+    /// </summary>
+    public int MinAngleBinsPerWaneSlice { get; set; } = 12;
 
 }
 
+
+/// <summary>
+/// Represents the settings for usable radius analysis, including thresholds for good, warning, and bad usable radius measurements.
+/// </summary>
 public sealed class UsableRadiusSettings
 {
-    public double CoreDiameterInches { get; set; } = 4.0; // Diameter of the core in inches. This value is used to determine the usable radius of the log.
-    public double VeneerThicknessMM { get; set; } = 3.2;  // Thickness of the veneer in millimeters. This value is used to determine the usable radius of the log.
 
-    public double ThinCleanupWarningMM { get; set; } = 1.0;  // Threshold for thin cleanup warning in millimeters. If the usable radius is below this threshold, a warning will be issued.
+    /// <summary>
+    /// Core diameter in inches used for usable radius analysis. This value defines the minimum core diameter of the log that is considered usable for processing.
+    /// </summary>
+    public double CoreDiameterInches { get; set; } = 4.0; 
+
+    /// <summary>
+    /// Thickness of the veneer in millimeters. This value is used to determine the usable radius of the log.
+    /// </summary>
+    public double VeneerThicknessMM { get; set; } = 3.2;  
+
+    /// <summary>
+    /// Threshold for thin cleanup warning in millimeters. If the usable radius is below this threshold, a warning will be issued.
+    /// </summary>
+    public double ThinCleanupWarningMM { get; set; } = 1.0;  
 }
 
+
+/// <summary>
+/// Represents the settings for scoring analysis, including weights and thresholds for different scoring metrics.
+/// </summary>
 public sealed class ScoringSettings
 {
-    public double WaneBalanceGoodIn { get; set; } = 0.050; // Threshold for good wane balance in inches. Wane balance measurements below this threshold are considered good.
-    public double WaneBalanceBadIn { get; set; } = 0.250;  // Threshold for bad wane balance in inches. Wane balance measurements above this threshold are considered bad.
-    public double WaneBalanceWeightPercent { get; set; } = 25.0;  // Weight assigned to wane balance in the scoring system as a percentage.
+    /// <summary>
+    /// Threshold for good wane balance in inches. Wane balance measurements below this threshold are considered good.
+    /// </summary>
+    public double WaneBalanceGoodIn { get; set; } = 0.050; 
 
-    public double LowWoodRiskGoodPercent { get; set; } = 25.0;  // Threshold for good low wood risk as a percentage. Low wood risk measurements below this threshold are considered good.
-    public double LowWoodRiskBadPercent { get; set; } = 100.0; // Threshold for bad low wood risk as a percentage. Low wood risk measurements above this threshold are considered bad.
-    public double LowWoodRiskWeightPercent { get; set; } = 35.0;  // Weight assigned to low wood risk in the scoring system as a percentage.
+    /// <summary>
+    /// Threshold for bad wane balance in inches. Wane balance measurements above this threshold are considered bad.
+    /// </summary>
+    public double WaneBalanceBadIn { get; set; } = 0.250;  
 
-    public double DeepestLowWoodGoodIn { get; set; } = 0.050;   // Threshold for good deepest low wood in inches. Deepest low wood measurements below this threshold are considered good.
-    public double DeepestLowWoodBadIn { get; set; } = 0.250;  // Threshold for bad deepest low wood in inches. Deepest low wood measurements above this threshold are considered bad.
-    public double DeepestLowWoodWeightPercent { get; set; } = 10.0;  // Weight assigned to deepest low wood in the scoring system as a percentage.
+    /// <summary>
+    /// Weight assigned to wane balance in the scoring system as a percentage.
+    /// </summary>
+    public double WaneBalanceWeightPercent { get; set; } = 25.0;  
 
-    public double SpindleMovementGoodIn { get; set; } = 0.100;  //  Threshold for good spindle movement in inches. Spindle movement measurements below this threshold are considered good.
-    public double SpindleMovementBadIn { get; set; } = 0.500;  // Threshold for bad spindle movement in inches. Spindle movement measurements above this threshold are considered bad.
-    public double SpindleMovementWeightPercent { get; set; } = 15.0;  // Weight assigned to spindle movement in the scoring system as a percentage.
+    /// <summary>
+    /// Threshold for good low wood risk as a percentage. Low wood risk measurements below this threshold are considered good.
+    /// </summary>
+    public double LowWoodRiskGoodPercent { get; set; } = 25.0;  
 
-    public double OutOfRoundGoodIn { get; set; } = 0.100; // Threshold for good out-of-roundness in inches. Out-of-roundness measurements below this threshold are considered good.
-    public double OutOfRoundBadIn { get; set; } = 0.500;  // Threshold for bad out-of-roundness in inches. Out-of-roundness measurements above this threshold are considered bad.
-    public double OutOfRoundWeightPercent { get; set; } = 10.0;  // Weight assigned to out-of-roundness in the scoring system as a percentage.
+    /// <summary>
+    /// Threshold for bad low wood risk as a percentage. Low wood risk measurements above this threshold are considered bad.
+    /// </summary>
+    public double LowWoodRiskBadPercent { get; set; } = 100.0; 
 
-    public double CenterlineSweepGoodIn { get; set; } = 0.100;  //  Threshold for good centerline sweep in inches. Centerline sweep measurements below this threshold are considered good.
-    public double CenterlineSweepBadIn { get; set; } = 0.750; // Threshold for bad centerline sweep in inches. Centerline sweep measurements above this threshold are considered bad.
-    public double CenterlineSweepWeightPercent { get; set; } = 5.0;  // Weight assigned to centerline sweep in the scoring system as a percentage.
+    /// <summary>
+    /// Weight assigned to low wood risk in the scoring system as a percentage.
+    /// </summary>
+    public double LowWoodRiskWeightPercent { get; set; } = 35.0;  
+
+    /// <summary>
+    /// Threshold for good deepest low wood in inches. Deepest low wood measurements below this threshold are considered good.
+    /// </summary>
+    public double DeepestLowWoodGoodIn { get; set; } = 0.050;   
+
+    /// <summary>
+    /// Threshold for bad deepest low wood in inches. Deepest low wood measurements above this threshold are considered bad.
+    /// </summary>
+    public double DeepestLowWoodBadIn { get; set; } = 0.250;  
+
+    /// <summary>
+    /// Weight assigned to deepest low wood in the scoring system as a percentage.
+    /// </summary>
+    public double DeepestLowWoodWeightPercent { get; set; } = 10.0;  
+
+    /// <summary>
+    /// Threshold for good spindle movement in inches. Spindle movement measurements below this threshold are considered good.
+    /// </summary>
+    public double SpindleMovementGoodIn { get; set; } = 0.100;  
+
+    /// <summary>
+    /// Threshold for bad spindle movement in inches. Spindle movement measurements above this threshold are considered bad.
+    /// </summary>
+    public double SpindleMovementBadIn { get; set; } = 0.500;  
+
+    /// <summary>
+    /// Weight assigned to spindle movement in the scoring system as a percentage.
+    /// </summary>
+    public double SpindleMovementWeightPercent { get; set; } = 15.0;  
+
+    /// <summary>
+    /// Threshold for good out-of-roundness in inches. Out-of-roundness measurements below this threshold are considered good.
+    /// </summary>
+    public double OutOfRoundGoodIn { get; set; } = 0.100; 
+
+    /// <summary>
+    /// Threshold for bad out-of-roundness in inches. Out-of-roundness measurements above this threshold are considered bad.
+    /// </summary>
+    public double OutOfRoundBadIn { get; set; } = 0.500;  
+
+    /// <summary>
+    /// Weight assigned to out-of-roundness in the scoring system as a percentage.
+    /// </summary>
+    public double OutOfRoundWeightPercent { get; set; } = 10.0;  
+
+    /// <summary>
+    /// Threshold for good centerline sweep in inches. Centerline sweep measurements below this threshold are considered good.
+    /// </summary>
+    public double CenterlineSweepGoodIn { get; set; } = 0.100;  
+
+    /// <summary>
+    /// Threshold for bad centerline sweep in inches. Centerline sweep measurements above this threshold are considered bad.
+    /// </summary>
+    public double CenterlineSweepBadIn { get; set; } = 0.750; 
+
+    /// <summary>
+    /// Weight assigned to centerline sweep in the scoring system as a percentage.
+    /// </summary>
+    public double CenterlineSweepWeightPercent { get; set; } = 5.0;  
 }
 
+
+/// <summary>
+/// Represents the settings for adaptive scoring, including parameters for adaptive scoring algorithms and criteria.
+/// </summary>
 public sealed class AdaptiveScoringSettings
 {
-    public bool Enabled { get; set; } = true; // When true, adaptive scoring is enabled, allowing the system to adjust scoring thresholds based on the characteristics of the log being analyzed.
 
-    public bool RebuildDefectMapWithAdaptiveThresholds { get; set; } = true; // When true, the defect map is rebuilt using adaptive thresholds based on the initial analysis of the log.
+    /// <summary>
+    /// Indicates whether adaptive scoring is enabled. If true, the application will use adaptive scoring algorithms to adjust scoring based on log characteristics; if false, standard scoring will be used.
+    /// </summary>
+    public bool Enabled { get; set; } = true; 
 
-    // Log classification thresholds.
-    public double HighSweepIn { get; set; } = 0.400; // Threshold for high sweep in inches. Logs with sweep measurements above this threshold are classified as high sweep logs.
-    public double HighBowIn { get; set; } = 0.200; // Threshold for high bow in inches. Logs with bow measurements above this threshold are classified as high bow logs.
-    public double HighOutOfRoundIn { get; set; } = 0.400; // Threshold for high out-of-roundness in inches. Logs with out-of-roundness measurements above this threshold are classified as high out-of-round logs.
+    /// <summary>
+    /// Indicates whether the defect map should be rebuilt using adaptive thresholds based on the initial analysis of the log. If true, the defect map is rebuilt; if false, the existing defect map is used.
+    /// </summary>
+    public bool RebuildDefectMapWithAdaptiveThresholds { get; set; } = true;
 
-    public double HighLowWoodPercent { get; set; } = 8.0;  // Threshold for high low wood percentage. Logs with low wood percentages above this threshold are classified as high low wood logs.
-    public double HighSevereLowWoodPercent { get; set; } = 1.0;  // Threshold for high severe low wood percentage. Logs with severe low wood percentages above this threshold are classified as high severe low wood logs.
-    public double DeepLowWoodIn { get; set; } = 0.150;  // Threshold for deep low wood in inches. Logs with deepest low wood measurements above this threshold are classified as deep low wood logs.
+    /// <summary>
+    /// Threshold for high sweep in inches. Logs with sweep measurements above this threshold are classified as high sweep logs.
+    /// </summary>
+    public double HighSweepIn { get; set; } = 0.400; 
+    /// <summary>
+    /// Threshold for high bow in inches. Logs with bow measurements above this threshold are classified as high bow logs.
+    /// </summary>
+    public double HighBowIn { get; set; } = 0.200; 
+    /// <summary>
+    /// Threshold for high out-of-roundness in inches. Logs with out-of-roundness measurements above this threshold are classified as high out-of-round logs.
+    /// </summary>
+    public double HighOutOfRoundIn { get; set; } = 0.400; 
 
-    public double CleanLowWoodMaxPercent { get; set; } = 2.0;  // Threshold for maximum clean low wood percentage. Logs with low wood percentages below this threshold are classified as clean logs.
-    public double CleanSweepMaxIn { get; set; } = 0.250; // Threshold for maximum clean sweep in inches. Logs with sweep measurements below this threshold are classified as clean logs.
-    public double CleanOutOfRoundMaxIn { get; set; } = 0.250; // Threshold for maximum clean out-of-roundness in inches. Logs with out-of-roundness measurements below this threshold are classified as clean logs.
+    /// <summary>
+    /// Threshold for high low wood percentage. Logs with low wood percentages above this threshold are classified as high low wood logs.
+    /// </summary>
+    public double HighLowWoodPercent { get; set; } = 8.0;  
+    /// <summary>
+    /// Threshold for high severe low wood percentage. Logs with severe low wood percentages above this threshold are classified as high severe low wood logs.
+    /// </summary>
+    public double HighSevereLowWoodPercent { get; set; } = 1.0;  
+    /// <summary>
+    /// Threshold for deep low wood in inches. Logs with deepest low wood measurements above this threshold are classified as deep low wood logs.
+    /// </summary>
+    public double DeepLowWoodIn { get; set; } = 0.150;  
 
-    // Multipliers applied to copied scoring settings for the current log.
-    public double SweptLogLowWoodWeightMultiplier { get; set; } = 1.35; // Multiplier applied to low wood weight for swept logs in the scoring system.
-    public double SweptLogSweepWeightMultiplier { get; set; } = 1.35; // Multiplier applied to sweep weight for swept logs in the scoring system.
-    public double SweptLogMovementWeightMultiplier { get; set; } = 0.70; // Multiplier applied to movement weight for swept logs in the scoring system.
+    /// <summary>
+    /// Threshold for maximum clean low wood percentage. Logs with low wood percentages below this threshold are classified as clean logs.
+    /// </summary>
+    public double CleanLowWoodMaxPercent { get; set; } = 2.0;  
+    /// <summary>
+    /// Threshold for maximum clean sweep in inches. Logs with sweep measurements below this threshold are classified as clean logs.
+    /// </summary>
+    public double CleanSweepMaxIn { get; set; } = 0.250; 
+    /// <summary>
+    /// Threshold for maximum clean out-of-roundness in inches. Logs with out-of-roundness measurements below this threshold are classified as clean logs.
+    /// </summary>
+    public double CleanOutOfRoundMaxIn { get; set; } = 0.250;
 
-    public double LowWoodLogLowWoodWeightMultiplier { get; set; } = 1.60; // Multiplier applied to low wood weight for low wood logs in the scoring system.
-    public double LowWoodLogDeepestWeightMultiplier { get; set; } = 1.40; // Multiplier applied to deepest low wood weight for low wood logs in the scoring system.
-    public double LowWoodLogMovementWeightMultiplier { get; set; } = 0.65;  //  Multiplier applied to movement weight for low wood logs in the scoring system.
+    /// <summary>
+    /// Multiplier applied to low wood weight for swept logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as swept logs, affecting their overall score.
+    /// </summary>
+    public double SweptLogLowWoodWeightMultiplier { get; set; } = 1.35;
 
-    public double OvalLogOutOfRoundWeightMultiplier { get; set; } = 1.45; // Multiplier applied to out-of-round weight for oval logs in the scoring system.
-    public double OvalLogLowWoodWeightMultiplier { get; set; } = 1.20;  //  Multiplier applied to low wood weight for oval logs in the scoring system.
+    /// <summary>
+    /// Multiplier applied to sweep weight for swept logs in the scoring system. This value adjusts the weight of sweep measurements for logs classified as swept logs, affecting their overall score.
+    /// </summary>
+    public double SweptLogSweepWeightMultiplier { get; set; } = 1.35; 
+    /// <summary>
+    /// Multiplier applied to movement weight for swept logs in the scoring system. This value adjusts the weight of movement measurements for logs classified as swept logs, affecting their overall score.
+    /// </summary>
+    public double SweptLogMovementWeightMultiplier { get; set; } = 0.70; 
 
-    public double CleanLogMovementWeightMultiplier { get; set; } = 1.60; // Multiplier applied to movement weight for clean logs in the scoring system.
-    public double CleanLogLowWoodWeightMultiplier { get; set; } = 0.80; // Multiplier applied to low wood weight for clean logs in the scoring system.
+    /// <summary>
+    /// Multiplier applied to low wood weight for low wood logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as low wood logs, affecting their overall score.
+    /// </summary>
+    public double LowWoodLogLowWoodWeightMultiplier { get; set; } = 1.60; 
+    /// <summary>
+    /// Multiplier applied to deepest low wood weight for low wood logs in the scoring system. This value adjusts the weight of deepest low wood measurements for logs classified as low wood logs, affecting their overall score.
+    /// </summary>
+    public double LowWoodLogDeepestWeightMultiplier { get; set; } = 1.40; 
+    /// <summary>
+    /// Multiplier applied to movement weight for low wood logs in the scoring system. This value adjusts the weight of movement measurements for logs classified as low wood logs, affecting their overall score.
+    /// </summary>
+    public double LowWoodLogMovementWeightMultiplier { get; set; } = 0.65;  
 
-    // Defect-map threshold behavior.
-    // Values closer to zero mark more cells as low wood.
-    public double SensitiveLowRadiusMultiplier { get; set; } = 0.85;  // -2.0 -> -1.7 mm
-    public double RelaxedLowRadiusMultiplier { get; set; } = 1.25;    // -2.0 -> -2.5 mm
+    /// <summary>
+    /// Multiplier applied to out-of-round weight for oval logs in the scoring system. This value adjusts the weight of out-of-round measurements for logs classified as oval logs, affecting their overall score.
+    /// </summary>
+    public double OvalLogOutOfRoundWeightMultiplier { get; set; } = 1.45; 
+    /// <summary>
+    /// Multiplier applied to low wood weight for oval logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as oval logs, affecting their overall score.
+    /// </summary>
+    public double OvalLogLowWoodWeightMultiplier { get; set; } = 1.20;  
 
-    // Internal optimizer movement penalty behavior.
-    public double MinimumMovementPenaltyWeight { get; set; } = 0.01; // Minimum weight assigned to movement penalties in the scoring system during optimization.
-    public double MaximumMovementPenaltyWeight { get; set; } = 0.20; // Maximum weight assigned to movement penalties in the scoring system during optimization.
+    /// <summary>
+    /// Multiplier applied to movement weight for clean logs in the scoring system. This value adjusts the weight of movement measurements for logs classified as clean logs, affecting their overall score.
+    /// </summary>
+    public double CleanLogMovementWeightMultiplier { get; set; } = 1.60; 
+    /// <summary>
+    /// Multiplier applied to low wood weight for clean logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as clean logs, affecting their overall score.
+    /// </summary>
+    public double CleanLogLowWoodWeightMultiplier { get; set; } = 0.80;
+
+    /// <summary>
+    /// Multiplier applied to the low radius threshold for sensitive scoring in the scoring system. This value adjusts the threshold for
+    /// low radius measurements when sensitive scoring is enabled, affecting how low radius defects are evaluated.
+    /// </summary>
+    public double SensitiveLowRadiusMultiplier { get; set; } = 0.85;
+
+    /// <summary>
+    /// Multiplier applied to the low radius threshold for relaxed scoring in the scoring system. This value adjusts the threshold for
+    /// </summary>
+    public double RelaxedLowRadiusMultiplier { get; set; } = 1.25;
+
+    /// <summary>
+    /// Minimum weight assigned to movement penalties in the scoring system during optimization. This value defines the lower
+    /// bound for how much movement penalties can influence the overall score during the optimization process.
+    /// </summary>
+    public double MinimumMovementPenaltyWeight { get; set; } = 0.01; 
+    /// <summary>
+    /// Maximum weight assigned to movement penalties in the scoring system during optimization. This value defines the upper
+    /// bound for how much movement penalties can influence the overall score during the optimization process.
+    /// </summary>
+    public double MaximumMovementPenaltyWeight { get; set; } = 0.20; 
 }
 
+/// <summary>
+/// Represents the settings for defect analysis, including thresholds for good, warning, and bad defect measurements.
+/// </summary>
 public sealed class DefectSettings
 {
-    // Error = measured radius - nominal radius.
-    public double LowRadiusThresholdMM { get; set; } = -2.0; // Threshold for low radius defects in millimeters (measured radius below nominal radius).
-    public double SevereLowRadiusThresholdMM { get; set; } = -4.0;  // Threshold for severe low radius defects in millimeters (measured radius significantly below nominal radius).
-    public double HighRadiusThresholdMM { get; set; } = 2.0; // Threshold for high radius defects in millimeters (measured radius above nominal radius).
+    /// <summary>
+    /// Threshold for low radius defects in millimeters. Defects with measured radius below this threshold are considered low radius defects.
+    /// </summary>
+    public double LowRadiusThresholdMM { get; set; } = -2.0; 
+    /// <summary>
+    /// Threshold for severe low radius defects in millimeters. Defects with measured radius significantly below the nominal radius are considered severe low radius defects.
+    /// </summary>
+    public double SevereLowRadiusThresholdMM { get; set; } = -4.0;  
+    /// <summary>
+    /// Threshold for high radius defects in millimeters. Defects with measured radius above the nominal radius are considered high radius defects.
+    /// </summary>
+    public double HighRadiusThresholdMM { get; set; } = 2.0; 
 
-    public double LowRadiusWeight { get; set; } = 1.0;  // Weight assigned to low radius defects in the scoring system.
-    public double SevereLowRadiusWeight { get; set; } = 3.0;  //    Weight assigned to severe low radius defects in the scoring system.
-    public double HighRadiusWeight { get; set; } = 0.35;  // Weight assigned to high radius defects in the scoring system.
+    /// <summary>
+    /// Weight assigned to low radius defects in the scoring system.
+    /// </summary>
+    public double LowRadiusWeight { get; set; } = 1.0;  
+    /// <summary>
+    /// Weight assigned to severe low radius defects in the scoring system.
+    /// </summary>
+    public double SevereLowRadiusWeight { get; set; } = 3.0;  
+    /// <summary>
+    /// Weight assigned to high radius defects in the scoring system.
+    /// </summary>
+    public double HighRadiusWeight { get; set; } = 0.35; 
 
-    public double PatchDepthWeight { get; set; } = 0.25;  // Weight assigned to the depth of patch defects in the scoring system.
-    public double PatchCellWeight { get; set; } = 0.002;  // Weight assigned to the number of cells in patch defects in the scoring system.
-    public double PatchSeverityWeight { get; set; } = 0.002;  // Weight assigned to the severity of patch defects in the scoring system.
-    public double SpindleReliefWeight { get; set; } = 0.10;  // Weight assigned to spindle relief defects in the scoring system.
+    /// <summary>
+    /// Weight assigned to the depth of patch defects in the scoring system.
+    /// </summary>
+    public double PatchDepthWeight { get; set; } = 0.25;  
+    /// <summary>
+    /// Weight assigned to the number of cells in patch defects in the scoring system.
+    /// </summary>
+    public double PatchCellWeight { get; set; } = 0.002;  
+    /// <summary>
+    /// Weight assigned to the severity of patch defects in the scoring system.
+    /// </summary>
+    public double PatchSeverityWeight { get; set; } = 0.002;  
+    /// <summary>
+    /// Weight assigned to spindle relief defects in the scoring system.
+    /// </summary>
+    public double SpindleReliefWeight { get; set; } = 0.10;  
 }
 
+
+/// <summary>
+/// Represents the settings for optimization analysis, including parameters for optimization algorithms and criteria.
+/// </summary>
 public sealed class OptimizationSettings
 {
-    // Final recommendation must beat baseline by this much before app says "use optimized setup".
-    public double MinimumImprovementPercent { get; set; } = 2.0;  // Minimum percentage improvement required for the optimized setup to be considered better than the baseline setup.
+   
+    /// <summary>
+    /// Minimum percentage improvement required for the optimized setup to be considered better than the baseline setup.
+    /// </summary>
+    public double MinimumImprovementPercent { get; set; } = 2.0;
 
-    // Coarse search.
-    public double CoarseMaxMoveMM { get; set; } = 20.0;  // Maximum movement allowed during the coarse search phase in millimeters.
-    public double CoarseStepMM { get; set; } = 5.0;  // Step size for the coarse search phase in millimeters.
+    /// <summary>
+    /// Maximum movement in millimeters allowed during the coarse search phase of the optimization process. This value defines the upper limit
+    /// for how much the spindle can move during the initial coarse search for optimal settings.
+    /// </summary>
+    public double CoarseMaxMoveMM { get; set; } = 20.0;
 
-    // Medium search.
-    public double MediumSearchRadiusMM { get; set; } = 5.0;  // Maximum search radius for the medium search phase in millimeters.
-    public double MediumStepMM { get; set; } = 2.5;  // Step size for the medium search phase in millimeters.
+    /// <summary>
+    /// Step size in millimeters for the coarse search phase of the optimization process. This value defines the increment by which the spindle moves during the coarse search for optimal settings.
+    /// </summary>
+    public double CoarseStepMM { get; set; } = 5.0;
 
-    // Fine search.
-    public double FineSearchRadiusMM { get; set; } = 2.5;  // Maximum search radius for the fine search phase in millimeters.
-    public double FineStepMM { get; set; } = 1.0;  // Step size for the fine search phase in millimeters.
 
-    // Peel recovery is evaluated by the virtual-peel stage. The spindle
-    // search settings below contain only values actually used by the
-    // penalty-scored search.
+    /// <summary>
+    /// Maximum search radius in millimeters for the medium search phase of the optimization process. This value defines the upper limit for how far the
+    /// optimizer will search for optimal settings during the medium search phase.
+    /// </summary>
+    public double MediumSearchRadiusMM { get; set; } = 5.0; 
+    public double MediumStepMM { get; set; } = 2.5; 
 
-    public double MovementPenaltyWeight { get; set; } = 0.05;  // Weight assigned to movement penalties in the scoring system.
+    public double FineSearchRadiusMM { get; set; } = 2.5;  
+    public double FineStepMM { get; set; } = 1.0;  
 
-    public bool UseCandidateAwareSearchScore { get; set; } = true; // When true, the optimizer will use a candidate-aware search score that considers both the baseline and candidate scores during the search for optimal settings.
 
-    // How much worse the candidate wane balance is allowed to get before
-    // the optimizer adds a guardrail penalty.
-    // Example: 35 means candidate wane may become 35% worse than baseline
-    // before the guardrail starts pushing back.
 
+    /// <summary>
+    /// Weight assigned to movement penalties in the scoring system.
+    /// </summary>
+    public double MovementPenaltyWeight { get; set; } = 0.05;  
+
+    /// <summary>
+    /// When true, the optimizer will use a candidate-aware search score that considers both the baseline and candidate scores during the search for optimal settings.
+    /// </summary>
+    public bool UseCandidateAwareSearchScore { get; set; } = true; 
+
+    /// <summary>
+    /// How much worse the candidate wane balance is allowed to get before
+    /// the optimizer adds a guardrail penalty.
+    /// </summary>
     public double MaximumAllowedWaneIncreasePercent { get; set; } = 15.0;
-    // Larger value = stronger pushback when wane gets worse than allowed.
-    // Start with 1.0. If it still over-sacrifices wane, try 1.5 or 2.0.
+
+    /// <summary>
+    /// Weight applied to the wane guardrail penalty in the scoring system. This value defines how much
+    /// the optimizer penalizes candidates that exceed the maximum allowed wane increase percentage.
+    /// </summary>
     public double WaneGuardPenaltyWeight { get; set; } = 1.0;
 
 }
 
 
+/// <summary>
+/// Settings related to the inscribed geometry used in the optimization process.
+/// </summary>  
 public sealed class InscribedGeometrySettings
 {
     /// <summary>
@@ -268,6 +679,9 @@ public sealed class InscribedGeometrySettings
     public double GeometryTieToleranceMM { get; set; } = 0.01;
 }
 
+/// <summary>
+/// Defines the operating modes for the charger, indicating whether it is in engineering, commissioning, or production mode.
+/// </summary>
 public enum ChargerOperatingMode
 {
     Engineering = 0,
@@ -275,6 +689,10 @@ public enum ChargerOperatingMode
     Production = 2
 }
 
+
+/// <summary>
+/// Represents the settings for production, including parameters for production readiness and commissioning checks.
+/// </summary>
 public sealed class ProductionSettings
 {
     public ChargerOperatingMode OperatingMode { get; set; } = ChargerOperatingMode.Commissioning;
@@ -314,6 +732,10 @@ public sealed class ProductionSettings
         CommissioningApprovedUtc.HasValue;
 }
 
+/// <summary>
+/// Represents the settings for PLC integration, including parameters for enabling the integration,
+/// automatic capture, result sending, and verification requirements.
+/// </summary>
 public sealed class PlcIntegrationSettings
 {
     public bool Enabled { get; set; } = true;
@@ -357,11 +779,16 @@ public sealed class SafetySettings
     public bool BlockOnMovementWarning { get; set; } = true;
     public bool RequireFiniteCommands { get; set; } = true;
 
+    /// <summary>
+    /// Computes the knife clearance in millimeters based on the given veneer thickness and the configured safety settings.
+    /// The effective clearance is calculated as the maximum of the minimum knife clearance and the product
+    /// of the veneer thickness and the knife clearance multiplier, plus any additional carriage retract buffer.
+    /// </summary>
+    /// <param name="veneerThicknessMM">The thickness of the veneer in millimeters.</param>
+    /// <returns>The computed knife clearance in millimeters.</returns>
     public double ComputeKnifeClearanceMM(double veneerThicknessMM)
     {
-        // Defense in depth: the effective multiplier can never be lower
-        // than the required ten peel thicknesses, even if settings are edited
-        // outside the normal validated settings path.
+        
         double effectiveMultiplier =
             Math.Max(10.0, KnifeClearancePeelThicknessMultiplier);
 
@@ -374,6 +801,10 @@ public sealed class SafetySettings
     }
 }
 
+/// <summary>
+/// Represents the settings for recovery optimization, including parameters for
+/// candidate inclusion, direct refinement, and search coverage checks.
+/// </summary>
 public sealed class RecoveryOptimizationSettings
 {
     /// <summary>
@@ -403,34 +834,65 @@ public sealed class RecoveryOptimizationSettings
     public int MinimumRecoverySearchAngularBins { get; set; } = 30;
 }
 
+/// <summary>
+/// Represents the settings for machine travel limits, including maximum allowed movements for the tail and head in both X and Y directions.
+/// </summary>
 public sealed class MachineLimitSettings
 {
-    // These values must be measured and approved during commissioning.
-    // Production PLC writes are blocked until MachineTravelLimitsVerified is true.
-    public double MaxTailMoveXMM { get; set; } = 50.8; // Maximum movement allowed for the tail in the X direction in millimeters.
-    public double MaxTailMoveYMM { get; set; } = 50.8; // Maximum movement allowed for the tail in the Y direction in millimeters.
-    public double MaxHeadMoveXMM { get; set; } = 50.8;  // Maximum movement allowed for the head in the X direction in millimeters.
-    public double MaxHeadMoveYMM { get; set; } = 50.8; // Maximum movement allowed for the head in the Y direction in millimeters.
+    /// <summary>
+    /// Maximum movement allowed for the tail in the X and Y direction in millimeters.
+    /// This value defines the upper limit for how far the tail can move in the X and Y direction during operation.
+    /// </summary>
+    public double MaxTailMoveXMM { get; set; } = 100; 
+    public double MaxTailMoveYMM { get; set; } = 100; 
+    public double MaxHeadMoveXMM { get; set; } = 100;  
+    public double MaxHeadMoveYMM { get; set; } = 100; 
 
-    public double WarningMoveMM { get; set; } = 50.8;  // Warning threshold for movement in millimeters. If the movement exceeds this value, a warning will be issued.
+    public double WarningMoveMM { get; set; } = 80;  // Warning threshold for movement in millimeters. If the movement exceeds this value, a warning will be issued.
 }
 
+
+/// <summary>
+/// Represents the settings for diagnostics, including options to include engineering details, timing reports, and settings summaries in the diagnostics report.
+/// </summary>
 public sealed class DiagnosticsSettings
 {
-    public bool IncludeEngineeringDetails { get; set; } = true;  // Indicates whether to include engineering details in the diagnostics report.
 
-    public bool IncludeTimingReport { get; set; } = true;  // Indicates whether to include timing report in the diagnostics report.
-    public bool IncludeSettingsSummary { get; set; } = true;   //   Indicates whether to include settings summary in the diagnostics report.
+    /// <summary>
+    /// Indicates whether to include engineering details in the diagnostics report. If true, the report will
+    /// contain detailed engineering information; if false, this information will be omitted.
+    /// </summary>
+    public bool IncludeEngineeringDetails { get; set; } = true; 
+
+    /// <summary>
+    /// Indicates whether to include timing report in the diagnostics report. If true, the report will
+    /// contain timing information; if false, this information will be omitted.
+    /// </summary>
+    public bool IncludeTimingReport { get; set; } = true;  
+
+    /// <summary>
+    /// Indicates whether to include settings summary in the diagnostics report. If true, the report will
+    /// contain a summary of the settings; if false, this information will be omitted.
+    /// </summary>
+    public bool IncludeSettingsSummary { get; set; } = true;   
 }
 
+
+/// <summary>
+/// Represents the statistics for sheet quality analysis, including total cells analyzed,
+/// usable cells, wane-affected cells, and severe wane-affected cells.
+/// </summary>
 public sealed class SheetQualityStats
 {
-    public int TotalCells { get; set; } // Total number of cells analyzed for sheet quality. This value is used to calculate the recoverable veneer score.
-    public int UsableCells { get; set; }  // Number of usable cells analyzed for sheet quality. This value is used to calculate the recoverable veneer score.
-    public int WaneCells { get; set; } // Number of cells affected by wane analyzed for sheet quality. This value is used to calculate the recoverable veneer score.
-    public int SevereWaneCells { get; set; }  // Number of cells affected by severe wane analyzed for sheet quality. This value is used to calculate the recoverable veneer score.
+    public int TotalCells { get; set; }
+    public int UsableCells { get; set; } 
+    public int WaneCells { get; set; } 
+    public int SevereWaneCells { get; set; }  
 }
 
+/// <summary>
+/// Represents information about a scan folder, including the date, block number, and scan number.
+/// </summary>  
 public class ScanFolderInfo
 {
     public int Year { get; set; }
@@ -443,6 +905,11 @@ public class ScanFolderInfo
     public string BlockFolderPath { get; set; } = string.Empty;
 }
 
+
+/// <summary>
+/// Represents the settings for database integration, including parameters for enabling
+/// database saving and specifying the connection string.
+/// </summary>
 public sealed class DatabaseSettings
 {
     public bool EnableDatabaseSaving { get; set; }
@@ -450,7 +917,10 @@ public sealed class DatabaseSettings
     public string ConnectionString { get; set; } = string.Empty;
 }
 
-
+/// <summary>
+/// Represents the settings for production setup, including parameters for database configuration,
+/// camera verification, laser detection, length calibration, and scanner calibration.
+/// </summary>
 public sealed class ProductionSetupSettings
 {
     public bool DatabaseConfigured { get; set; }

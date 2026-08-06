@@ -1,5 +1,4 @@
 using Microsoft.Data.SqlClient;
-
 using OptimizationXY.Charger.Models.Core;
 using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Configuration;
@@ -8,12 +7,25 @@ using System.Globalization;
 
 namespace OptimizationXY.Charger.Services.Storage;
 
+/// <summary>
+/// Saves the scan results to a SQL database. This service handles the insertion of scan session data, scan frames, and optimization results into the appropriate database tables. It ensures that all related data is saved within a single transaction, providing atomicity and consistency.
+/// If any part of the save operation fails, the transaction is rolled back to maintain data integrity.
+/// </summary>
+/// <param name="settings">The database settings used to configure the connection.</param>
 public sealed class SqlScanSaveService(DatabaseSettings settings)
 {
     private const double MM_PER_INCH = 25.4;
 
     private readonly DatabaseSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
+
+    /// <summary>
+    /// Saves the scan results from the provided PipelineState to the SQL database. This method performs the following steps:
+    /// </summary>
+    /// <param name="state">The pipeline state containing the scan results to be saved.</param>
+    /// <returns>The ID of the inserted scan record.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the database connection string is not configured or if the last saved run folder is missing.</exception>
+    /// <exception cref="AggregateException">Thrown if saving the scan fails and the SQL transaction could not be rolled back cleanly.</exception>
     public int SaveScan(PipelineState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -81,6 +93,19 @@ public sealed class SqlScanSaveService(DatabaseSettings settings)
         }
     }
 
+    /// <summary>
+    /// Inserts a new scan record into the ScanSession table in the database. This method collects relevant information from the PipelineState,
+    /// such as scan frames, point cloud data, and
+    /// optimization results, and saves them to the database. It returns the ID of the newly inserted scan record.
+    /// </summary>
+    /// <param name="connection">The SQL connection to use for the operation.</param>
+    /// <param name="transaction">The SQL transaction to use for the operation.</param>
+    /// <param name="state">The pipeline state containing the scan results to be saved.</param>
+    /// <param name="blockId">The ID of the scan block.</param>
+    /// <param name="scanNumber">The scan number.</param>
+    /// <param name="angleStepDegrees">The angle step in degrees.</param>
+    /// <returns>The ID of the newly inserted scan record.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the scan record could not be inserted.</exception>
     private static int InsertScanRecord(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -210,6 +235,15 @@ VALUES
         return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Inserts the scan frames associated with a scan session into the ScanFrame table in the database.
+    /// Each frame's details, such as angle, file path, validity, and profile point count, are saved. This method
+    /// iterates through the list of scan frames in the PipelineState and inserts them one by one within the provided SQL transaction.
+    /// </summary>
+    /// <param name="connection">The SQL connection to use for the operation.</param>
+    /// <param name="transaction">The SQL transaction within which the operation should be performed.</param>
+    /// <param name="state">The pipeline state containing the scan frames to be inserted.</param>
+    /// <param name="scanId">The ID of the scan to which the frames belong.</param>
     private static void InsertScanFrames(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -281,6 +315,13 @@ VALUES
         }
     }
 
+    /// <summary>
+    /// Inserts the optimization results associated with a scan session into the OptimizationResult table in the database.
+    /// </summary>
+    /// <param name="connection">The SQL connection to use for the operation.</param>
+    /// <param name="transaction">The SQL transaction within which the operation should be performed.</param>
+    /// <param name="state">The pipeline state containing the optimization results to be inserted.</param>
+    /// <param name="scanId">The ID of the scan to which the optimization results belong.</param>
     private static void InsertOptimizationResults(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -356,6 +397,12 @@ VALUES
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Converts a given value to DBNull.Value if it is null or not a finite number (for double and float types). This is useful for
+    /// preparing parameters for SQL commands, ensuring that invalid or missing values are correctly represented in the database.
+    /// </summary>
+    /// <param name="value">The value to be converted to DBNull.Value if it is null or not a finite number.</param>
+    /// <returns>DBNull.Value if the value is null or not a finite number; otherwise, the original value.</returns>
     private static object ToDbNull(object? value) => value switch
     {
         null => DBNull.Value,
@@ -364,6 +411,12 @@ VALUES
         _ => value
     };
 
+    /// <summary>
+    /// Calculates the median angle step in degrees from a list of ScanFrame objects. The method extracts the distinct angles from the frames, sorts them, and computes the differences between consecutive angles to find the positive steps.
+    /// It then returns the median of these positive steps, which represents the typical angular increment between frames in the scan.
+    /// </summary>
+    /// <param name="frames">The list of ScanFrame objects from which to calculate the median angle step.</param>
+    /// <returns>The median angle step in degrees, or null if it cannot be calculated.</returns>
     private static double? CalculateAngleStepDegrees(
         List<ScanFrame> frames)
     {
@@ -406,6 +459,15 @@ VALUES
             : (positiveSteps[middle - 1] + positiveSteps[middle]) / 2.0;
     }
 
+    /// <summary>
+    /// Retrieves the BlockId for a given scan block based on the provided ScanFolderInfo. If the block does not exist in
+    /// the database, it creates a new entry and returns the newly generated BlockId. This method ensures that each scan block
+    /// is uniquely identified by its year, month, day, and block number.
+    /// </summary>
+    /// <param name="connection">The SQL connection to use for the operation.</param>
+    /// <param name="transaction">The SQL transaction to use for the operation.</param>
+    /// <param name="info">The ScanFolderInfo containing details about the scan block.</param>
+    /// <returns>The BlockId of the existing or newly created scan block.</returns>
     private static int GetOrCreateScanBlock(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -465,6 +527,14 @@ VALUES
         return Convert.ToInt32(insert.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Parses the folder path to extract scan and block information, returning a ScanFolderInfo object containing the year, month, day,
+    /// block number, scan number, block name, and block folder path. The method expects the folder structure to follow a specific naming convention
+    /// (e.g., "Block_####" and "Scan_####") and will throw an InvalidOperationException if the expected structure is not found.
+    /// </summary>
+    /// <param name="folderPath">The path to the folder to parse.</param>
+    /// <returns>A ScanFolderInfo object containing the parsed information.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the folder structure does not match the expected naming convention.</exception>
     private static ScanFolderInfo ParseScanFolderInfo(string folderPath)
     {
         var currentDir = new DirectoryInfo(folderPath);
@@ -519,6 +589,14 @@ VALUES
         };
     }
 
+    /// <summary>
+    /// Parses the trailing number from a folder name that follows the pattern "Name_####". It looks for the
+    /// last underscore in the string and attempts to parse the substring after it as an integer.
+    /// If the format is incorrect or the number cannot be parsed, it throws an InvalidOperationException.
+    /// </summary>
+    /// <param name="text">The folder name to parse.</param>
+    /// <returns>The parsed integer.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the folder name does not contain a valid trailing number.</exception>
     private static int ParseTrailingNumber(string text)
     {
         int underscoreIndex = text.LastIndexOf('_');

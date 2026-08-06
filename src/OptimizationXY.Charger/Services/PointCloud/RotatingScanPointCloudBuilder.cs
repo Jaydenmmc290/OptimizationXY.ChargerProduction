@@ -4,8 +4,19 @@ using OptimizationXY.Charger.Models.Geometry;
 
 namespace OptimizationXY.Charger.Services.PointCloud;
 
+/// <summary>
+/// Builds a 3D point cloud from a series of rotating scan frames.
+/// </summary>
 public static class RotatingScanPointCloudBuilder
 {
+    /// <summary>
+    /// Builds a 3D point cloud from a series of rotating scan frames.
+    /// </summary>
+    /// <param name="frames">The list of scan frames.</param>
+    /// <param name="lengthPixelsPerMM">The length in pixels per millimeter.</param>
+    /// <param name="settings">The application settings.</param>
+    /// <param name="fillMissingPoints">Whether to fill missing points.</param>
+    /// <returns>A list of 3D points representing the point cloud.</returns>
     public static List<Point3D> BuildFromFrames(
         List<ScanFrame> frames,
         double lengthPixelsPerMM,
@@ -145,6 +156,14 @@ public static class RotatingScanPointCloudBuilder
     // It linearly blends between the two nearby good values.
     // This is safe for small gaps.
     // ------------------------------------------------------------
+    /// <summary>
+    /// Fills missing radius values along the log length.
+    /// </summary>
+    /// <param name="radiusGrid">The grid of radius values.</param>
+    /// <param name="xColumns">The list of x column indices.</param>
+    /// <param name="frameCount">The number of frames.</param>
+    /// <param name="xCount">The number of x columns.</param>
+    /// <param name="maxLinearGapPixels">The maximum linear gap in pixels to fill.</param>
     private static void FillSmallLengthwiseGaps(
         double[,] radiusGrid,
         List<int> xColumns,
@@ -196,6 +215,13 @@ public static class RotatingScanPointCloudBuilder
     // This helps when one angle missed a point but the neighboring
     // angles saw roughly the same area.
     // ------------------------------------------------------------
+    /// <summary>
+    /// Fills missing values by looking at nearby rotation frames.
+    /// </summary>
+    /// <param name="radiusGrid">The grid of radius values.</param>
+    /// <param name="frameCount">The number of frames.</param>
+    /// <param name="xCount">The number of x columns.</param>
+    /// <param name="maxAngularNeighborFrames">The maximum number of neighboring frames to consider.</param>
     private static void FillSmallAngularGaps(
         double[,] radiusGrid,
         int frameCount,
@@ -255,6 +281,11 @@ public static class RotatingScanPointCloudBuilder
         }
     }
 
+    /// <summary>
+    /// Checks if the given radius is valid (greater than zero and not NaN or Infinity).
+    /// </summary>
+    /// <param name="radius">The radius value to check.</param>
+    /// <returns>True if the radius is valid; otherwise, false.</returns>
     private static bool IsValidRadius(double radius)
     {
         return radius > 0 &&
@@ -262,6 +293,12 @@ public static class RotatingScanPointCloudBuilder
                !double.IsInfinity(radius);
     }
 
+    /// <summary>
+    /// Wraps the index to ensure it stays within the bounds of the count.
+    /// </summary>
+    /// <param name="index">The index to wrap.</param>
+    /// <param name="count">The total number of elements.</param>
+    /// <returns>The wrapped index.</returns>
     private static int WrapIndex(int index, int count)
     {
         while (index < 0)
@@ -273,6 +310,13 @@ public static class RotatingScanPointCloudBuilder
         return index;
     }
 
+    /// <summary>
+    /// Builds a list of x column indices from the minimum to maximum x values with the specified step.
+    /// </summary>
+    /// <param name="minX">The minimum x value.</param>
+    /// <param name="maxX">The maximum x value.</param>
+    /// <param name="step">The step size between x values.</param>
+    /// <returns>A list of x column indices.</returns>
     private static List<int> BuildXColumns(int minX, int maxX, int step)
     {
         if (step <= 0)
@@ -291,6 +335,11 @@ public static class RotatingScanPointCloudBuilder
         return result;
     }
 
+    /// <summary>
+    /// Estimates the typical step size between x values in the scan frames.
+    /// </summary>
+    /// <param name="frames">The list of scan frames.</param>
+    /// <returns>The estimated typical step size between x values.</returns>
     private static int EstimateTypicalXStep(List<ScanFrame> frames)
     {
         var diffs = frames

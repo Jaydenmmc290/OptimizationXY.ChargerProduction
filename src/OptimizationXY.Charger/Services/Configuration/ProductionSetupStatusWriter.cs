@@ -4,6 +4,10 @@ using OptimizationXY.Charger.Infrastructure;
 using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Calibration;
 
+
+/// <summary>
+/// Writes a JSON file containing the current production setup status, including configuration and calibration details.
+/// </summary>
 namespace OptimizationXY.Charger.Services.Configuration;
 
 public static class ProductionSetupStatusWriter
@@ -13,6 +17,11 @@ public static class ProductionSetupStatusWriter
         WriteIndented = true
     };
 
+    /// <summary>
+    /// Writes the production setup status to a JSON file in the setup directory.
+    /// </summary>
+    /// <param name="settings">The application settings containing the production setup status to write.</param>
+    /// <returns>The path to the written JSON file.</returns>
     public static string Write(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -26,16 +35,16 @@ public static class ProductionSetupStatusWriter
         {
             SchemaVersion = 3,
             UpdatedUtc = DateTime.UtcNow,
-            MachineName = Environment.MachineName,
+            Environment.MachineName,
             WindowsIdentity = Environment.UserDomainName + "\\" + Environment.UserName,
             RuntimeDataRoot = ApplicationPaths.RootDirectory,
-            SettingsPath = AppSettingsStore.SettingsPath,
-            CalibrationDirectory = ApplicationPaths.CalibrationDirectory,
+            AppSettingsStore.SettingsPath,
+            ApplicationPaths.CalibrationDirectory,
             ActiveCalibrationPackagePath = ApplicationPaths.CalibrationLookupTablePath,
             CurrentAcquisitionGeometrySha256 =
                 ScannerCalibrationCompatibility.ComputeAcquisitionGeometrySha256(
                     settings.Acquisition),
-            SavedScansDirectory = ApplicationPaths.SavedScansDirectory,
+            ApplicationPaths.SavedScansDirectory,
             Database = new
             {
                 settings.Database.EnableDatabaseSaving,
@@ -68,7 +77,7 @@ public static class ProductionSetupStatusWriter
             settings.Setup.MinimumSetupComplete,
             settings.Setup.LastSetupCompletedUtc,
             OperatingMode = settings.Production.OperatingMode.ToString(),
-            CommissioningComplete = settings.Production.CommissioningComplete
+            settings.Production.CommissioningComplete
         };
 
         string temporaryPath = path + ".tmp";

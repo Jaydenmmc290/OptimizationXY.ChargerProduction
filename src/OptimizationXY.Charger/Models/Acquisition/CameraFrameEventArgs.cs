@@ -7,7 +7,7 @@ namespace OptimizationXY.Charger.Models.Acquisition
     /// Contains the managed image and metadata.
     /// The Frame property owns a cloned Mat (not a pointer to the unmanaged Sapera buffer).
     /// </summary>
-    public sealed class CameraFrameEventArgs : EventArgs
+    public sealed class CameraFrameEventArgs : EventArgs 
     {
         /// <summary>
         /// A managed copy of the frame (Mat).

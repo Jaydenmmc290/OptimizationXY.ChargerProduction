@@ -1,12 +1,15 @@
-using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
+
 
 namespace OptimizationXY.Charger.UI.Forms;
+/// <summary>
+/// Represents a form that displays the tail camera view.
+/// </summary>
 
 public partial class TailCameraForm : Form
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TailCameraForm"/> class.
+    /// </summary>
     public TailCameraForm()
     {
         pictureBoxTail = new DoubleBufferedPictureBox(); // Initialize the field
@@ -15,6 +18,9 @@ public partial class TailCameraForm : Form
 
     public Control CameraViewHost => pictureBoxTail;
 
+    /// <summary>
+    /// Ensures that the camera view is ready for display by creating the necessary controls and handles.
+    /// </summary>
     public void EnsureCameraViewReady()
     {
         if (!IsHandleCreated)
@@ -26,6 +32,10 @@ public partial class TailCameraForm : Form
         _ = pictureBoxTail.Handle;
     }
 
+    /// <summary>
+    /// Updates the preview image displayed in the tail camera view.
+    /// </summary>
+    /// <param name="bitmap"></param>
     public void UpdatePreview(Bitmap bitmap)
     {
         ArgumentNullException.ThrowIfNull(bitmap);
@@ -41,6 +51,10 @@ public partial class TailCameraForm : Form
         previous?.Dispose();
     }
 
+    /// <summary>
+    /// Handles the form's FormClosed event to dispose of the previous image in the picture box.
+    /// </summary>
+    /// <param name="e">The event data for the FormClosed event.</param>
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         Image? previous = pictureBoxTail.Image;
@@ -50,6 +64,9 @@ public partial class TailCameraForm : Form
         base.OnFormClosed(e);
     }
 
+    /// <summary>
+    /// A custom PictureBox control that enables double buffering to reduce flickering during image updates.
+    /// </summary>
     public sealed class DoubleBufferedPictureBox : PictureBox
     {
         public DoubleBufferedPictureBox()
@@ -67,6 +84,10 @@ public partial class TailCameraForm : Form
 
     private DoubleBufferedPictureBox pictureBoxTail;
 
+
+    /// <summary>
+    /// Initializes the components of the TailCameraForm, including the picture box for displaying the tail camera view.
+    /// </summary>
     private void InitializeComponent()
     {
         pictureBoxTail = new DoubleBufferedPictureBox();

@@ -2,352 +2,380 @@ using OptimizationXY.Charger.Models.Acquisition;
 using OptimizationXY.Charger.Models.Core;
 
 
-namespace OptimizationXY.Charger.Services.Acquisition
+namespace OptimizationXY.Charger.Services.Acquisition;
+
+/// <summary>
+/// Collects one complete rotating-log scan from both the head and tail cameras.
+/// A capture is complete only when both cameras reach TargetFramePairsPerLog.
+/// </summary>
+public sealed class RotatingLogCaptureManager
 {
-    /// <summary>
-    /// Collects one complete rotating-log scan from both the head and tail cameras.
-    /// A capture is complete only when both cameras reach TargetFramePairsPerLog.
-    /// </summary>
-    public sealed class RotatingLogCaptureManager
+    private readonly CameraAcquisitionSettings _settings;
+    private readonly DiagnosticsCollector _diagnostics;
+    private readonly List<ScanFrame> _headFrames = [];
+    private readonly List<ScanFrame> _tailFrames = [];
+    private readonly Lock _captureLock = new();
+
+    private bool _isCapturingActive;
+    private DateTime _captureStartTime;
+    private int _droppedFrameCount;
+    private string _currentLogId;
+    private byte[]? _headCameraConfigurationSnapshot;
+    private byte[]? _tailCameraConfigurationSnapshot;
+
+    public event EventHandler<string>? DiagnosticsMessage;
+
+    public RotatingLogCaptureManager(
+        CameraAcquisitionSettings settings,
+        DiagnosticsCollector diagnostics)
     {
-        private readonly CameraAcquisitionSettings _settings;
-        private readonly DiagnosticsCollector _diagnostics;
-        private readonly List<ScanFrame> _headFrames = new();
-        private readonly List<ScanFrame> _tailFrames = new();
-        private readonly object _captureLock = new();
+        _settings = settings
+            ?? throw new ArgumentNullException(nameof(settings));
+        _diagnostics = diagnostics
+            ?? throw new ArgumentNullException(nameof(diagnostics));
 
-        private bool _isCapturingActive;
-        private DateTime _captureStartTime;
-        private int _droppedFrameCount;
-        private string _currentLogId;
-        private byte[]? _headCameraConfigurationSnapshot;
-        private byte[]? _tailCameraConfigurationSnapshot;
+        _settings.Validate();
+        _currentLogId = GenerateLogId();
+    }
 
-        public event EventHandler<string>? DiagnosticsMessage;
-
-        public RotatingLogCaptureManager(
-            CameraAcquisitionSettings settings,
-            DiagnosticsCollector diagnostics)
+    public bool IsCapturingActive
+    {
+        get
         {
-            _settings = settings
-                ?? throw new ArgumentNullException(nameof(settings));
-            _diagnostics = diagnostics
-                ?? throw new ArgumentNullException(nameof(diagnostics));
-
-            _settings.Validate();
-            _currentLogId = GenerateLogId();
-        }
-
-        public bool IsCapturingActive
-        {
-            get
-            {
-                lock (_captureLock)
-                    return _isCapturingActive;
-            }
-        }
-
-        public int HeadFrameCount
-        {
-            get
-            {
-                lock (_captureLock)
-                    return _headFrames.Count;
-            }
-        }
-
-        public int TailFrameCount
-        {
-            get
-            {
-                lock (_captureLock)
-                    return _tailFrames.Count;
-            }
-        }
-
-        /// <summary>
-        /// Number of complete head/tail positions currently available.
-        /// </summary>
-        public int CapturedFrameCount
-        {
-            get
-            {
-                lock (_captureLock)
-                    return Math.Min(_headFrames.Count, _tailFrames.Count);
-            }
-        }
-
-        public void BeginCapture(
-            ReadOnlyMemory<byte> headCameraConfigurationSnapshot,
-            ReadOnlyMemory<byte> tailCameraConfigurationSnapshot)
-        {
-            if (headCameraConfigurationSnapshot.IsEmpty)
-            {
-                throw new InvalidOperationException(
-                    "The head camera has no loaded camera-configuration snapshot. Reconnect the camera before starting a capture.");
-            }
-
-            if (tailCameraConfigurationSnapshot.IsEmpty)
-            {
-                throw new InvalidOperationException(
-                    "The tail camera has no loaded camera-configuration snapshot. Reconnect the camera before starting a capture.");
-            }
-
             lock (_captureLock)
-            {
-                if (_isCapturingActive)
-                {
-                    throw new InvalidOperationException(
-                        "A capture is already in progress.");
-                }
+                return _isCapturingActive;
+        }
+    }
 
-                // Defensive cleanup in case a previous capture was abandoned.
-                DisposeFrames(_headFrames);
-                DisposeFrames(_tailFrames);
-                _headFrames.Clear();
-                _tailFrames.Clear();
+    public int HeadFrameCount
+    {
+        get
+        {
+            lock (_captureLock)
+                return _headFrames.Count;
+        }
+    }
 
-                _droppedFrameCount = 0;
-                _captureStartTime = DateTime.UtcNow;
-                _isCapturingActive = true;
-                _currentLogId = GenerateLogId();
-                _headCameraConfigurationSnapshot =
-                    headCameraConfigurationSnapshot.ToArray();
-                _tailCameraConfigurationSnapshot =
-                    tailCameraConfigurationSnapshot.ToArray();
+    public int TailFrameCount
+    {
+        get
+        {
+            lock (_captureLock)
+                return _tailFrames.Count;
+        }
+    }
 
-                LogDiagnostics(
-                    $"Capture started for Log ID: {_currentLogId}");
+    /// <summary>
+    /// Number of complete head/tail positions currently available.
+    /// </summary>
+    public int CapturedFrameCount
+    {
+        get
+        {
+            lock (_captureLock)
+                return Math.Min(_headFrames.Count, _tailFrames.Count);
+        }
+    }
 
-                LogDiagnostics(
-                    $"Target: {_settings.TargetFramePairsPerLog} frame pairs " +
-                    $"({_settings.TargetFramePairsPerLog} head + " +
-                    $"{_settings.TargetFramePairsPerLog} tail).");
-            }
+    /// <summary>
+    /// Begins a new dual-camera capture session. Both cameras must have a valid
+    /// </summary>
+    /// <param name="headCameraConfigurationSnapshot">The head camera configuration snapshot.</param>
+    /// <param name="tailCameraConfigurationSnapshot">The tail camera configuration snapshot.</param>
+    /// <exception cref="InvalidOperationException"></exception>
+    public void BeginCapture(
+        ReadOnlyMemory<byte> headCameraConfigurationSnapshot,
+        ReadOnlyMemory<byte> tailCameraConfigurationSnapshot)
+    {
+        if (headCameraConfigurationSnapshot.IsEmpty)
+        {
+            throw new InvalidOperationException(
+                "The head camera has no loaded camera-configuration snapshot. Reconnect the camera before starting a capture.");
         }
 
-        /// <summary>
-        /// Adds one camera frame and transfers ownership of frameArgs.Frame
-        /// to this manager when accepted. Rejected frames are disposed here.
-        /// </summary>
-        public bool AddFrame(
-            CameraPosition position,
-            CameraFrameEventArgs frameArgs)
+        if (tailCameraConfigurationSnapshot.IsEmpty)
         {
-            ArgumentNullException.ThrowIfNull(frameArgs);
+            throw new InvalidOperationException(
+                "The tail camera has no loaded camera-configuration snapshot. Reconnect the camera before starting a capture.");
+        }
 
-            _diagnostics.RecordFrameReceived(position);
-
-            if (frameArgs.Frame == null || frameArgs.Frame.IsEmpty)
+        lock (_captureLock)
+        {
+            if (_isCapturingActive)
             {
-                frameArgs.Frame?.Dispose();
+                throw new InvalidOperationException(
+                    "A capture is already in progress.");
+            }
+
+            // Defensive cleanup in case a previous capture was abandoned.
+            DisposeFrames(_headFrames);
+            DisposeFrames(_tailFrames);
+            _headFrames.Clear();
+            _tailFrames.Clear();
+
+            _droppedFrameCount = 0;
+            _captureStartTime = DateTime.UtcNow;
+            _isCapturingActive = true;
+            _currentLogId = GenerateLogId();
+            _headCameraConfigurationSnapshot =
+                headCameraConfigurationSnapshot.ToArray();
+            _tailCameraConfigurationSnapshot =
+                tailCameraConfigurationSnapshot.ToArray();
+
+            LogDiagnostics(
+                $"Capture started for Log ID: {_currentLogId}");
+
+            LogDiagnostics(
+                $"Target: {_settings.TargetFramePairsPerLog} frame pairs " +
+                $"({_settings.TargetFramePairsPerLog} head + " +
+                $"{_settings.TargetFramePairsPerLog} tail).");
+        }
+    }
+
+    /// <summary>
+    /// Adds a new frame from the specified camera position to the capture session.
+    /// </summary>
+    /// <param name="position">The camera position (head or tail) from which the frame was captured.</param>
+    /// <param name="frameArgs">The frame event arguments containing the captured frame.</param>
+    /// <returns>True if the frame was successfully added; otherwise, false.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public bool AddFrame(
+        CameraPosition position,
+        CameraFrameEventArgs frameArgs)
+    {
+        ArgumentNullException.ThrowIfNull(frameArgs);
+
+        _diagnostics.RecordFrameReceived(position);
+
+        if (frameArgs.Frame == null || frameArgs.Frame.IsEmpty)
+        {
+            frameArgs.Frame?.Dispose();
+            _diagnostics.RecordFrameDropped(position);
+            LogDiagnostics($"Rejected empty {position} frame.");
+            return false;
+        }
+
+        lock (_captureLock)
+        {
+            if (!_isCapturingActive)
+            {
+                frameArgs.Frame.Dispose();
                 _diagnostics.RecordFrameDropped(position);
-                LogDiagnostics($"Rejected empty {position} frame.");
                 return false;
             }
 
-            lock (_captureLock)
+            List<ScanFrame> targetFrames = position switch
             {
-                if (!_isCapturingActive)
-                {
-                    frameArgs.Frame.Dispose();
-                    _diagnostics.RecordFrameDropped(position);
-                    return false;
-                }
+                CameraPosition.Head => _headFrames,
+                CameraPosition.Tail => _tailFrames,
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(position),
+                    position,
+                    "Unsupported camera position.")
+            };
 
-                List<ScanFrame> targetFrames = position switch
+            if (targetFrames.Count >=
+                _settings.TargetFramePairsPerLog)
+            {
+                // The other camera may still be receiving its final frame.
+                // Extra free-running/triggered frames after this camera has
+                // completed its quota are intentionally ignored and are not
+                // counted as dropped capture data.
+                frameArgs.Frame.Dispose();
+                return false;
+            }
+
+            int frameIndex = targetFrames.Count;
+
+            try
+            {
+                var scanFrame = new ScanFrame
                 {
-                    CameraPosition.Head => _headFrames,
-                    CameraPosition.Tail => _tailFrames,
-                    _ => throw new ArgumentOutOfRangeException(
-                        nameof(position),
-                        position,
-                        "Unsupported camera position.")
+                    FrameIndex = frameIndex,
+                    AngleDeg =
+                        frameIndex *
+                        _settings.GetAngularStepDegrees(),
+                    ImagePath = string.Empty,
+                    GrayImage = frameArgs.Frame,
+                    IsValid = true,
+                    StatusMessage =
+                        $"{position} live captured"
                 };
 
-                if (targetFrames.Count >=
-                    _settings.TargetFramePairsPerLog)
-                {
-                    // The other camera may still be receiving its final frame.
-                    // Extra free-running/triggered frames after this camera has
-                    // completed its quota are intentionally ignored and are not
-                    // counted as dropped capture data.
-                    frameArgs.Frame.Dispose();
-                    return false;
-                }
-
-                int frameIndex = targetFrames.Count;
-
-                try
-                {
-                    var scanFrame = new ScanFrame
-                    {
-                        FrameIndex = frameIndex,
-                        AngleDeg =
-                            frameIndex *
-                            _settings.GetAngularStepDegrees(),
-                        ImagePath = string.Empty,
-                        GrayImage = frameArgs.Frame,
-                        IsValid = true,
-                        StatusMessage =
-                            $"{position} live captured"
-                    };
-
-                    targetFrames.Add(scanFrame);
-
-                    LogDiagnostics(
-                        $"{position} capture progress: " +
-                        $"{targetFrames.Count} / " +
-                        $"{_settings.TargetFramePairsPerLog}");
-
-                    return true;
-                }
-                catch
-                {
-                    frameArgs.Frame.Dispose();
-                    _droppedFrameCount++;
-                    _diagnostics.RecordFrameDropped(position);
-                    throw;
-                }
-            }
-        }
-
-        public bool IsCaptureComplete()
-        {
-            lock (_captureLock)
-            {
-                return
-                    _isCapturingActive &&
-                    _headFrames.Count >=
-                        _settings.TargetFramePairsPerLog &&
-                    _tailFrames.Count >=
-                        _settings.TargetFramePairsPerLog;
-            }
-        }
-
-        public CompletedLogCapture FinishCapture()
-        {
-            lock (_captureLock)
-            {
-                if (!_isCapturingActive)
-                {
-                    throw new InvalidOperationException(
-                        "No capture is currently active.");
-                }
-
-                if (_headFrames.Count == 0 ||
-                    _tailFrames.Count == 0)
-                {
-                    throw new InvalidOperationException(
-                        "A dual-camera capture requires at least one " +
-                        "head frame and one tail frame.");
-                }
-
-                _isCapturingActive = false;
-
-                DateTime captureEndTime = DateTime.UtcNow;
-                double captureDuration =
-                    (captureEndTime - _captureStartTime).TotalSeconds;
-
-                int headCount = _headFrames.Count;
-                int tailCount = _tailFrames.Count;
-
-                List<ScanFrame> concatenatedFrames;
-
-                try
-                {
-                    concatenatedFrames =
-                        DualCameraFrameConcatenator.ConcatenatePairs(
-                            _headFrames,
-                            _tailFrames,
-                            _settings.Concatenation,
-                            _settings.GetAngularStepDegrees());
-                }
-                finally
-                {
-                    // The concatenated frames own independent image data.
-                    // Raw camera halves are no longer needed by the processing
-                    // pipeline and are released immediately.
-                    DisposeFrames(_headFrames);
-                    DisposeFrames(_tailFrames);
-                    _headFrames.Clear();
-                    _tailFrames.Clear();
-                }
-
-                AcquisitionMode acquisitionMode =
-                    _settings.HeadCamera.Mode;
-
-                var result = new CompletedLogCapture(
-                    logId: _currentLogId,
-                    concatenatedFrames: concatenatedFrames,
-                    headFrameCount: headCount,
-                    tailFrameCount: tailCount,
-                    captureDurationSeconds: captureDuration,
-                    captureStartedUtc: _captureStartTime,
-                    captureCompletedUtc: captureEndTime,
-                    headCameraConfigurationSnapshot:
-                        _headCameraConfigurationSnapshot ?? [],
-                    tailCameraConfigurationSnapshot:
-                        _tailCameraConfigurationSnapshot ?? [],
-                    droppedFrameCount: _droppedFrameCount,
-                    acquisitionMode: acquisitionMode,
-                    notes:
-                        $"Concatenated frames: {concatenatedFrames.Count}; " +
-                        $"Head source frames: {headCount}; " +
-                        $"Tail source frames: {tailCount}; " +
-                        $"Angular step: " +
-                        $"{_settings.GetAngularStepDegrees():F2}°.");
-
-                _headCameraConfigurationSnapshot = null;
-                _tailCameraConfigurationSnapshot = null;
+                targetFrames.Add(scanFrame);
 
                 LogDiagnostics(
-                    $"Capture finished: {result.FramePairCount} concatenated " +
-                    $"processing frames created from {headCount} head and " +
-                    $"{tailCount} tail frames in {captureDuration:F2} seconds.");
+                    $"{position} capture progress: " +
+                    $"{targetFrames.Count} / " +
+                    $"{_settings.TargetFramePairsPerLog}");
 
-                return result;
+                return true;
+            }
+            catch
+            {
+                frameArgs.Frame.Dispose();
+                _droppedFrameCount++;
+                _diagnostics.RecordFrameDropped(position);
+                throw;
             }
         }
+    }
 
-        public void CancelCapture()
+    /// <summary>
+    /// Determines whether the capture session is complete.
+    /// </summary>
+    /// <returns>True if the capture session is complete; otherwise, false.</returns>
+    public bool IsCaptureComplete()
+    {
+        lock (_captureLock)
         {
-            lock (_captureLock)
+            return
+                _isCapturingActive &&
+                _headFrames.Count >=
+                    _settings.TargetFramePairsPerLog &&
+                _tailFrames.Count >=
+                    _settings.TargetFramePairsPerLog;
+        }
+    }
+    
+    /// <summary>
+    /// Finishes the current capture session and returns the completed log capture.
+    /// </summary>
+    /// <returns>The completed log capture.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no capture is currently active or if there are no frames captured.</exception>
+    public CompletedLogCapture FinishCapture()
+    {
+        lock (_captureLock)
+        {
+            if (!_isCapturingActive)
             {
-                _isCapturingActive = false;
+                throw new InvalidOperationException(
+                    "No capture is currently active.");
+            }
 
+            if (_headFrames.Count == 0 ||
+                _tailFrames.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "A dual-camera capture requires at least one " +
+                    "head frame and one tail frame.");
+            }
+
+            _isCapturingActive = false;
+
+            DateTime captureEndTime = DateTime.UtcNow;
+            double captureDuration =
+                (captureEndTime - _captureStartTime).TotalSeconds;
+
+            int headCount = _headFrames.Count;
+            int tailCount = _tailFrames.Count;
+
+            List<ScanFrame> concatenatedFrames;
+
+            try
+            {
+                concatenatedFrames =
+                    DualCameraFrameConcatenator.ConcatenatePairs(
+                        _headFrames,
+                        _tailFrames,
+                        _settings.Concatenation,
+                        _settings.GetAngularStepDegrees());
+            }
+            finally
+            {
+                // The concatenated frames own independent image data.
+                // Raw camera halves are no longer needed by the processing
+                // pipeline and are released immediately.
                 DisposeFrames(_headFrames);
                 DisposeFrames(_tailFrames);
-
                 _headFrames.Clear();
                 _tailFrames.Clear();
-                _headCameraConfigurationSnapshot = null;
-                _tailCameraConfigurationSnapshot = null;
-
-                LogDiagnostics(
-                    "Capture cancelled and all head/tail frames disposed.");
             }
-        }
 
-        private static void DisposeFrames(
-            IEnumerable<ScanFrame> frames)
-        {
-            foreach (ScanFrame frame in frames)
-            {
-                frame.GrayImage?.Dispose();
-                frame.BinaryImage?.Dispose();
-                frame.OverlayImage?.Dispose();
-            }
-        }
+            AcquisitionMode acquisitionMode =
+                _settings.HeadCamera.Mode;
 
-        private static string GenerateLogId()
-        {
-            return $"Log_{DateTime.Now:yyyyMMdd_HHmmss_fff}";
-        }
+            var result = new CompletedLogCapture(
+                logId: _currentLogId,
+                concatenatedFrames: concatenatedFrames,
+                headFrameCount: headCount,
+                tailFrameCount: tailCount,
+                captureDurationSeconds: captureDuration,
+                captureStartedUtc: _captureStartTime,
+                captureCompletedUtc: captureEndTime,
+                headCameraConfigurationSnapshot:
+                    _headCameraConfigurationSnapshot ?? [],
+                tailCameraConfigurationSnapshot:
+                    _tailCameraConfigurationSnapshot ?? [],
+                droppedFrameCount: _droppedFrameCount,
+                acquisitionMode: acquisitionMode,
+                notes:
+                    $"Concatenated frames: {concatenatedFrames.Count}; " +
+                    $"Head source frames: {headCount}; " +
+                    $"Tail source frames: {tailCount}; " +
+                    $"Angular step: " +
+                    $"{_settings.GetAngularStepDegrees():F2}°.");
 
-        private void LogDiagnostics(string message)
-        {
-            DiagnosticsMessage?.Invoke(this, message);
+            _headCameraConfigurationSnapshot = null;
+            _tailCameraConfigurationSnapshot = null;
+
+            LogDiagnostics(
+                $"Capture finished: {result.FramePairCount} concatenated " +
+                $"processing frames created from {headCount} head and " +
+                $"{tailCount} tail frames in {captureDuration:F2} seconds.");
+
+            return result;
         }
+    }
+    
+    /// <summary>
+    /// Cancels the current capture session and releases all resources.
+    /// </summary>
+    public void CancelCapture()
+    {
+        lock (_captureLock)
+        {
+            _isCapturingActive = false;
+
+            DisposeFrames(_headFrames);
+            DisposeFrames(_tailFrames);
+
+            _headFrames.Clear();
+            _tailFrames.Clear();
+            _headCameraConfigurationSnapshot = null;
+            _tailCameraConfigurationSnapshot = null;
+
+            LogDiagnostics(
+                "Capture cancelled and all head/tail frames disposed.");
+        }
+    }
+
+    private static void DisposeFrames(
+        IEnumerable<ScanFrame> frames)
+    {
+        foreach (ScanFrame frame in frames)
+        {
+            frame.GrayImage?.Dispose();
+            frame.BinaryImage?.Dispose();
+            frame.OverlayImage?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Generates a unique log ID based on the current timestamp.
+    /// </summary>
+    /// <returns>The generated unique log ID.</returns>
+    private static string GenerateLogId()
+    {
+        return $"Log_{DateTime.Now:yyyyMMdd_HHmmss_fff}";
+    }
+
+    /// <summary>
+    /// Logs a diagnostic message to the registered event handlers.
+    /// </summary>
+    /// <param name="message">The diagnostic message to log.</param>
+    private void LogDiagnostics(string message)
+    {
+        DiagnosticsMessage?.Invoke(this, message);
     }
 }

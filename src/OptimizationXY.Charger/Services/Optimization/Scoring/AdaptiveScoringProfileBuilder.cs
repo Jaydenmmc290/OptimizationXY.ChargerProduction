@@ -1,10 +1,13 @@
 using OptimizationXY.Charger.Models.Optimization.Scoring;
 using OptimizationXY.Charger.Models.Settings;
 using System.Text;
-using System.Globalization;
+
 
 namespace OptimizationXY.Charger.Services.Optimization.Scoring;
 
+/// <summary>
+/// Provides functionality to build an adaptive scoring profile based on log diagnostics and application settings.
+/// </summary>
 public static class AdaptiveScoringProfileBuilder
 {
 
@@ -157,8 +160,8 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     /// Builds a human-readable report of the adaptive scoring profile.
     /// </summary>
-    /// <param name="profile"></param>
-    /// <returns></returns>
+    /// <param name="profile">The adaptive scoring profile to build a report for.</param>
+    /// <returns>A string containing the human-readable report of the adaptive scoring profile.</returns>
     public static string BuildReport(AdaptiveScoringProfile profile)
     {
         if (profile == null)
@@ -202,8 +205,8 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     ///     Creates a deep copy of the provided ScoringSettings object.
     /// </summary>
-    /// <param name="s"></param>
-    /// <returns></returns>
+    /// <param name="s">The ScoringSettings object to copy.</param>
+    /// <returns>A deep copy of the provided ScoringSettings object.</returns>
     private static ScoringSettings CopyScoring(ScoringSettings s)
     {
         return new ScoringSettings
@@ -237,8 +240,8 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     ///     Creates a deep copy of the provided DefectSettings object.
     /// </summary>
-    /// <param name="s"></param>
-    /// <returns></returns>
+    /// <param name="s">The DefectSettings object to copy.</param>
+    /// <returns>A deep copy of the provided DefectSettings object.</returns>
     private static DefectSettings CopyDefects(DefectSettings s)
     {
         return new DefectSettings
@@ -261,8 +264,8 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     ///    Creates a deep copy of the provided OptimizationSettings object.
     /// </summary>
-    /// <param name="s"></param>
-    /// <returns></returns>
+    /// <param name="s">The OptimizationSettings object to copy.</param>
+    /// <returns>A deep copy of the provided OptimizationSettings object.</returns>
     private static OptimizationSettings CopyOptimization(OptimizationSettings s)
     {
         return new OptimizationSettings
@@ -289,8 +292,8 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     ///   Creates a deep copy of the provided WaneSettings object.
     /// </summary>
-    /// <param name="s"></param>
-    /// <returns></returns>
+    /// <param name="s">The WaneSettings object to copy.</param>
+    /// <returns>A deep copy of the provided WaneSettings object.</returns>
     private static WaneSettings CopyWane(WaneSettings s)
     {
         return new WaneSettings
@@ -304,7 +307,7 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     ///    Normalizes the scoring weights in the provided ScoringSettings object so that they sum to 100%.
     /// </summary>
-    /// <param name="scoring"></param>
+    /// <param name="scoring">The ScoringSettings object whose weights are to be normalized.</param>
     private static void NormalizeUniformWeights(ScoringSettings scoring)
     {
         double total =
@@ -331,10 +334,10 @@ public static class AdaptiveScoringProfileBuilder
     /// <summary>
     ///   Clamps the provided value between the specified minimum and maximum values.
     /// </summary>
-    /// <param name="value"></param>
-    /// <param name="min"></param>
-    /// <param name="max"></param>
-    /// <returns></returns>
+    /// <param name="value">The value to clamp.</param>
+    /// <param name="min">The minimum allowable value.</param>
+    /// <param name="max">The maximum allowable value.</param>
+    /// <returns>The clamped value.</returns>
     private static double Clamp(double value, double min, double max)
     {
         if (double.IsNaN(value) || double.IsInfinity(value))

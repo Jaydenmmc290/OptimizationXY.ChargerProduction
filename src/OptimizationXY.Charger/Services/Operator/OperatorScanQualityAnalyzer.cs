@@ -6,11 +6,16 @@ using OptimizationXY.Charger.UI.Controls;
 namespace OptimizationXY.Charger.Services.Operator;
 
 /// <summary>
-/// Converts the production pipeline's existing rotating radius field into a
-/// simple operator profile and a scan-completeness decision.
+/// Analyzes the quality of a scan based on the pipeline state and settings, producing a result that indicates whether
+/// the scan is good, warning, or failed, along with relevant metrics and messages for the operator.
 /// </summary>
 public sealed class OperatorScanQualityAnalyzer
 {
+    /// <summary>
+    /// Analyzes the scan quality based on the provided pipeline state and returns an OperatorScanQualityResult containing
+    /// </summary>
+    /// <param name="state">The current state of the pipeline.</param>
+    /// <returns>An OperatorScanQualityResult containing the analysis of the scan quality.</returns>
     public static OperatorScanQualityResult Analyze(PipelineState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -187,6 +192,15 @@ public sealed class OperatorScanQualityAnalyzer
         };
     }
 
+    /// <summary>
+    /// Creates a failed OperatorScanQualityResult with the specified parameters.
+    /// </summary>
+    /// <param name="validFrames">The number of valid frames used in the scan.</param>
+    /// <param name="expectedFrames">The number of expected frames for the scan.</param>
+    /// <param name="message">The operator message describing the failure.</param>
+    /// <param name="detail">The detailed message providing additional information about the failure.</param>
+    /// <param name="profile">The list of log profile points associated with the scan.</param>
+    /// <returns>An OperatorScanQualityResult representing a failed scan quality.</returns>
     private static OperatorScanQualityResult Failed(
         int validFrames,
         int expectedFrames,
@@ -205,6 +219,17 @@ public sealed class OperatorScanQualityAnalyzer
         };
     }
 
+    /// <summary>
+    /// Builds a detailed message summarizing the scan quality metrics, including frame percentage, profile
+    /// coverage, valid slice percentage, largest gap, and slice requirements.
+    /// </summary>
+    /// <param name="framePercent">The percentage of frames used in the scan.</param>
+    /// <param name="coveragePercent">The percentage of profile coverage in the scan.</param>
+    /// <param name="validSlicePercent">The percentage of valid slices in the scan.</param>
+    /// <param name="largestGapMM">The largest gap in the scan, measured in millimeters.</param>
+    /// <param name="minimumAngularBins">The minimum number of angular bins required.</param>
+    /// <param name="expectedAngularBins">The expected number of angular bins.</param>
+    /// <returns>A detailed message summarizing the scan quality metrics.</returns>
     private static string BuildDetail(
         double framePercent,
         double coveragePercent,
@@ -219,6 +244,11 @@ public sealed class OperatorScanQualityAnalyzer
             $"slice requirement {minimumAngularBins}/{expectedAngularBins} angular bins.";
     }
 
+    /// <summary>
+    /// Calculates the median of a collection of double values, ignoring any non-finite values (NaN or Infinity).
+    /// </summary>
+    /// <param name="values">The collection of double values.</param>
+    /// <returns>The median of the finite values in the collection, or 0.0 if there are no finite values.</returns>
     private static double Median(IEnumerable<double> values)
     {
         double[] sorted = [.. values
@@ -234,6 +264,12 @@ public sealed class OperatorScanQualityAnalyzer
             : sorted[middle];
     }
 
+    /// <summary>
+    /// Represents a summary of a slice in the binned radius field, including its Z position, radius, and angular bin count.
+    /// </summary>
+    /// <param name="ZMM">The Z position of the slice in millimeters.</param>
+    /// <param name="RadiusMM">The radius of the slice in millimeters.</param>
+    /// <param name="AngularBinCount">The number of angular bins in the slice.</param>
     private readonly record struct SliceSummary(
         double ZMM,
         double RadiusMM,

@@ -94,10 +94,10 @@ namespace OptimizationXY.Charger.Services.Core
         public DefectPatchAnalysis? DefectPatchAnalysis { get; set; }
 
         // Optimization
-        public OptimizationWeights OptimizationWeights { get; set; } = new();
+      
         public AdaptiveScoringProfile? AdaptiveScoringProfile { get; set; }
 
-        public OptimizedChargerSetup? OptimizedChargerSetup { get; set; }
+        
 
         public InscribedGeometryResult? LargestInscribedCylinder { get; set; }
         public InscribedGeometryResult? LargestInscribedOval { get; set; }
@@ -171,7 +171,7 @@ namespace OptimizationXY.Charger.Services.Core
             RadiusDefectMap = null;
             DefectPatchAnalysis = null;
             AdaptiveScoringProfile = null;
-            OptimizedChargerSetup = null;
+            
             LargestInscribedCylinder = null;
             LargestInscribedOval = null;
             GeometryPeelComparison = null;

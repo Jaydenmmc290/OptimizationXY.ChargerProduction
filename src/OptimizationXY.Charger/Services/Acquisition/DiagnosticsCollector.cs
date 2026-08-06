@@ -5,7 +5,7 @@ namespace OptimizationXY.Charger.Services.Acquisition;
 
 /// <summary>
 /// Thread-safe acquisition counters used by the operator diagnostics display.
-/// </summary>
+/// </summary
 public sealed class DiagnosticsCollector
 {
     private readonly ConcurrentDictionary<string, long> _counters = new();

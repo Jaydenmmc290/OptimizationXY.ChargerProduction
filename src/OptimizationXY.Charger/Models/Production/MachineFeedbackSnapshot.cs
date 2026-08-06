@@ -13,7 +13,7 @@ public sealed class MachineFeedbackSnapshot
     public double? ActualHeadXMM { get; set; }
     public double? ActualHeadYMM { get; set; }
     public double? ActualTailXMM { get; set; }
-    public double? ActualTailYMM { get; set; }
+    public double? ActualTailYMM { get; set; } 
     public double? ActualKnifePositionMM { get; set; }
     public double? ActualPeelDiameterMM { get; set; }
     public long? EncoderCount { get; set; }

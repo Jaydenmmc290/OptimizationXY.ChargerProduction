@@ -19,19 +19,70 @@ public sealed class InscribedGeometryResult
     /// </summary>
     public double GuaranteedCircularRadiusMM { get; set; }
 
+
+    /// <summary>
+    /// Guaranteed major semi-axis for the oval result. For a cylinder result, this is
+    /// </summary>
     public double MajorSemiAxisMM { get; set; }
+
+    /// <summary>
+    /// Guaranteed minor semi-axis for the oval result. For a cylinder result, this is
+    /// </summary>
     public double MinorSemiAxisMM { get; set; }
+
+    /// <summary>
+    /// Orientation of the inscribed geometry in degrees. For a cylinder result, this is the orientation
+    /// of the cylinder axis. For an oval result, this is the orientation of the major semi-axis.
+    /// </summary>
     public double OrientationDeg { get; set; }
+
+    /// <summary>
+    /// Guaranteed area of the inscribed geometry in square millimeters. For a cylinder result,
+    /// this is the area of the circle. For an oval result, this is the area of the ellipse.
+    /// </summary>
     public double AreaMM2 { get; set; }
 
+
+    /// <summary>
+    /// Number of angular bins that were valid for the inscribed geometry search. This is a measure of how many orientations were considered during the search process.
+    /// </summary>
     public int ValidAngularBins { get; set; }
+
+    /// <summary>
+    /// Number of candidate orientations that were tested during the inscribed geometry search.
+    /// This is a measure of how many potential orientations were evaluated to find the optimal inscribed geometry.
+    /// </summary>
     public int TestedCandidates { get; set; }
+
+    /// <summary>
+    /// Number of candidate orientations that were considered at a coarse level during the inscribed geometry search.
+    /// </summary>
     public int CoarseCandidates { get; set; }
+
+    /// <summary>
+    /// Number of candidate orientations that were considered at a medium level during the inscribed geometry search.
+    /// </summary>
     public int MediumCandidates { get; set; }
+
+
+    /// <summary>
+    /// Number of candidate orientations that were considered at a fine level during the inscribed geometry search.
+    /// </summary>
     public int FineCandidates { get; set; }
 
+
+    /// <summary>
+    /// Maximum spindle movement in millimeters required to achieve the inscribed geometry. This value
+    /// represents the maximum distance the spindle must move to accommodate the inscribed shape,
+    /// which can be important for assessing the feasibility of the machining process.
+    /// </summary>
     public double MaxSpindleMovementMM { get; set; }
 
+
+    /// <summary>
+    /// Gets the name of the strategy used for the inscribed geometry search based on the kind of geometry.
+    /// If the kind is a cylinder, it returns "Largest Inscribed Cylinder"; if it's an oval, it returns "Largest Inscribed Oval".
+    /// </summary>
     public string StrategyName =>
         Kind == InscribedGeometryKind.Cylinder
             ? "Largest Inscribed Cylinder"

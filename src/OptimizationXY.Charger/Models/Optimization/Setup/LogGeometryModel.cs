@@ -1,26 +1,40 @@
 using OptimizationXY.Charger.Models.Analysis;
-using OptimizationXY.Charger.Models.Geometry;
 
+/// <summary>
+/// Represents the geometric properties of a log, including measurements and analysis results related to its shape and dimensions.
+/// </summary>
 namespace OptimizationXY.Charger.Models.Optimization.Setup;
 
-public class LogGeometryModel // This class represents the geometric properties of a log, including measurements
-                              // and analysis results related to its shape and dimensions.
+public class LogGeometryModel 
 {
+    /// <summary>
+    /// Gets or sets the average diameter of the log in millimeters, which may be used to assess its overall size and potential growth patterns.
+    /// </summary>
+    public double AverageDiameterMM { get; set; }
 
-    public double AverageDiameterMM { get; set; }  // The average diameter of the log in millimeters, calculated from the profile measurements.
 
-    public double MinDiameterMM { get; set; }  // The minimum diameter of the log in millimeters, which may indicate the presence of
-                                               // defects or irregularities in the log's shape.
+    /// <summary>
+    /// Gets or sets the minimum diameter of the log in millimeters, which may indicate the narrowest point of the log and potential defects or irregularities in its shape.
+    /// </summary>
+    public double MinDiameterMM { get; set; }
 
-    public double MaxDiameterMM { get; set; }  // The maximum diameter of the log in millimeters, which may indicate the overall size and potential growth patterns of the log.
 
-    public double MinDiameterInches => MinDiameterMM / 25.4;
-    public double AverageDiameterInches => AverageDiameterMM / 25.4;
-    public double MaxDiameterInches => MaxDiameterMM / 25.4;
+    /// <summary>
+    /// Gets or sets the maximum diameter of the log in millimeters, which may indicate
+    /// the widest point of the log and potential defects or irregularities in its shape.
+    /// </summary>
+    public double MaxDiameterMM { get; set; }
 
-    public double WaneScore { get; set; }  // A score representing the wane (deviation from ideal shape) of the log, which may be used to assess
-                                           // its quality and suitability for processing.
 
-    public OvalityResult? OvalityAnalysis { get; internal set; }  // A property representing the results of an ovality analysis, which assesses the deviation of the log's cross-section
-                                                                 // from a perfect circle and may indicate defects or irregularities in the log's shape.
+    /// <summary>
+    /// Gets or sets the wane score of the log, which may be used to assess the extent of wane
+    /// (the amount of bark or sapwood present) and its potential impact on the log's quality and value.
+    /// </summary>
+    public double WaneScore { get; set; }  
+    
+    /// <summary>
+    /// Gets or sets the results of an ovality analysis, which assesses the deviation of the log's cross-section
+    /// from a perfect circle and may indicate defects or irregularities in the log's shape.
+    /// </summary>
+    public OvalityResult? OvalityAnalysis { get; internal set; }  
 }

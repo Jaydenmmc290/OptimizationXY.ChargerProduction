@@ -13,11 +13,11 @@ namespace OptimizationXY.Charger.Services.Calibration;
 /// </summary>
 public sealed class CalibrationFrameCaptureSession : IDisposable
 {
-    private readonly object _sync = new();
+    private readonly Lock _sync = new();
     private readonly CameraAcquisitionSettings _settings;
     private readonly int _targetPairCount;
-    private readonly List<ScanFrame> _headFrames = new();
-    private readonly List<ScanFrame> _tailFrames = new();
+    private readonly List<ScanFrame> _headFrames = [];
+    private readonly List<ScanFrame> _tailFrames = [];
     private readonly TaskCompletionSource<CalibrationCaptureBatch> _completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -26,6 +26,17 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
     private bool _completed;
     private bool _disposed;
 
+
+    /// <summary>
+    /// Initializes a new instance of the CalibrationFrameCaptureSession class with the specified settings, target pair count, and camera configuration snapshots.
+    /// </summary>
+    /// <param name="settings">The camera acquisition settings.</param>
+    /// <param name="targetPairCount">The target number of frame pairs to capture.</param>
+    /// <param name="headConfiguration">The head camera configuration snapshot.</param>
+    /// <param name="tailConfiguration">The tail camera configuration snapshot.</param>
+    /// <exception cref="ArgumentNullException">Thrown if the settings parameter is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the targetPairCount is less than 1 or greater than the maximum allowed frame pairs per log.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if either camera configuration snapshot is empty.</exception>
     public CalibrationFrameCaptureSession(
         CameraAcquisitionSettings settings,
         int targetPairCount,
@@ -52,6 +63,9 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         _tailConfiguration = tailConfiguration.ToArray();
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the calibration capture session is still active and accepting frames.
+    /// </summary>
     public bool IsActive
     {
         get
@@ -63,6 +77,9 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets the number of head frames that have been captured in the calibration session.
+    /// </summary>
     public int HeadFrameCount
     {
         get
@@ -74,6 +91,10 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+    
+    /// <summary>
+    /// Gets the number of tail frames that have been captured in the calibration session.
+    /// </summary>
     public int TailFrameCount
     {
         get
@@ -85,8 +106,20 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a task that completes when the calibration capture session is finished, either successfully with a
+    /// CalibrationCaptureBatch or with an exception if the session was canceled or failed.
+    /// </summary>
     public Task<CalibrationCaptureBatch> Completion => _completion.Task;
 
+
+    /// <summary>
+    /// Attempts to add a frame to the calibration capture session for the specified camera position (head or tail).
+    /// </summary>
+    /// <param name="position">The camera position (head or tail) from which the frame was captured.</param>
+    /// <param name="frameArgs">The frame event arguments containing the captured frame.</param>
+    /// <returns>True if the frame was successfully added; otherwise, false.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the position parameter is not a valid CameraPosition value.</exception>
     public bool TryAddFrame(
         CameraPosition position,
         CameraFrameEventArgs frameArgs)
@@ -134,6 +167,10 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Cancels the calibration capture session, disposing of any captured frames and completing the session with an OperationCanceledException.
+    /// </summary>
+    /// <param name="reason">The reason for canceling the calibration capture session.</param>
     public void Cancel(string reason)
     {
         lock (_sync)
@@ -153,6 +190,13 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+
+    /// <summary>
+    /// Completes the calibration capture session by concatenating the captured head and tail frames,
+    /// creating a CalibrationCaptureBatch, and completing the session's
+    /// task. This method is called when the target number of frame pairs has been captured.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if a concatenated calibration frame is empty.</exception>
     private void CompleteCaptureLocked()
     {
         if (_completed)
@@ -205,6 +249,11 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+
+    /// <summary>
+    /// Disposes of the GrayImage, BinaryImage, and OverlayImage properties of each ScanFrame in the provided collection.
+    /// </summary>
+    /// <param name="frames">The collection of ScanFrame objects to dispose.</param>
     private static void DisposeFrames(IEnumerable<ScanFrame> frames)
     {
         foreach (ScanFrame frame in frames)
@@ -215,6 +264,11 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
         }
     }
 
+
+    /// <summary>
+    /// Disposes of the calibration capture session, releasing any captured
+    /// frames and completing the session's task if it has not already been completed or canceled.
+    /// </summary>
     public void Dispose()
     {
         lock (_sync)

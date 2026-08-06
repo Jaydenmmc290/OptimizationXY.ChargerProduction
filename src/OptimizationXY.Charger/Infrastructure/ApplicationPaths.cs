@@ -2,21 +2,44 @@ namespace OptimizationXY.Charger.Infrastructure;
 
 public static class ApplicationPaths
 {
+    // Environment variable name for the root data directory.
     public const string DataDirectoryEnvironmentVariable =
         "OPTIMIZATION_XY_DATA_DIR";
 
+    // Root directory for application data, resolved from environment variable or default location.
     public static string RootDirectory { get; } = ResolveRootDirectory();
+
+    // Subdirectories for various application data.
     public static string ConfigDirectory => Path.Combine(RootDirectory, "Config");
+
+    // Directory for log files.
     public static string LogDirectory => Path.Combine(RootDirectory, "Logs");
+
+    // Directory for calibration data, including archive and staging.
     public static string CalibrationDirectory => Path.Combine(ConfigDirectory, "Calibration");
+
+    // Directory for archived calibration data.
     public static string CalibrationArchiveDirectory => Path.Combine(CalibrationDirectory, "Archive");
+
+    // Directory for staging calibration data before finalization.
     public static string CalibrationStagingDirectory => Path.Combine(CalibrationDirectory, "Staging");
+
+    // Paths for specific calibration files.
     public static string CalibrationLookupTablePath => Path.Combine(CalibrationDirectory, "scanner-lookup-table.json");
+
+    // Path for calibration metadata file.
     public static string CalibrationMetadataPath => Path.Combine(CalibrationDirectory, "scanner-calibration.json");
+
+    // Directory for camera configuration files.
     public static string CameraConfigurationDirectory => Path.Combine(ConfigDirectory, "CameraConfiguration");
+
+    // Directory for setup-related files.
     public static string SetupDirectory => Path.Combine(ConfigDirectory, "Setup");
+
+    // Directory for saved scan data.
     public static string SavedScansDirectory => Path.Combine(RootDirectory, "SavedScans");
 
+    // Ensures that all necessary directories exist, creating them if they do not.
     public static void EnsureCreated()
     {
         Directory.CreateDirectory(RootDirectory);
@@ -30,6 +53,7 @@ public static class ApplicationPaths
 
     }
 
+    // Resolves the full path to a camera configuration file, checking for machine-specific overrides.
     public static string ResolveCameraConfigurationPath(string fileNameOrPath)
     {
         if (string.IsNullOrWhiteSpace(fileNameOrPath))
@@ -37,6 +61,7 @@ public static class ApplicationPaths
             return string.Empty;
         }
 
+        // Expand environment variables and trim whitespace from the input path.
         string expanded = Environment.ExpandEnvironmentVariables(
             fileNameOrPath.Trim());
 
@@ -45,6 +70,7 @@ public static class ApplicationPaths
             return Path.GetFullPath(expanded);
         }
 
+        // Check for a machine-specific configuration file in the CameraConfigurationDirectory.
         string machineSpecificPath = Path.Combine(
             CameraConfigurationDirectory,
             Path.GetFileName(expanded));
@@ -60,59 +86,10 @@ public static class ApplicationPaths
             Path.GetFileName(expanded));
     }
 
-    public static string ImportCameraConfiguration(string sourcePath)
-    {
-        if (string.IsNullOrWhiteSpace(sourcePath))
-        {
-            throw new ArgumentException(
-                "A camera configuration source path is required.",
-                nameof(sourcePath));
-        }
 
-        string fullSourcePath = Path.GetFullPath(
-            Environment.ExpandEnvironmentVariables(sourcePath));
 
-        if (!File.Exists(fullSourcePath))
-        {
-            throw new FileNotFoundException(
-                $"Camera configuration file not found: {fullSourcePath}",
-                fullSourcePath);
-        }
-
-        if (!string.Equals(
-            Path.GetExtension(fullSourcePath),
-            ".ccf",
-            StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException(
-                "Camera configuration files must use the .ccf extension.");
-        }
-
-        EnsureCreated();
-        Directory.CreateDirectory(CameraConfigurationDirectory);
-
-        string destinationPath = Path.Combine(
-            CameraConfigurationDirectory,
-            Path.GetFileName(fullSourcePath));
-
-        string temporaryPath = destinationPath + ".tmp";
-
-        try
-        {
-            File.Copy(fullSourcePath, temporaryPath, overwrite: true);
-            File.Move(temporaryPath, destinationPath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
-        }
-
-        return destinationPath;
-    }
-
+    // Resolves the root directory for application data, using an environment
+    // variable if set, or falling back to a default location.
     private static string ResolveRootDirectory()
     {
         string? configuredDirectory =
@@ -124,6 +101,7 @@ public static class ApplicationPaths
                 Environment.ExpandEnvironmentVariables(configuredDirectory));
         }
 
+        // If the environment variable is not set, use the local application data folder.
         string localAppData = Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData);
 

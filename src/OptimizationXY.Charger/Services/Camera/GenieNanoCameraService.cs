@@ -36,30 +36,17 @@ public sealed class GenieNanoCameraService : IDisposable
     public event EventHandler<CameraFrameEventArgs>? FrameAcquired;
     public event EventHandler<string>? DiagnosticsMessage;
 
-    public void Connect(CameraDeviceSettings settings, Exception argumentOutOfRangeException, Exception argumentOutOfRangeException1)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        Panel hiddenViewHost = new()
-        {
-            Width = 1,
-            Height = 1,
-            Visible = false
-        };
-        hiddenViewHost.CreateControl();
 
-        try
-        {
-            Connect(settings, hiddenViewHost, argumentOutOfRangeException, argumentOutOfRangeException1);
-            _ownsCameraViewHost = true;
-        }
-        catch
-        {
-            hiddenViewHost.Dispose();
-            throw;
-        }
-    }
-
-    public void Connect(CameraDeviceSettings settings, Control panelCameraView, Exception argumentOutOfRangeException, Exception argumentOutOfRangeException1)
+    /// <summary>
+    /// Connects to the Genie Nano camera using the provided settings and displays the live view in the specified panel.
+    /// </summary>
+    /// <param name="settings">The camera device settings to use for the connection.</param>
+    /// <param name="panelCameraView">The panel control to display the live camera view.</param>
+    /// <param name="argumentOutOfRangeException">An exception to be thrown if an argument is out of range.</param>
+    /// <param name="argumentOutOfRangeException1">An additional exception to be thrown if an argument is out of range.</param>
+    /// <exception cref="InvalidDataException">Thrown if the camera configuration file is empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the camera cannot be created or the serial number cannot be read.</exception>
+    public void Connect(CameraDeviceSettings settings, Control panelCameraView, Exception argumentOutOfRangeException1, ArgumentOutOfRangeException argumentOutOfRangeException)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(panelCameraView);
@@ -176,6 +163,15 @@ public sealed class GenieNanoCameraService : IDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// Applies the specified acquisition mode settings to the given SapAcqDevice, updating the applied features dictionary accordingly.
+    /// Throws an exception if the acquisition mode is not recognized.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice to configure.</param>
+    /// <param name="settings">The camera device settings to apply.</param>
+    /// <param name="applied">A dictionary to record the applied feature values.</param>
+    /// <param name="argumentOutOfRangeException">The exception to throw if the acquisition mode is not recognized.</param>
     private void ApplyAcquisitionMode(
         SapAcqDevice device,
         CameraDeviceSettings settings,
@@ -205,7 +201,13 @@ public sealed class GenieNanoCameraService : IDisposable
                 throw argumentOutOfRangeException;
         }
     }
-
+    
+    /// <summary>
+    /// Configures the specified SapAcqDevice for FrameRate acquisition mode, updating the applied features dictionary accordingly.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice to configure.</param>
+    /// <param name="settings">The camera device settings to apply.</param>
+    /// <param name="applied">A dictionary to record the applied feature values.</param>
     private void ConfigureFrameRateMode(
         SapAcqDevice device,
         CameraDeviceSettings settings,
@@ -252,6 +254,12 @@ public sealed class GenieNanoCameraService : IDisposable
             $"TriggerMode={actualMode}.");
     }
 
+    /// <summary>
+    /// Configures the specified SapAcqDevice for Encoder acquisition mode, updating the applied features dictionary accordingly.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice to configure.</param>
+    /// <param name="settings">The camera device settings to apply.</param>
+    /// <param name="applied">A dictionary to record the applied feature values.</param>
     private void ConfigureEncoderMode(
         SapAcqDevice device,
         CameraDeviceSettings settings,
@@ -391,6 +399,12 @@ public sealed class GenieNanoCameraService : IDisposable
             $"TriggerSource={source}, " +
             $"TriggerActivation={DisplayFeatureValue(activation)}.");
     }
+
+    /// <summary>
+    /// Returns a display-friendly representation of the given feature value, substituting "<unavailable>" for null or whitespace values.
+    /// </summary>
+    /// <param name="value">The feature value to display.</param>
+    /// <returns>A display-friendly representation of the feature value.</returns>
     private static string DisplayFeatureValue(string value)
     {
         return string.IsNullOrWhiteSpace(value)
@@ -415,6 +429,12 @@ public sealed class GenieNanoCameraService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads a string feature from the specified SapAcqDevice. If the feature is unavailable or an error occurs, returns an empty string.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice from which to read the feature.</param>
+    /// <param name="featureName">The name of the feature to read.</param>
+    /// <returns>The feature value as a string, or an empty string if unavailable or an error occurs.</returns>
     private static string ReadStringFeature(
         SapAcqDevice device,
         string featureName)
@@ -435,6 +455,12 @@ public sealed class GenieNanoCameraService : IDisposable
         return string.Empty;
     }
 
+    /// <summary>
+    /// Captures the readback values for geometry-related features
+    /// (Width, Height, OffsetX, OffsetY, PixelFormat) from the specified SapAcqDevice and stores them in the provided dictionary.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice from which to read the geometry-related features.</param>
+    /// <param name="applied">The dictionary in which to store the captured feature values.</param>
     private static void CaptureGeometryReadback(
         SapAcqDevice device,
         IDictionary<string, object?> applied)
@@ -446,6 +472,12 @@ public sealed class GenieNanoCameraService : IDisposable
         CaptureReadback(device, applied, "PixelFormat");
     }
 
+    /// <summary>
+    /// Captures the readback value for a specific feature from the specified SapAcqDevice and stores it in the provided dictionary.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice from which to read the feature.</param>
+    /// <param name="applied">The dictionary in which to store the captured feature value.</param>
+    /// <param name="featureName">The name of the feature to capture.</param>
     private static void CaptureReadback(
         SapAcqDevice device,
         IDictionary<string, object?> applied,
@@ -489,11 +521,23 @@ public sealed class GenieNanoCameraService : IDisposable
     }
 
 
+    /// <summary>
+    /// Returns a JsonSerializerOptions instance configured for indented JSON output, suitable for serializing
+    /// the programmatic snapshot of camera settings and applied features.
+    /// </summary>
+    /// <returns>A JsonSerializerOptions instance with WriteIndented set to true.</returns>
     private static JsonSerializerOptions GetOptions()
     {
         return new JsonSerializerOptions { WriteIndented = true };
     }
 
+    /// <summary>
+    /// Builds a programmatic snapshot of the camera settings and applied features, serializing it to a byte array in JSON format.
+    /// </summary>
+    /// <param name="settings">The camera device settings to include in the snapshot.</param>
+    /// <param name="appliedFeatures">The applied features to include in the snapshot.</param>
+    /// <param name="options">The JsonSerializerOptions to use for serialization.</param>
+    /// <returns>A byte array containing the JSON-serialized snapshot.</returns>
     private static byte[] BuildProgrammaticSnapshot(
         CameraDeviceSettings settings,
         SortedDictionary<string, object?> appliedFeatures, JsonSerializerOptions options)
@@ -531,6 +575,12 @@ public sealed class GenieNanoCameraService : IDisposable
 options);
     }
 
+    /// <summary>
+    /// Event handler for the Sapera transfer's XferNotify event, which is triggered when a frame is ready. This method
+    /// handles displaying the frame in the view and raising the FrameAcquired event if managed frame capture is enabled.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="args">The SapXferNotifyEventArgs instance containing event data.</param>
     private void OnFrameReady(object sender, SapXferNotifyEventArgs args)
     {
         if (args.Context is SapView view)
@@ -567,6 +617,13 @@ options);
         }
     }
 
+
+    /// <summary>
+    /// Extracts a managed Emgu CV Mat frame from the current Sapera buffer. Validates the buffer geometry and pixel
+    /// depth, and clones the data into a new Mat instance.
+    /// </summary>
+    /// <returns>The extracted Mat frame, or null if extraction fails.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the Sapera buffer has invalid geometry or pixel depth.</exception>
     private Mat? ExtractFrameFromSaperaBuffer()
     {
         SapBuffer? buffer = _buffer;
@@ -603,8 +660,18 @@ options);
         }
     }
 
+    /// <summary>
+    /// Handles the SizeChanged event of the camera view host control. When the size of the host changes, this method
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The EventArgs instance containing event data.</param>
     private void CameraViewHost_SizeChanged(object? sender, EventArgs e) => _view?.OnSize();
 
+    /// <summary>
+    /// Starts live acquisition of frames from the camera. Throws an exception if the camera is not connected
+    /// or if the transfer object is null.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if the camera is not connected or if the transfer object is null.</exception>
     public void StartLive()
     {
         if (!IsConnected || _transfer is null)
@@ -613,6 +680,9 @@ options);
         LogDiagnostics("Live acquisition started.");
     }
 
+    /// <summary>
+    /// Stops live acquisition of frames from the camera. If the transfer object is null, this method does nothing.
+    /// </summary>
     public void StopLive()
     {
         _isCapturingManagedFrames = false;
@@ -629,6 +699,10 @@ options);
         }
     }
 
+    /// <summary>
+    /// Starts managed frame capture, which raises the FrameAcquired event for each frame. Resets the frame counter to zero.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if the camera is not connected.</exception>
     public void StartManagedFrameCapture()
     {
         if (!IsConnected)
@@ -638,8 +712,15 @@ options);
         _isCapturingManagedFrames = true;
     }
 
+    /// <summary>
+    /// Stops managed frame capture, which stops raising the FrameAcquired event for each frame.
+    /// </summary>
     public void StopManagedFrameCapture() => _isCapturingManagedFrames = false;
 
+    /// <summary>
+    /// Disconnects from the camera, releasing all resources and resetting the connection state.
+    /// If the camera is not connected, this method does nothing.
+    /// </summary>
     public void Disconnect()
     {
         bool hadResources = IsConnected || _transfer is not null || _buffer is not null ||
@@ -684,14 +765,29 @@ options);
         _loadedConfigurationSnapshot = null;
     }
 
+    /// <summary>
+    /// Attempts to release a Sapera resource and logs any exceptions that occur during the release process.
+    /// This method is used to safely clean up resources without throwing exceptions that could disrupt the disconnect process.
+    /// </summary>
+    /// <param name="resourceName">The name of the resource being released.</param>
+    /// <param name="release">The action that releases the resource.</param>
     private void TryRelease(string resourceName, Action release)
     {
         try { release(); }
         catch (Exception ex) { LogDiagnostics($"Failed to release Sapera {resourceName}: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Logs a diagnostic message by invoking the DiagnosticsMessage event. This method is used to provide feedback about the camera
+    /// service's operations, such as connection status, configuration changes, and errors.
+    /// </summary>
+    /// <param name="message">The diagnostic message to log.</param>
     private void LogDiagnostics(string message) => DiagnosticsMessage?.Invoke(this, message);
 
+    /// <summary>
+    /// Disposes of the camera service, disconnecting from the camera and releasing all resources. This method should
+    /// be called when the camera service is no longer needed to ensure proper cleanup.
+    /// </summary>
     public void Dispose()
     {
         Disconnect();

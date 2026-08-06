@@ -6,8 +6,15 @@ namespace OptimizationXY.Charger.Models.Plc;
 /// </summary>
 public sealed class PlcCommandPayload
 {
+    /// <summary>
+    /// Gets or sets the number of blocks in the scanned data.
+    /// </summary>
     public int BlockCount { get; set; }
 
+    /// <summary>
+    /// Gets or sets the head and tail coordinates in millimeters, as well as the small and large diameters,
+    /// largest and smallest measured radii, knife clearance, and safe carriage retract radius.
+    /// </summary>
     public double HeadXMM { get; set; }
     public double HeadYMM { get; set; }
     public double TailXMM { get; set; }
@@ -20,6 +27,10 @@ public sealed class PlcCommandPayload
     public double KnifeClearanceMM { get; set; }
     public double SafeCarriageRetractRadiusMM { get; set; }
 
+
+    /// <summary>
+    /// Gets the scanned block data as an array of floats, including head and tail coordinates, diameters, radii, and block count.
+    /// </summary>
     public float[] ScannedBlockData =>
     [
         (float)HeadXMM,
@@ -34,6 +45,9 @@ public sealed class PlcCommandPayload
         BlockCount
     ];
 
+    /// <summary>
+    /// Gets the carriage retract data as an array of floats, including the safe carriage retract radius and block count.
+    /// </summary>
     public float[] CarriageRetract =>
     [
         (float)SafeCarriageRetractRadiusMM,
@@ -43,6 +57,9 @@ public sealed class PlcCommandPayload
         BlockCount
     ];
 
+    /// <summary>
+    /// Gets the roundup complete data as an array of floats, including the smallest measured radius and block count.
+    /// </summary>
     public float[] RoundupComplete =>
     [
         (float)SmallestMeasuredRadiusMM,

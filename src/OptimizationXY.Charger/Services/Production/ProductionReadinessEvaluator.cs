@@ -7,8 +7,17 @@ using OptimizationXY.Charger.Services.Core;
 
 namespace OptimizationXY.Charger.Services.Production;
 
+/// <summary>
+/// Evaluates the production readiness of the system based on the current pipeline state and configuration settings.
+/// </summary>
 public static class ProductionReadinessEvaluator
 {
+    /// <summary>
+    /// Evaluates the production readiness of the system based on the provided pipeline state and PLC connection status.
+    /// </summary>
+    /// <param name="state">The current pipeline state.</param>
+    /// <param name="plcConnected">Indicates whether the PLC is connected.</param>
+    /// <returns>A report detailing the production readiness of the system.</returns>
     public static ProductionReadinessReport Evaluate(
         PipelineState state,
         bool plcConnected)
@@ -502,6 +511,12 @@ public static class ProductionReadinessEvaluator
         return report;
     }
 
+    /// <summary>
+    /// Checks whether the provided camera configuration snapshot matches the expected serial number.
+    /// </summary>
+    /// <param name="snapshot">The camera configuration snapshot to check.</param>
+    /// <param name="expectedSerial">The expected serial number to match.</param>
+    /// <returns>True if the snapshot's serial number matches the expected serial number; otherwise, false.</returns>
     private static bool SnapshotSerialMatches(byte[]? snapshot, string expectedSerial)
     {
         if (snapshot is not { Length: > 0 } || string.IsNullOrWhiteSpace(expectedSerial))
@@ -525,9 +540,21 @@ public static class ProductionReadinessEvaluator
         }
     }
 
+    /// <summary>
+    /// Checks if all provided double values are finite (not NaN or Infinity).
+    /// </summary>
+    /// <param name="values">The double values to check.</param>
+    /// <returns>True if all values are finite; otherwise, false.</returns>
     private static bool AreFinite(params double[] values) =>
         values.All(double.IsFinite);
 
+
+    /// <summary>
+    /// Checks if the file at the specified path matches the provided snapshot byte array.
+    /// </summary>
+    /// <param name="path">The file path to check.</param>
+    /// <param name="snapshot">The snapshot byte array to compare against the file's contents.</param>
+    /// <returns>True if the file's contents match the snapshot; otherwise, false.</returns>
     private static bool FileMatchesSnapshot(
         string path,
         byte[]? snapshot)
@@ -545,6 +572,13 @@ public static class ProductionReadinessEvaluator
         }
     }
 
+    /// <summary>
+    /// Adds a new production readiness check to the report with the specified name, status, and message.
+    /// </summary>
+    /// <param name="report">The production readiness report to add the check to.</param>
+    /// <param name="name">The name of the production readiness check.</param>
+    /// <param name="status">The status of the production readiness check.</param>
+    /// <param name="message">The message associated with the production readiness check.</param>
     private static void Add(
         ProductionReadinessReport report,
         string name,

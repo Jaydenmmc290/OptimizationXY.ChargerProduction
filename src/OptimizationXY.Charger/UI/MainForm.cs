@@ -1,24 +1,27 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
 using Emgu.CV;
 using NLog;
 using OptimizationXY.Charger.Infrastructure;
 using OptimizationXY.Charger.Models.Acquisition;
 using OptimizationXY.Charger.Models.Calibration;
+using OptimizationXY.Charger.Models.Operator;
 using OptimizationXY.Charger.Models.Optimization;
+using OptimizationXY.Charger.Models.Production;
 using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Acquisition;
-using OptimizationXY.Charger.Services.Camera;
 using OptimizationXY.Charger.Services.Calibration;
-using OptimizationXY.Charger.Services.Core;
+using OptimizationXY.Charger.Services.Camera;
 using OptimizationXY.Charger.Services.Configuration;
-using OptimizationXY.Charger.Services.Plc;
-using OptimizationXY.Charger.Models.Production;
-using OptimizationXY.Charger.Models.Operator;
+using OptimizationXY.Charger.Services.Core;
 using OptimizationXY.Charger.Services.Operator;
+using OptimizationXY.Charger.Services.Plc;
 using OptimizationXY.Charger.UI.Forms;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace OptimizationXY.Charger.UI;
+/// <summary>
+/// The main form of the application that manages camera services, PLC integration, and user interface for the Optimization XY Charger.
+/// </summary>
 
 public partial class MainForm : Form
 {
@@ -91,8 +94,21 @@ public partial class MainForm : Form
     private readonly Lock _livePreviewLock = new();
     private Mat? _latestHeadPreview;
     private Mat? _latestTailPreview;
+    private int _headPreviewPostPending;
+    private int _tailPreviewPostPending;
     private bool _combinedPreviewUpdatePosted;
 
+    // Limit UI preview work without limiting production capture.
+    // Camera/capture frames can still arrive at full encoder or frame rate.
+    private static readonly long PreviewIntervalTicks =
+        Stopwatch.Frequency / 10; // 10 preview updates per second
+
+    private long _lastHeadPreviewTimestamp;
+    private long _lastTailPreviewTimestamp;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MainForm"/> class.
+    /// </summary>
     public MainForm()
     {
         InitializeComponent();
@@ -101,6 +117,10 @@ public partial class MainForm : Form
 
     }
 
+
+    /// <summary>
+    /// Initializes the optimization mode selector combo box with available modes and sets up event handling for selection changes.
+    /// </summary>
     private void InitializeOptimizationModeSelector()
     {
         cmbOptimizationMode.DataSource =
@@ -120,6 +140,11 @@ public partial class MainForm : Form
     }
 
 
+    /// <summary>
+    /// Returns a user-friendly display name for the given optimization mode.
+    /// </summary>
+    /// <param name="mode">The optimization mode.</param>
+    /// <returns>A user-friendly display name for the optimization mode.</returns>
     private static string GetOptimizationModeDisplayName(
         SpindleOptimizationMode mode)
     {
@@ -139,6 +164,11 @@ public partial class MainForm : Form
         };
     }
 
+    /// <summary>
+    /// Handles the event when the selected optimization mode in the combo box changes. Updates the application settings and saves them to persistent storage.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The event data.</param>
     private void OptimizationMode_SelectedIndexChanged(
         object? sender,
         EventArgs e)
@@ -159,21 +189,46 @@ public partial class MainForm : Form
             $"Optimization mode selected: {selectedMode}");
     }
 
+    /// <summary>
+    /// Determines whether the preview for the specified camera position should be updated based on the elapsed time since the last update.
+    /// This throttles the preview updates to avoid overwhelming the UI with too many updates per second.
+    /// </summary>
+    /// <param name="position">The camera position for which to determine if the preview should be updated.</param>
+    /// <returns>True if the preview should be updated; otherwise, false.</returns>
+    private bool ShouldUpdatePreview(CameraPosition position)
+    {
+        long now = Stopwatch.GetTimestamp();
+
+        ref long previous =
+            ref position == CameraPosition.Head
+                ? ref _lastHeadPreviewTimestamp
+                : ref _lastTailPreviewTimestamp;
+
+        while (true)
+        {
+            long last = Volatile.Read(ref previous);
+
+            if (now - last < PreviewIntervalTicks)
+                return false;
+
+            if (Interlocked.CompareExchange(
+                    ref previous,
+                    now,
+                    last) == last)
+            {
+                return true;
+            }
+        }
+    }
     // ================================================================
     // FORM LIFECYCLE
     // ================================================================
-   /* private void InitializeCameraPreviewForms()
-    {
-        _headCameraForm = new HeadCameraForm();
-        _tailCameraForm = new TailCameraForm();
 
-        
-
-        _headCameraForm.EnsureCameraViewReady();
-        _tailCameraForm.EnsureCameraViewReady();
-
-    }
-*/
+    /// <summary>
+    /// Initializes the operator view form based on the application settings. If the operator view is enabled, it
+    /// creates and configures the OperatorScanQualityForm,
+    /// sets its position and size according to the specified display index, and shows it if auto-show is enabled.
+    /// </summary>
     private void InitializeOperatorView()
     {
         OperatorViewSettings settings = PipelineState.Instance.Settings.OperatorView;
@@ -205,6 +260,10 @@ public partial class MainForm : Form
             _operatorScanQualityForm.Show();
     }
 
+    /// <summary>
+    /// Gets the current operator runtime status, including PLC connection status, scan start and complete flags, captured frame pairs, and expected frame pairs.
+    /// </summary>
+    /// <returns>The current operator runtime status.</returns>
     private OperatorRuntimeStatus GetOperatorRuntimeStatus()
     {
         return new OperatorRuntimeStatus
@@ -218,11 +277,20 @@ public partial class MainForm : Form
         };
     }
 
+    /// <summary>
+    /// Updates the operator runtime status on the OperatorScanQualityForm.
+    /// </summary>
     private void UpdateOperatorRuntime()
     {
         _operatorScanQualityForm?.UpdateRuntime(GetOperatorRuntimeStatus());
     }
 
+    /// <summary>
+    /// Handles the Load event of the MainForm. Initializes camera services, operator view, PLC integration, and starts the diagnostics timer. If any initialization error occurs, it logs the error and
+    /// sets the application state to Faulted. If the production setup wizard should be opened, it invokes the method to open it.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
     private void MainForm_Load(object sender, EventArgs e)
     {
         try
@@ -254,6 +322,11 @@ public partial class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Handles the FormClosing event of the MainForm. Cancels any ongoing processing, disposes of camera services,
+    /// PLC integration, and other resources, and ensures that the base class's OnFormClosing method is called.
+    /// </summary>
+    /// <param name="e">The <see cref="FormClosingEventArgs"/> instance containing the event data.</param>
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (_isDisposing)
@@ -318,6 +391,12 @@ public partial class MainForm : Form
     // CAMERA INITIALIZATION
     // ================================================================
 
+    /// <summary>
+    /// Initializes the camera services for both head and tail cameras based on the configured settings. Validates the camera settings,
+    /// creates instances of GenieNanoCameraService for each camera, connects to the cameras, starts live preview and managed frame capture,
+    /// and sets the application state to CameraReady. If any error occurs during initialization, it logs the error, disposes of the camera
+    /// services, shows a failure message on the operator scan quality form, and sets the application state to Faulted.
+    /// </summary>
     private void InitializeCameraServices()
     {
         DisposeCameraServices();
@@ -373,30 +452,43 @@ public partial class MainForm : Form
             _headCameraForm.EnsureCameraViewReady();
             _tailCameraForm.EnsureCameraViewReady();
 
-            _headCameraService.Connect(headSettings, _headCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
+            _headCameraService.Connect(
+                headSettings,
+                _headCameraForm.CameraViewHost,
+                new ArgumentOutOfRangeException(
                     nameof(headSettings.Mode),
-headSettings.Mode,
-                    "Unsupported camera acquisition mode."), new ArgumentOutOfRangeException(
+                    headSettings.Mode,
+                    "Unsupported camera acquisition mode."),
+                new ArgumentOutOfRangeException(
                     nameof(headSettings.Mode),
-headSettings.Mode,
+                    headSettings.Mode,
                     "Unsupported camera acquisition mode."));
+
             AppendDiagnostics($"Head camera connected: {headSettings.ServerName} [{headSettings.DeviceIndex}]");
 
             _tailCameraService.Connect(tailSettings, _tailCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
                     nameof(tailSettings.Mode),
-tailSettings.Mode,
-                    "Unsupported camera acquisition mode."), new ArgumentOutOfRangeException(
+                    tailSettings.Mode,
+                    "Unsupported camera acquisition mode."),
+                new ArgumentOutOfRangeException(
                     nameof(tailSettings.Mode),
-tailSettings.Mode,
+                    tailSettings.Mode,
                     "Unsupported camera acquisition mode."));
+
+
             AppendDiagnostics($"Tail camera connected: {tailSettings.ServerName} [{tailSettings.DeviceIndex}]");
 
-            // Managed capture also runs while idle so each acquired
-            // frame can be displayed in the designer PictureBoxes.
+            
 
 
             _headCameraService.StartLive();
             _tailCameraService.StartLive();
+
+            // Managed callbacks remain active for live preview and diagnostics.
+            // The preview path is throttled separately so full camera rate does
+            // not overload the UI or create excessive temporary images.
+            _headCameraService.StartManagedFrameCapture();
+            _tailCameraService.StartManagedFrameCapture();
 
             AppendDiagnostics("Both cameras started successfully.");
 
@@ -415,6 +507,11 @@ tailSettings.Mode,
         }
     }
 
+    /// <summary>
+    /// Initializes the PLC integration by checking the settings, creating an instance of XyRestrictedPlcService, subscribing
+    /// to its events, and starting the service.
+    /// If PLC integration is disabled in the settings, it logs a message and does not initialize the service.
+    /// </summary>
     private void InitializePlcIntegration()
     {
         DisposePlcIntegration();
@@ -435,11 +532,22 @@ tailSettings.Mode,
         _plcService.Start();
     }
 
+    /// <summary>
+    /// Handles diagnostics messages from the PLC service and appends them to the diagnostics log in a thread-safe manner.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="message">The diagnostics message.</param>
     private void PlcService_DiagnosticsMessage(object? sender, string message)
     {
         AppendDiagnosticsThreadSafe($"[PLC] {message}");
     }
 
+    /// <summary>
+    /// Handles the connection state change event from the PLC service. Updates the internal connection state,
+    /// appends a diagnostics message indicating the new connection status, and updates the operator runtime status accordingly.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="connected">The new connection state.</param>
     private void PlcService_ConnectionStateChanged(object? sender, bool connected)
     {
         _plcConnected = connected;
@@ -450,6 +558,11 @@ tailSettings.Mode,
         UpdateOperatorRuntime();
     }
 
+    /// <summary>
+    /// Handles the ScanStartChanged event from the PLC service. Updates the internal scan start state,
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="active">The new scan start state.</param>
     private void PlcService_ScanStartChanged(object? sender, bool active)
     {
         _plcScanStart = active;
@@ -457,6 +570,11 @@ tailSettings.Mode,
         UpdateOperatorRuntime();
     }
 
+    /// <summary>
+    /// Handles the ScanCompleteChanged event from the PLC service. Updates the internal scan complete state,
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="complete">The new scan complete state.</param>
     private void PlcService_ScanCompleteChanged(object? sender, bool complete)
     {
         _plcScanComplete = complete;
@@ -464,6 +582,13 @@ tailSettings.Mode,
         UpdateOperatorRuntime();
     }
 
+
+    /// <summary>
+    /// Handles the ScanStartRequested event from the PLC service. If the application is in a
+    /// state that allows starting a capture, it initiates the capture process.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The event data.</param>
     private void PlcService_ScanStartRequested(object? sender, EventArgs e)
     {
         if (_setupWizardOpen)
@@ -510,6 +635,10 @@ tailSettings.Mode,
             StartFromPlc();
     }
 
+    /// <summary>
+    /// Appends a diagnostics message to the diagnostics log in a thread-safe manner. If the form is disposing or disposed, it does nothing.
+    /// </summary>
+    /// <param name="message">The diagnostics message to append.</param>
     private void AppendDiagnosticsThreadSafe(string message)
     {
         if (_isDisposing || IsDisposed)
@@ -532,6 +661,10 @@ tailSettings.Mode,
         AppendDiagnostics(message);
     }
 
+
+    /// <summary>
+    /// Disposes of the PLC integration by unsubscribing from events, disposing of the PLC service, and setting the reference to null.
+    /// </summary>
     private void DisposePlcIntegration()
     {
         if (_plcService is null)
@@ -636,6 +769,15 @@ tailSettings.Mode,
         }
     }
 
+    /// <summary>
+    /// Updates the camera preview for the specified camera position using the provided frame event arguments.
+    /// It creates independent copies of the frame for display, normalizes the display copy, and updates
+    /// the corresponding preview form if it is visible. The method also queues a combined preview
+    /// update to ensure that the operator sees a consistent view of both cameras.
+    /// If any errors occur during the update process, they are logged in the diagnostics.
+    /// </summary>
+    /// <param name="position">The position of the camera (Head or Tail).</param>
+    /// <param name="e">The camera frame event arguments.</param>
     private void UpdateCameraPreview(
         CameraPosition position,
         CameraFrameEventArgs e)
@@ -713,12 +855,18 @@ tailSettings.Mode,
             // the tail branch cannot bind to the inner childBitmap condition.
             if (position == CameraPosition.Head && childBitmap is not null)
             {
-                PostBitmapToPreviewForm(_headCameraForm, childBitmap);
+                PostBitmapToPreviewForm(CameraPosition.Head,
+                    _headCameraForm,
+                    childBitmap);
+
                 childBitmap = null;
             }
             else if (position == CameraPosition.Tail && childBitmap is not null)
             {
-                PostBitmapToPreviewForm(_tailCameraForm, childBitmap);
+                PostBitmapToPreviewForm(CameraPosition.Tail,
+                    _tailCameraForm,
+                    childBitmap);
+
                 childBitmap = null;
             }
 
@@ -737,18 +885,43 @@ tailSettings.Mode,
         }
     }
 
-    private static void PostBitmapToPreviewForm(
-        Form? previewForm,
-        Bitmap? bitmap)
+    /// <summary>
+    /// Posts the provided bitmap to the specified preview form for the given camera position.
+    /// If the preview form is not available or a post is already pending, the bitmap is disposed.
+    /// </summary>
+    private void PostBitmapToPreviewForm(
+      CameraPosition position,
+      Form? previewForm,
+      Bitmap? bitmap)
     {
         if (bitmap is null)
+            return;
+
+        if (previewForm is null ||
+            previewForm.IsDisposed ||
+            previewForm.Disposing ||
+            !previewForm.IsHandleCreated)
         {
+            bitmap.Dispose();
             return;
         }
 
-        if (previewForm == null ||
-            previewForm.IsDisposed ||
-            previewForm.Disposing)
+        bool postAccepted;
+
+        if (position == CameraPosition.Head)
+        {
+            postAccepted =
+                Interlocked.Exchange(ref _headPreviewPostPending, 1) == 0;
+        }
+        else
+        {
+            postAccepted =
+                Interlocked.Exchange(ref _tailPreviewPostPending, 1) == 0;
+        }
+
+        // A preview update is already waiting on the UI thread.
+        // Dispose this newer Bitmap rather than building an unlimited queue.
+        if (!postAccepted)
         {
             bitmap.Dispose();
             return;
@@ -756,50 +929,76 @@ tailSettings.Mode,
 
         try
         {
-            if (!previewForm.IsHandleCreated)
-            {
-                bitmap.Dispose();
-                return;
-            }
-
             previewForm.BeginInvoke(new Action(() =>
             {
                 try
                 {
-                    if (previewForm.IsDisposed || previewForm.Disposing)
+                    if (previewForm.IsDisposed ||
+                        previewForm.Disposing)
                     {
                         bitmap.Dispose();
                         return;
                     }
+
                     if (previewForm is HeadCameraForm headForm)
                     {
-
                         headForm.UpdatePreview(bitmap);
+                        bitmap = null;
                         return;
-
                     }
+
                     if (previewForm is TailCameraForm tailForm)
                     {
                         tailForm.UpdatePreview(bitmap);
+                        bitmap = null;
                         return;
                     }
 
                     bitmap.Dispose();
+                    bitmap = null;
                 }
-                catch
+                finally
                 {
-                    bitmap.Dispose();
-                    throw;
+                    bitmap?.Dispose();
+
+                    if (position == CameraPosition.Head)
+                    {
+                        Interlocked.Exchange(
+                            ref _headPreviewPostPending,
+                            0);
+                    }
+                    else
+                    {
+                        Interlocked.Exchange(
+                            ref _tailPreviewPostPending,
+                            0);
+                    }
                 }
             }));
         }
         catch
         {
-            bitmap.Dispose();
+            if (position == CameraPosition.Head)
+            {
+                Interlocked.Exchange(
+                    ref _headPreviewPostPending,
+                    0);
+            }
+            else
+            {
+                Interlocked.Exchange(
+                    ref _tailPreviewPostPending,
+                    0);
+            }
+
+            bitmap!.Dispose();
             throw;
         }
     }
 
+    /// <summary>
+    /// Queues an update for the combined preview image by posting a request to the UI thread.
+    /// </summary>
     private void QueueCombinedPreviewUpdate()
     {
 
@@ -844,6 +1043,11 @@ tailSettings.Mode,
         }
     }
 
+    /// <summary>
+    /// Updates the combined preview image by combining the latest head and tail camera frames, normalizing them for
+    /// display, and updating the picture box on the main form.
+    /// If any errors occur during the update process, they are logged in the diagnostics.
+    /// </summary>
     private void UpdateLiveCombinedPreview()
     {
         if (_isDisposing)
@@ -973,6 +1177,15 @@ tailSettings.Mode,
         return normalized;
     }
 
+    /// <summary>
+    /// Handles a camera frame event for the specified camera position. It checks if the application is disposing
+    /// or if the frame is null or empty, and disposes of the frame if necessary. If the preview should be updated,
+    /// it calls UpdateCameraPreview. If a calibration capture session is active, it tries to add the frame to the
+    /// session and updates the block label. If a capture manager is active, it adds the frame to the capture manager and updates the
+    /// block label accordingly. If the capture is complete, it initiates the finish capture and process sequence.
+    /// </summary>
+    /// <param name="position"> The position of the camera. </param>
+    /// <param name="e"> The camera frame event arguments. </param>
     private void HandleCameraFrame(
         CameraPosition position,
         CameraFrameEventArgs e)
@@ -985,10 +1198,14 @@ tailSettings.Mode,
             return;
         }
 
-        // Always display the live frame in the existing designer
-        // PictureBox. The capture manager only retains frames while
-        // an operator capture is active.
-        UpdateCameraPreview(position, e);
+        // Preview is deliberately throttled. Production and calibration
+        // capture still receive every incoming frame..
+        // Display only a limited number of frames per second.
+        // Do not throttle the production/calibration capture path below.
+        if (ShouldUpdatePreview(position))
+        {
+            UpdateCameraPreview(position, e);
+        }
 
         CalibrationFrameCaptureSession? calibrationSession =
             _calibrationCaptureSession;
@@ -997,7 +1214,9 @@ tailSettings.Mode,
         {
             calibrationSession.TryAddFrame(position, e);
             UpdateBlockLabel(
-                $"Calibration capture | Head {calibrationSession.HeadFrameCount} | Tail {calibrationSession.TailFrameCount}");
+                $"Calibration capture |" +
+                $" Head {calibrationSession.HeadFrameCount} |" +
+                $" Tail {calibrationSession.TailFrameCount}");
             return;
         }
 
@@ -1016,7 +1235,10 @@ tailSettings.Mode,
             int tailCount = _captureManager.TailFrameCount;
 
             UpdateBlockLabel(
-                $"Block: Capturing | Head {headCount} | Tail {tailCount}");
+                $"Block: Capturing |" +
+                $" Head {headCount} |" +
+                $" Tail {tailCount}");
+
             _operatorScanQualityForm?.ShowCapturing(GetOperatorRuntimeStatus());
         }
 
@@ -1032,28 +1254,14 @@ tailSettings.Mode,
         {
             return;
         }
-
-        try
-        {
-            // Do not stop managed frame capture here.
-            // It supplies the continuous live preview while the completed
-            // log is being processed and after processing finishes.
-
-            if (!IsDisposed && IsHandleCreated)
-            {
-                BeginInvoke(
-                    new Action(() => _ = FinishCaptureAndProcessAsync()));
-            }
-        }
-        catch
-        {
-            Interlocked.Exchange(
-                ref _captureFinishRequested,
-                0);
-            throw;
-        }
+        _ = FinishCaptureAndProcessAsync();
     }
 
+
+    /// <summary>
+    /// Updates the block label on the main form with the provided text. If the form or label is disposed, it does nothing.
+    /// </summary>
+    /// <param name="text"> The text to display on the block label. </param>
     private void UpdateBlockLabel(string text)
     {
         if (_isDisposing ||
@@ -1081,6 +1289,11 @@ tailSettings.Mode,
         lblBlock.Text = text;
     }
 
+    /// <summary>
+    /// Handles diagnostics messages from the capture manager and appends them to the diagnostics log in a thread-safe manner.
+    /// </summary>
+    /// <param name="sender"> The source of the diagnostics message. </param>
+    /// <param name="message"> The diagnostics message. </param>
     private void CaptureManager_DiagnosticsMessage(
 object? sender,
 string message)
@@ -1099,6 +1312,12 @@ string message)
         AppendDiagnostics(
             $"[Capture Manager] {message}");
     }
+
+    /// <summary>
+    /// Handles diagnostics messages from the processing coordinator and appends them to the diagnostics log in a thread-safe manner.
+    /// </summary>
+    /// <param name="sender"> The source of the diagnostics message. </param>
+    /// <param name="message"> The diagnostics message. </param>
     private void ProcessingCoordinator_DiagnosticsMessage(
         object? sender,
         string message)
@@ -1117,6 +1336,11 @@ string message)
         AppendDiagnostics($"[Processing] {message}");
     }
 
+
+    /// <summary>
+    /// Determines whether the Production Setup Wizard should be opened based on the current application settings and calibration state.
+    /// </summary>
+    /// <returns> True if the setup wizard should be opened; otherwise, false. </returns>
     private bool ShouldOpenSetupWizard()
     {
         AppSettings settings = PipelineState.Instance.Settings;
@@ -1193,11 +1417,22 @@ string message)
         }
     }
 
+
+    /// <summary>
+    /// Handles the click event for the Production Setup button. It opens the Production Setup Wizard
+    /// if the application is in a suitable state and no capture is currently active.
+    /// </summary>
+    /// <param name="sender"> The source of the click event. </param>
+    /// <param name="e"> The event data. </param>
     private void BtnProductionSetup_Click(object sender, EventArgs e)
     {
         OpenProductionSetupWizard();
     }
 
+
+    /// <summary>
+    /// Opens the Production Setup Wizard if it is not already open and the application is in a suitable state.
+    /// </summary>
     private void OpenProductionSetupWizard()
     {
         if (_setupWizardOpen)
@@ -1250,7 +1485,10 @@ string message)
         }
     }
 
-
+    /// <summary>
+    /// Shows the head camera preview form for setup. If the form is unavailable or disposed, it throws an InvalidOperationException.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if the head camera preview form is unavailable or disposed.</exception>
     private void ShowHeadPreviewForSetup()
     {
         if (_headCameraForm is null || _headCameraForm.IsDisposed)
@@ -1263,6 +1501,11 @@ string message)
         _headCameraForm.BringToFront();
     }
 
+
+    /// <summary>
+    /// Shows the tail camera preview form for setup. If the form is unavailable or disposed, it throws an InvalidOperationException.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if the tail camera preview form is unavailable or disposed.</exception>
     private void ShowTailPreviewForSetup()
     {
         if (_tailCameraForm is null || _tailCameraForm.IsDisposed)
@@ -1275,6 +1518,12 @@ string message)
         _tailCameraForm.BringToFront();
     }
 
+
+    /// <summary>
+    /// Retrieves the current status of the camera hardware, including connection status, server names, serial numbers, configuration paths,
+    /// and whether configurations are loaded.
+    /// </summary>
+    /// <returns>The current status of the camera hardware.</returns>
     private CameraHardwareStatus GetCameraHardwareStatus()
     {
         CameraDeviceSettings head =
@@ -1299,6 +1548,11 @@ string message)
         };
     }
 
+    /// <summary>
+    /// Reconnects the cameras for setup by initializing the camera services and returning the current camera hardware status.
+    /// </summary>
+    /// <returns>The current status of the camera hardware.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if a camera capture is active.</exception>
     private Task<CameraHardwareStatus> ReconnectCamerasForSetupAsync()
     {
         if (_captureManager?.IsCapturingActive == true ||
@@ -1312,6 +1566,13 @@ string message)
         return Task.FromResult(GetCameraHardwareStatus());
     }
 
+    /// <summary>
+    /// Captures a specified number of synchronized calibration frame pairs from the head and tail cameras.
+    /// </summary>
+    /// <param name="pairCount">The number of synchronized frame pairs to capture.</param>
+    /// <param name="token">A cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the captured calibration frames.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the capture cannot be performed.</exception>
     private async Task<CalibrationCaptureBatch> CaptureCalibrationFramesAsync(
         int pairCount,
         CancellationToken token)
@@ -1358,17 +1619,29 @@ string message)
             AppendDiagnostics(
                 $"Calibration capture started for {pairCount} synchronized frame pairs.");
 
-            CalibrationCaptureBatch result = await session.Completion;
+            TimeSpan timeout = TimeSpan.FromSeconds(15);
+            CalibrationCaptureBatch? result = null;
+
+            try
+            {
+                result = await session.Completion.WaitAsync(timeout, token);
+            }
+            catch (TimeoutException)
+            {
+                AppendDiagnostics("No camera frames were received. If Encoder mode is selected, verify that\r\n" +
+                    "encoder pulses are connected to Line1, or switch to Frame Rate mode for setup.");
+            }
 
             AppendDiagnostics(
-                $"Calibration capture complete: {result.HeadFrameCount} head and {result.TailFrameCount} tail frames.");
+                $"Calibration capture complete: {result?.HeadFrameCount} head and {result?.TailFrameCount} tail frames.");
 
-            return result;
+            return result!;
         }
         finally
         {
-            _headCameraService.StopManagedFrameCapture();
-            _tailCameraService.StopManagedFrameCapture();
+            // Managed frame callbacks remain enabled because they also support
+            // the normal idle live preview. The calibration session itself
+            // determines whether incoming frames are retained.
 
             if (ReferenceEquals(_calibrationCaptureSession, session))
             {
@@ -1389,6 +1662,13 @@ string message)
     // UI BUTTON HANDLERS
     // ================================================================
 
+    /// <summary>
+    /// Handles the click event for the "Start Capture" button. It initiates the capture process if the
+    /// application is in a suitable state and no setup wizard is open.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The event data.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the capture cannot be started.</exception>
     private void BtnStartCapture_Click(object sender, EventArgs e)
     {
         try
@@ -1455,6 +1735,12 @@ string message)
         }
     }
 
+    /// <summary>
+    /// Handles the click event for the "Stop Capture" button. It stops the capture process if the application is
+    /// in a suitable state and manual capture is allowed.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The event data.</param>
     private void BtnStopCapture_Click(object sender, EventArgs e)
     {
         try
@@ -1487,6 +1773,13 @@ string message)
     // CAPTURE COMPLETION AND PROCESSING
     // ================================================================
 
+    /// <summary>
+    /// Asynchronously finishes the capture process and initiates the processing of the captured frames.
+    /// It handles PLC ScanComplete verification if required, updates the UI state,
+    /// and manages the processing lifecycle, including saving results and sending payloads to the PLC if applicable.
+    /// </summary>
+    /// <returns> A task that represents the asynchronous operation. </returns>
+    /// <exception cref="InvalidOperationException">Thrown if the PLC service is unavailable when required for production processing.</exception>
     private async Task FinishCaptureAndProcessAsync()
     {
         if (_captureManager == null || _processingCoordinator == null)
@@ -1528,8 +1821,9 @@ string message)
 
             var completedCapture = _captureManager.FinishCapture();
 
-            _headCameraService?.StopManagedFrameCapture();
-            _tailCameraService?.StopManagedFrameCapture();
+            // Keep managed frames enabled for the idle live preview.
+            // FinishCapture removes the retained 36-pair capture from the
+            // active capture manager; future idle frames are not stored there.
 
             lblBlock.Text =
             $"Block: Complete | " +
@@ -1662,9 +1956,10 @@ string message)
         {
             _processingCancellation?.Dispose();
             _processingCancellation = null;
-            //This guarantees capture stops even when processing throws an exception.
-            _headCameraService?.StopManagedFrameCapture();
-            _tailCameraService?.StopManagedFrameCapture();
+
+
+            // Managed callbacks remain active for the live preview.
+            // Only application shutdown or camera reconnection stops them.
 
 
             Interlocked.Exchange(
@@ -1677,6 +1972,10 @@ string message)
     // RESULTS DISPLAY
     // ================================================================
 
+
+    /// <summary>
+    /// Displays the final spindle recommendation results in the diagnostics log, including optimization mode, selected strategy,
+    /// </summary>
     private void DisplayFinalResults()
     {
         var state = PipelineState.Instance;
@@ -1743,6 +2042,11 @@ string message)
     // UI STATE MANAGEMENT
     // ================================================================
 
+    /// <summary>
+    /// Sets the current application state and updates the UI accordingly. This method ensures that UI updates are performed
+    /// on the correct thread, using Invoke if necessary.
+    /// </summary>
+    /// <param name="state">The new application state to set.</param>
     private void SetUIState(ApplicationState state)
     {
         _currentState = state;
@@ -1757,6 +2061,11 @@ string message)
         }
     }
 
+    /// <summary>
+    /// Updates the UI elements based on the current application state. This method modifies labels and button states to reflect
+    /// the current state of the application.
+    /// </summary>
+    /// <param name="state">The current application state.</param>
     private void UpdateUIForState(ApplicationState state)
     {
         switch (state)
@@ -1835,6 +2144,11 @@ string message)
                      ApplicationState.Cancelled;
     }
 
+
+    /// <summary>
+    /// Determines whether manual capture is allowed based on the current operating mode of the application.
+    /// </summary>
+    /// <returns>True if manual capture is allowed; otherwise, false.</returns>
     private static bool ManualCaptureAllowed() =>
         PipelineState.Instance.Settings.Production.OperatingMode !=
         ChargerOperatingMode.Production;
@@ -1862,13 +2176,18 @@ string message)
         RefreshDiagnosticsLabel();
     }
 
+    /// <summary>
+    /// Handles the Tick event of the diagnostics timer, refreshing the diagnostics label to display live camera traffic and active-capture diagnostics.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The event data.</param>
     private void DiagnosticsTimer_Tick(object? sender, EventArgs e)
     {
         RefreshDiagnosticsLabel();
     }
 
     /// <summary>
-    /// Displays live camera traffic plus active-capture diagnostics.
+    /// Refreshes the diagnostics label to display live camera traffic and active-capture diagnostics.
     /// </summary>
     private void RefreshDiagnosticsLabel()
     {
@@ -1904,6 +2223,9 @@ string message)
             $"Capture: {tailCaptureReceived} Drop: {tailCaptureDropped}";
     }
 
+    /// <summary>
+    /// Stops the operator diagnostics refresh loop and cleans up the timer resources.
+    /// </summary>
     private void StopDiagnosticsTimer()
     {
         if (_diagnosticsTimer == null)
@@ -1915,6 +2237,11 @@ string message)
         _diagnosticsTimer = null;
     }
 
+    /// <summary>
+    /// Appends a diagnostics message to the diagnostics text box and logs it. This method ensures that UI updates
+    /// are performed on the correct thread, using BeginInvoke if necessary.
+    /// </summary>
+    /// <param name="message">The diagnostics message to append.</param>
     private void AppendDiagnostics(string message)
     {
         if (_isDisposing ||
@@ -1947,6 +2274,11 @@ string message)
     // ================================================================
     // Shutdown and Cleanup
     // ================================================================
+
+    /// <summary>
+    /// Disposes of the camera services by unsubscribing from events and stopping live capture.
+    /// This method ensures that resources are released properly during application shutdown or when reconnecting cameras.
+    /// </summary>
     private void DisposeCameraServices()
     {
         _headCameraService?.FrameAcquired -=
@@ -1965,6 +2297,10 @@ string message)
         DisposeCameraService(ref _tailCameraService);
     }
 
+    /// <summary>
+    /// Disposes of a specific camera service by stopping managed frame capture, stopping live capture, disconnecting, and disposing of the service.
+    /// </summary>
+    /// <param name="service">The camera service to dispose.</param>
     private static void DisposeCameraService(
         ref GenieNanoCameraService? service)
     {
@@ -1988,8 +2324,13 @@ string message)
         }
     }
 
-   
 
+    /// <summary>
+    /// Disposes of a preview form by calling its Dispose method and setting the reference to null. This method ensures that
+    /// resources are released properly when the form is no longer needed.
+    /// </summary>
+    /// <typeparam name="TForm">The type of the form to dispose.</typeparam>
+    /// <param name="form">The form instance to dispose.</param>
     private static void DisposePreviewForm<TForm>(
         ref TForm? form)
         where TForm : Form

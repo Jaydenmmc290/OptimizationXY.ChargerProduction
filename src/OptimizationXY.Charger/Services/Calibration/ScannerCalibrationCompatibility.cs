@@ -13,11 +13,21 @@ namespace OptimizationXY.Charger.Services.Calibration;
 /// </summary>
 public static class ScannerCalibrationCompatibility
 {
+    /// <summary>
+    /// JSON serialization options for computing the acquisition geometry fingerprint.
+    /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = false
     };
 
+    /// <summary>
+    /// Computes a SHA256 fingerprint of the acquisition geometry settings that affect
+    /// the pixel coordinate system used by the scanner lookup table.
+    /// </summary>
+    /// <param name="settings">The camera acquisition settings to compute the fingerprint for.</param>
+    /// <returns>The SHA256 fingerprint as a hexadecimal string.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if the settings or concatenation settings are null.</exception>
     public static string ComputeAcquisitionGeometrySha256(
         CameraAcquisitionSettings settings)
     {

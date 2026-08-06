@@ -6,6 +6,9 @@ using OptimizationXY.Charger.UI;
 
 namespace OptimizationXY.Charger;
 
+/// <summary>
+/// The main entry point for the application.
+/// </summary>
 internal static class Program
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -54,6 +57,9 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Configures logging for the application.
+    /// </summary>
     private static void ConfigureLogging()
     {
         ApplicationPaths.EnsureCreated();
@@ -73,6 +79,9 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Configures global exception handling for the application.
+    /// </summary>
     private static void ConfigureGlobalExceptionHandling()
     {
         Application.SetUnhandledExceptionMode(
@@ -106,6 +115,9 @@ internal static class Program
         };
     }
 
+    /// <summary>
+    /// Shows a fatal error message box to the user.
+    /// </summary>
     private static void ShowFatalError(Exception exception)
     {
         MessageBox.Show(

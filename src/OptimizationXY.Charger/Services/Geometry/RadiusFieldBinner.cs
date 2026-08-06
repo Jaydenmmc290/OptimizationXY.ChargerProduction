@@ -1,92 +1,92 @@
 using MathNet.Numerics.Statistics;
 using OptimizationXY.Charger.Models.Geometry;
-using OptimizationXY.Charger.Models.Settings;
 
-namespace OptimizationXY.Charger.Services.Geometry
+namespace OptimizationXY.Charger.Services.Geometry;
+
+public static class RadiusFieldBinner
 {
-    public static class RadiusFieldBinner
+
+    /// <summary>
+    /// Bins a list of RadiusFieldPoint objects into BinnedRadiusFieldPoint objects based on specified z and angle bin sizes.
+    /// </summary>
+    /// <param name="rawField">The list of RadiusFieldPoint objects to bin.</param>
+    /// <param name="zBinSizeMM">The size of each z-axis bin in millimeters.</param>
+    /// <param name="angleBinSizeDeg">The size of each angle bin in degrees.</param>
+    /// <param name="minPointsPerBin">The minimum number of points required per bin.</param>
+    /// <returns>A list of BinnedRadiusFieldPoint objects representing the binned radius field.</returns>
+    public static List<BinnedRadiusFieldPoint> Bin(
+ List<RadiusFieldPoint> rawField,
+ double zBinSizeMM,
+ double angleBinSizeDeg,
+ int minPointsPerBin)
     {
+        if (rawField == null || rawField.Count == 0)
+            return [];
 
-        /// <summary>
-        /// Bins raw radius field points into specified Z and angle bins, calculating statistics for each bin.
-        /// Points with invalid radius values (<= 0, NaN, Infinity) are excluded from binning.
-        /// </summary>
-        public static List<BinnedRadiusFieldPoint> Bin(
-     List<RadiusFieldPoint> rawField,
-     double zBinSizeMM,
-     double angleBinSizeDeg,
-     int minPointsPerBin)
-        {
-            if (rawField == null || rawField.Count == 0)
-                return new List<BinnedRadiusFieldPoint>();
-
-            var groups = rawField
-                .Where(p =>
-                    p.RadiusMM > 0 &&
-                    !double.IsNaN(p.RadiusMM) &&
-                    !double.IsInfinity(p.RadiusMM))
-                .GroupBy(p => new
-                {
-                    ZBin = Math.Floor(p.Z / zBinSizeMM) * zBinSizeMM,
-                    AngleBin = NormalizeAngleBin(
-                        Math.Floor(p.AngleDeg / angleBinSizeDeg) * angleBinSizeDeg)
-                });
-
-            List<BinnedRadiusFieldPoint> binned = new();
-
-            foreach (var g in groups)
+        var groups = rawField
+            .Where(p =>
+                p.RadiusMM > 0 &&
+                !double.IsNaN(p.RadiusMM) &&
+                !double.IsInfinity(p.RadiusMM))
+            .GroupBy(p => new
             {
-                var radii = g
-                    .Select(p => p.RadiusMM)
-                    .OrderBy(v => v)
-                    .ToList();
+                ZBin = Math.Floor(p.Z / zBinSizeMM) * zBinSizeMM,
+                AngleBin = NormalizeAngleBin(
+                    Math.Floor(p.AngleDeg / angleBinSizeDeg) * angleBinSizeDeg)
+            });
 
-                if (radii.Count < minPointsPerBin)
-                    continue;
+        List<BinnedRadiusFieldPoint> binned = [];
 
-                double stdDev =
-                    radii.Count >= 2
-                        ? radii.StandardDeviation()
-                        : 0.0;
-
-                if (double.IsNaN(stdDev) || double.IsInfinity(stdDev))
-                    stdDev = 0.0;
-
-                binned.Add(new BinnedRadiusFieldPoint
-                {
-                    ZBinMM = g.Key.ZBin,
-                    AngleBinDeg = g.Key.AngleBin,
-
-                    MeanRadiusMM = radii.Mean(),
-                    MedianRadiusMM = radii.Median(),
-                    MinRadiusMM = radii.Minimum(),
-                    MaxRadiusMM = radii.Maximum(),
-                    StdDevRadiusMM = stdDev,
-
-                    Count = radii.Count
-                });
-            }
-
-            return binned
-                .OrderBy(p => p.ZBinMM)
-                .ThenBy(p => p.AngleBinDeg)
-                .ToList();
-        }
-
-        /// <summary>
-        /// Normalizes an angle to the range [0, 360) degrees.
-        /// This ensures that angles are consistently binned regardless of their original range.
-        /// For example, an angle of -10 degrees would be normalized to 350 degrees, and an angle of 370 degrees would be normalized to 10 degrees.
-        /// This is important for correct binning, as angles that differ by multiples of 360 degrees should be treated as equivalent.
-        /// </summary>
-        private static double NormalizeAngleBin(double angle)
+        foreach (var g in groups)
         {
-            angle %= 360.0;
+            var radii = g
+                .Select(p => p.RadiusMM)
+                .OrderBy(v => v)
+                .ToList();
 
-            if (angle < 0)
-                angle += 360.0;
+            if (radii.Count < minPointsPerBin)
+                continue;
 
-            return angle;
+            double stdDev =
+                radii.Count >= 2
+                    ? radii.StandardDeviation()
+                    : 0.0;
+
+            if (double.IsNaN(stdDev) || double.IsInfinity(stdDev))
+                stdDev = 0.0;
+
+            binned.Add(new BinnedRadiusFieldPoint
+            {
+                ZBinMM = g.Key.ZBin,
+                AngleBinDeg = g.Key.AngleBin,
+
+                MeanRadiusMM = radii.Mean(),
+                MedianRadiusMM = radii.Median(),
+                MinRadiusMM = radii.Minimum(),
+                MaxRadiusMM = radii.Maximum(),
+                StdDevRadiusMM = stdDev,
+
+                Count = radii.Count
+            });
         }
+
+        return [.. binned
+            .OrderBy(p => p.ZBinMM)
+            .ThenBy(p => p.AngleBinDeg)];
+    }
+
+    /// <summary>
+    /// Normalizes an angle to the range [0, 360) degrees.
+    /// </summary>
+    /// <param name="angle">The angle in degrees to normalize.</param>
+    /// <returns>The normalized angle in the range [0, 360) degrees.</returns>
+    private static double NormalizeAngleBin(double angle)
+    {
+        angle %= 360.0;
+
+        if (angle < 0)
+            angle += 360.0;
+
+        return angle;
     }
 }

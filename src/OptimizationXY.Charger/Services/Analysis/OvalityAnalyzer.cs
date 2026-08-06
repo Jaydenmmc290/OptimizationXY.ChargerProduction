@@ -5,10 +5,19 @@ using OptimizationXY.Charger.Models.Geometry;
 
 namespace OptimizationXY.Charger.Services.Analysis;
 
+/// <summary>
+/// Provides methods to analyze the ovality of a spindle based on binned radius field data.
+/// </summary>
 public static class OvalityAnalyzer
 {
 
-    // Analyzes the ovality of a spindle based on binned radius field data.
+    /// <summary>
+    /// Analyzes the ovality of a spindle based on a list of binned radius field points.
+    /// </summary>
+    /// <param name="binnedField">The list of binned radius field points.</param>
+    /// <param name="minAngleBinsPerSlice">The minimum number of angle bins required per slice for analysis.</param>
+    /// <returns>The result of the ovality analysis.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the binned radius field is empty or if no valid slices are available for analysis.</exception>
     public static OvalityResult Analyze(List<BinnedRadiusFieldPoint> binnedField,int minAngleBinsPerSlice = 36)
     {
         if (binnedField == null || binnedField.Count == 0)
@@ -49,7 +58,12 @@ public static class OvalityAnalyzer
         return worst;
     }
 
-    // Analyzes a single slice of binned radius field points to determine ovality and related parameters.
+    /// <summary>
+    /// Analyzes a single slice of binned radius field points to determine ovality characteristics.
+    /// </summary>
+    /// <param name="slicePoints">The list of binned radius field points for the slice.</param>
+    /// <param name="z">The Z-coordinate of the slice.</param>
+    /// <returns>The result of the ovality analysis for the slice.</returns>
     private static OvalityResult AnalyzeSlice(List<BinnedRadiusFieldPoint> slicePoints,double z)
     {
         int n = slicePoints.Count;

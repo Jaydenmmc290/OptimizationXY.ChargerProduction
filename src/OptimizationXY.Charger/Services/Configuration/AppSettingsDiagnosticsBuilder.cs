@@ -3,8 +3,17 @@ using OptimizationXY.Charger.Models.Settings;
 
 namespace OptimizationXY.Charger.Services.Configuration;
 
+
+/// <summary>
+/// Provides a summary of the application settings for diagnostic purposes.
+/// </summary>
 public static class AppSettingsDiagnosticsBuilder
 {
+    /// <summary>
+    /// Builds a summary of the provided application settings.
+    /// </summary>
+    /// <param name="settings">The application settings to summarize.</param>
+    /// <returns>A string containing the summary of the application settings.</returns>
     public static string BuildSummary(AppSettings settings)
     {
         var sb = new StringBuilder();

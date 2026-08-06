@@ -3,10 +3,18 @@ using OptimizationXY.Charger.Infrastructure;
 namespace OptimizationXY.Charger.Models.Acquisition;
 
 /// <summary>
-/// Production acquisition settings for the head and tail Genie Nano cameras.
+/// Saved production acquisition configuration for the head and tail cameras.
+/// Property initializers are first-run defaults only. Values loaded from the
+/// production settings file replace these defaults after commissioning.
 /// </summary>
 public sealed class CameraAcquisitionSettings
 {
+
+    /// <summary>
+    /// Saved configuration for one physical camera. ServerName and DeviceIndex
+    /// locate the Sapera resource. ExpectedSerialNumber verifies that the correct
+    /// physical camera is connected at that machine position.
+    /// </summary>
     public CameraDeviceSettings HeadCamera { get; set; } = new()
     {
         Position = CameraPosition.Head,
@@ -21,6 +29,11 @@ public sealed class CameraAcquisitionSettings
         Mode = AcquisitionMode.Encoder
     };
 
+    /// <summary>
+    /// Saved configuration for one physical camera. ServerName and DeviceIndex
+    /// locate the Sapera resource. ExpectedSerialNumber verifies that the correct
+    /// physical camera is connected at that machine position.
+    /// </summary>
     public CameraDeviceSettings TailCamera { get; set; } = new()
     {
         Position = CameraPosition.Tail,
@@ -35,11 +48,20 @@ public sealed class CameraAcquisitionSettings
         Mode = AcquisitionMode.Encoder
     };
 
+    /// <summary>
+    /// Target number of frame pairs to acquire for each log. The actual number of
+    /// frame pairs may be slightly higher or lower depending on the angular step size
+    /// and the encoder position at the start of the log.
+    /// </summary>
     public int TargetFramePairsPerLog { get; set; } = 36;
     public DualCameraConcatenationSettings Concatenation { get; set; } = new();
     public int QueueCapacityPerCamera { get; set; } = 16;
     public double? TestAngularStepDegrees { get; set; }
 
+    /// <summary>
+    /// Validates the camera acquisition settings. Throws an exception if any required
+    /// settings are missing or invalid.
+    /// </summary>
     public void Validate()
     {
         if (HeadCamera is null)
@@ -97,6 +119,9 @@ public sealed class CameraAcquisitionSettings
         TestAngularStepDegrees ?? 360.0 / TargetFramePairsPerLog;
 }
 
+/// <summary>
+/// Settings for how the head and tail camera images are concatenated into a single image.
+/// </summary>
 public sealed class DualCameraConcatenationSettings
 {
     public bool HeadOnLeft { get; set; } = true;
@@ -110,6 +135,10 @@ public sealed class DualCameraConcatenationSettings
     public int OverlapPixels { get; set; }
     public bool RequireEqualHeights { get; set; } = true;
 
+    /// <summary>
+    /// Validates the dual-camera concatenation settings. Throws an exception if any required
+    /// settings are missing or invalid
+    /// </summary>
     public void Validate()
     {
         if (HeadCropLeftPixels < 0 || HeadCropRightPixels < 0 ||
@@ -143,10 +172,10 @@ public sealed class CameraDeviceSettings
     public string PixelFormat { get; set; } = "Mono8";
     public double ExposureTimeMicroseconds { get; set; } = 15017.0;
     public double Gain { get; set; } = 1.0;
-    public bool DisableAutomaticExposure { get; set; } = true;
-    public bool DisableAutomaticGain { get; set; } = true;
+
     public string TriggerSource { get; set; } = "Line1";
     public string TriggerActivation { get; set; } = "RisingEdge";
+
 
     /// <summary>
     /// When true, a missing or rejected production-critical feature causes the
@@ -154,6 +183,11 @@ public sealed class CameraDeviceSettings
     /// </summary>
     public bool RequireConfiguredFeatures { get; set; } = true;
 
+
+    /// <summary>
+    /// Validates the camera device settings. Throws an exception if any required
+    /// settings are missing or invalid.
+    /// </summary>
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(ServerName))
@@ -171,10 +205,7 @@ public sealed class CameraDeviceSettings
         if (!double.IsFinite(Gain) || Gain < 0)
             throw new ArgumentOutOfRangeException(nameof(Gain));
 
-        if (Mode == AcquisitionMode.Encoder && string.IsNullOrWhiteSpace(TriggerSource))
-            throw new ArgumentException($"{Position} camera TriggerSource is required in Encoder mode.");
-        if (Mode == AcquisitionMode.Encoder && string.IsNullOrWhiteSpace(TriggerActivation))
-            throw new ArgumentException($"{Position} camera TriggerActivation is required in Encoder mode.");
+       
 
         if (InitializationMode == CameraInitializationMode.ConfigurationFile)
         {
@@ -187,9 +218,17 @@ public sealed class CameraDeviceSettings
         }
     }
 
+    /// <summary>
+    /// Returns the full path to the camera configuration file, if any. The path is resolved
+    /// relative to the application configuration directory. If no configuration file is specified,
+    /// an empty string is returned.
+    /// </summary>
     public string GetConfigurationFilePath() =>
         ApplicationPaths.ResolveCameraConfigurationPath(ConfigurationFileName);
 
+    /// <summary>
+    /// Returns a human-readable description of how the camera is initialized, either programmatically or via a legacy CCF file.
+    /// </summary>
     public string GetInitializationDescription() =>
         InitializationMode == CameraInitializationMode.Programmatic
             ? $"Direct Sapera device {ServerName} [{DeviceIndex}]"

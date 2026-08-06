@@ -7,6 +7,9 @@ using OptimizationXY.Charger.Models.Settings;
 
 namespace OptimizationXY.Charger.Services.Configuration;
 
+/// <summary>
+/// Provides methods to load and save application settings from a JSON file.
+/// </summary>
 public static class AppSettingsStore
 {
     private const int CurrentSettingsVersion = 10;
@@ -28,6 +31,10 @@ public static class AppSettingsStore
         "Config",
         "appsettings.json");
 
+    /// <summary>
+    /// Loads the application settings from the JSON file or creates default settings if the file does not exist.
+    /// </summary>
+    /// <returns>The loaded or default application settings.</returns>
     public static AppSettings LoadOrCreateDefault()
     {
         ApplicationPaths.EnsureCreated();
@@ -44,14 +51,8 @@ public static class AppSettingsStore
         {
             string json = File.ReadAllText(SettingsPath, Encoding.UTF8);
             AppSettings? settings =
-                JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
-
-            if (settings is null)
-            {
-                throw new InvalidOperationException(
+                JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? throw new InvalidOperationException(
                     "The settings file was empty or could not be deserialized.");
-            }
-
             bool migrated = ApplySafeMigrations(settings);
             AppSettingsValidator.Validate(settings);
 
@@ -84,6 +85,10 @@ public static class AppSettingsStore
         }
     }
 
+    /// <summary>
+    /// Saves the application settings to the JSON file, ensuring that the directory exists and that the settings are valid.
+    /// </summary>
+    /// <param name="settings">The application settings to save.</param>
     public static void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -231,6 +236,10 @@ public static class AppSettingsStore
         return changed;
     }
 
+    /// <summary>
+    /// Migrates legacy settings from the old configuration path to the new configuration directory if needed. If the new
+    /// settings file already exists or the legacy settings file does not exist, no action is taken.
+    /// </summary>
     private static void MigrateLegacySettingsIfNeeded()
     {
         if (File.Exists(SettingsPath) || !File.Exists(LegacySettingsPath))
@@ -241,6 +250,11 @@ public static class AppSettingsStore
         File.Copy(LegacySettingsPath, SettingsPath, overwrite: false);
     }
 
+    /// <summary>
+    /// Creates a backup of the invalid settings file with a timestamped filename in the configuration directory.
+    /// The backup file is named "appsettings.invalid.{timestamp}.json". Returns the path to the backup file.
+    /// </summary>
+    /// <returns>The path to the backup file.</returns>
     private static string BackupInvalidSettings()
     {
         string backupPath = Path.Combine(

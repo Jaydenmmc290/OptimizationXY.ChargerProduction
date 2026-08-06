@@ -30,5 +30,5 @@ public sealed class GenieNanoCameraService : IDisposable
         DiagnosticsMessage?.Invoke(this, MissingSdkMessage);
         throw new PlatformNotSupportedException(MissingSdkMessage);
     }
-}
+} 
 #endif

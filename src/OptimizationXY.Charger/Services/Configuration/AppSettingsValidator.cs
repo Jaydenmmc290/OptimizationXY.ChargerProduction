@@ -3,8 +3,16 @@ using OptimizationXY.Charger.Models.Settings;
 
 namespace OptimizationXY.Charger.Services.Configuration;
 
+/// <summary>
+/// Validates the application settings to ensure they are complete and consistent.
+/// </summary>
 public static class AppSettingsValidator
 {
+    /// <summary>
+    /// Validates the provided application settings, throwing an exception if any required settings are missing or inconsistent.
+    /// </summary>
+    /// <param name="settings">The application settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if any required settings are missing or inconsistent.</exception>
     public static void Validate(AppSettings settings)
     {
         if (settings == null)
@@ -30,6 +38,12 @@ public static class AppSettingsValidator
         ValidateSetup(settings);
     }
 
+    /// <summary>
+    /// Validates the camera acquisition settings, ensuring that both head and tail cameras are properly
+    /// configured and do not conflict with each other.
+    /// </summary>
+    /// <param name="settings">The application settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if any required camera acquisition settings are missing or inconsistent.</exception>
     private static void ValidateAcquisition(AppSettings settings)
     {
         if (settings.Acquisition == null)
@@ -80,6 +94,13 @@ public static class AppSettingsValidator
     }
 
 
+    /// <summary>
+    /// Validates the shape and required properties of a camera device settings object, ensuring that
+    /// it is properly configured for the expected camera position (head or tail).
+    /// </summary>
+    /// <param name="camera">The camera device settings to validate.</param>
+    /// <param name="expectedPosition">The expected camera position (head or tail).</param>
+    /// <exception cref="InvalidOperationException">Thrown if the camera device settings are missing or inconsistent.</exception>
     private static void ValidateCameraDeviceShape(
         CameraDeviceSettings camera,
         CameraPosition expectedPosition)
@@ -112,6 +133,11 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>
+    /// Validates the operator view settings, ensuring that all required properties are present and consistent.
+    /// </summary>
+    /// <param name="settings">The application settings containing the operator view settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the operator view settings are missing or inconsistent.</exception>
     private static void ValidateOperatorView(AppSettings settings)
     {
         if (settings.OperatorView == null)
@@ -150,6 +176,11 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>
+    /// Validates the unit settings, ensuring that decimal precision for inches and millimeters is non-negative.
+    /// </summary>
+    /// <param name="settings">The application settings containing the unit settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the unit settings are missing or inconsistent.</exception>
     private static void ValidateUnits(AppSettings settings)
     {
         if (settings.Units.InchesDecimals < 0)
@@ -159,6 +190,12 @@ public static class AppSettingsValidator
             throw new InvalidOperationException("MillimetersDecimals cannot be negative.");
     }
 
+    /// <summary>
+    /// Validates the rotating scan settings, ensuring that minimum and preferred valid frames,
+    /// expected angle step, and minimum profile points per frame are all positive and consistent.
+    /// </summary>
+    /// <param name="settings">The application settings containing the rotating scan settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the rotating scan settings are missing or inconsistent.</exception>
     private static void ValidateRotatingScan(AppSettings settings)
     {
         if (settings.RotatingScan.MinimumValidFrames <= 0)
@@ -174,6 +211,11 @@ public static class AppSettingsValidator
             throw new InvalidOperationException("MinimumProfilePointsPerFrame must be greater than zero.");
     }
 
+    /// <summary>
+    /// Validates the geometry settings, ensuring that various geometric parameters are positive and within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the geometry settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the geometry settings are missing or inconsistent.</exception>
     private static void ValidateGeometry(AppSettings settings)
     {
         if (settings.Geometry.LocalCenterlineSliceThicknessMM <= 0)
@@ -195,6 +237,11 @@ public static class AppSettingsValidator
             throw new InvalidOperationException("MinPointsPerRadiusBin must be greater than zero.");
     }
 
+    /// <summary>
+    /// Validates the defect settings, ensuring that radius thresholds and weights are consistent and within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the defect settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the defect settings are missing or inconsistent.</exception>
     private static void ValidateDefects(AppSettings settings)
     {
         if (settings.Defects.SevereLowRadiusThresholdMM >= settings.Defects.LowRadiusThresholdMM)
@@ -214,6 +261,11 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>
+    /// Validates the optimization settings, ensuring that various optimization parameters are positive and within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the optimization settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the optimization settings are missing or inconsistent.</exception>
     private static void ValidateOptimization(AppSettings settings)
     {
         if (settings.Optimization.MinimumImprovementPercent < 0)
@@ -232,6 +284,12 @@ public static class AppSettingsValidator
             throw new InvalidOperationException("FineStepMM must be greater than zero.");
     }
 
+    /// <summary>
+    /// Validates the inscribed geometry settings, ensuring that angular bins, axis ratios, orientation steps, and
+    /// tolerances are within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the inscribed geometry settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the inscribed geometry settings are missing or inconsistent.</exception>
     private static void ValidateInscribedGeometry(AppSettings settings)
     {
         if (settings.InscribedGeometry == null)
@@ -280,6 +338,13 @@ public static class AppSettingsValidator
         }
     }
 
+
+    /// <summary>
+    /// Validates the peel view settings, ensuring that veneer lengths, marker spacing, coverage percentages,
+    /// and other related settings are within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the peel view settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the peel view settings are missing or inconsistent.</exception>
     private static void ValidatePeelView(AppSettings settings)
     {
         if (settings.PeelView == null)
@@ -334,6 +399,12 @@ public static class AppSettingsValidator
         }
     }
 
+
+    /// <summary>
+    /// Validates the usable radius and wane settings, ensuring that core diameter, veneer thickness, wane tolerances,
+    /// </summary>
+    /// <param name="settings">The application settings containing the usable radius and wane settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the usable radius or wane settings are missing or inconsistent.</exception>
     private static void ValidateUsableRadiusAndWane(AppSettings settings)
     {
         if (settings.UsableRadius == null)
@@ -362,7 +433,12 @@ public static class AppSettingsValidator
         if (settings.Wane.MinAngleBinsPerWaneSlice <= 0)
             throw new InvalidOperationException("MinAngleBinsPerWaneSlice must be greater than zero.");
     }
-
+    
+    /// <summary>
+    /// Validates the machine limits settings, ensuring that maximum tail and head movements and warning moves are within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the machine limits settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the machine limits settings are missing or inconsistent.</exception>  
     private static void ValidateMachineLimits(AppSettings settings)
     {
         if (settings.MachineLimits == null)
@@ -381,7 +457,12 @@ public static class AppSettingsValidator
             throw new InvalidOperationException("WarningMoveMM must be a non-negative finite value.");
     }
 
-
+    /// <summary>
+    /// Validates the production settings, ensuring that maximum dropped source frames, minimum point cloud points,
+    /// minimum local centerline slices, and minimum binned radius cells are within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the production settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the production settings are missing or inconsistent.</exception>
     private static void ValidateProduction(AppSettings settings)
     {
         if (settings.Production == null)
@@ -407,6 +488,12 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>
+    /// Validates the PLC integration settings, ensuring that readback timeouts, float comparison tolerances,
+    /// and scan complete timeouts are within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the PLC integration settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the PLC integration settings are missing or inconsistent.</exception>
     private static void ValidatePlc(AppSettings settings)
     {
         if (settings.Plc == null)
@@ -425,6 +512,12 @@ public static class AppSettingsValidator
                 "Plc.ScanCompleteTimeoutMilliseconds must be at least 1000.");
     }
 
+    /// <summary>
+    /// Validates the safety settings, ensuring that knife clearance, peel thickness multipliers, and carriage-retract
+    /// buffers are within valid ranges and consistent with veneer thickness.
+    /// </summary>
+    /// <param name="settings">The application settings containing the safety settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the safety settings are missing or inconsistent.</exception>
     private static void ValidateSafety(AppSettings settings)
     {
         if (settings.Safety == null)
@@ -455,6 +548,12 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>
+    /// Validates the recovery optimization settings, ensuring that at least one seed candidate strategy is included
+    /// and that numerical parameters are within valid ranges.
+    /// </summary>
+    /// <param name="settings">The application settings containing the recovery optimization settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the recovery optimization settings are missing or inconsistent.</exception>
     private static void ValidateRecoveryOptimization(AppSettings settings)
     {
         if (settings.RecoveryOptimization == null)
@@ -502,7 +601,12 @@ public static class AppSettingsValidator
                 "MinimumRecoverySearchAngularBins must be between 1 and 360.");
         }
     }
-
+    
+    /// <summary>
+    /// Validates the storage settings, ensuring that the number of days to keep saved scans is positive.
+    /// </summary>
+    /// <param name="settings">The application settings containing the storage settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the storage settings are missing or inconsistent.</exception> 
     private static void ValidateStorage(AppSettings settings)
     {
         if (settings.Storage == null)
@@ -515,6 +619,12 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>
+    /// Validates the database settings, ensuring that if database saving is enabled, a valid connection string is provided
+    /// either in the settings or through the environment variable.
+    /// </summary>
+    /// <param name="settings">The application settings containing the database settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the database settings are missing or inconsistent.</exception>
     private static void ValidateDatabase(AppSettings settings)
     {
         if (settings.Database == null)
@@ -531,7 +641,12 @@ public static class AppSettingsValidator
     }
 
 
-
+    /// <summary>
+    /// Validates the production setup settings, ensuring that if length calibration is configured, a valid pending
+    /// length pixels per millimeter value is provided,
+    /// </summary>
+    /// <param name="settings">The application settings containing the production setup settings to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the production setup settings are missing or inconsistent.</exception>
     private static void ValidateSetup(AppSettings settings)
     {
         if (settings.Setup == null)

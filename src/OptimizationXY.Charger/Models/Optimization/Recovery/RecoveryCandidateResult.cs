@@ -2,15 +2,45 @@ using OptimizationXY.Charger.Models.Analysis;
 using OptimizationXY.Charger.Models.Optimization.Geometry;
 using OptimizationXY.Charger.Models.Optimization.Spindle;
 
+
+/// <summary>
+/// Represents the result of a recovery candidate evaluation, including the strategy name,
+/// optimized spindle movement, peel simulation result, inscribed geometry result, and candidate search count.
+/// </summary>
 namespace OptimizationXY.Charger.Models.Optimization.Recovery;
 
 public sealed class RecoveryCandidateResult
 {
+
+    /// <summary>
+    /// Gets or sets the name of the recovery strategy used for this candidate result.
+    /// </summary>
     public string StrategyName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the optimized spindle movement resulting from the recovery candidate evaluation.
+    /// </summary>
     public OptimizedSpindleMovement Movement { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the peel simulation result, which provides information about the peel behavior and performance of the recovery candidate.
+    /// </summary>
     public PeelSimulationResult Peel { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the inscribed geometry result, which provides information about the inscribed geometry of the recovery candidate.
+    /// </summary>
     public InscribedGeometryResult? Geometry { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of candidates that were searched during the recovery candidate evaluation.
+    /// This value indicates how many potential recovery strategies were considered before selecting the final result.
+    /// </summary>
     public int CandidateSearchCount { get; set; }
+
+    /// <summary>
+    /// Gets the maximum movement in millimeters among the tail and head movements in both X and Y directions.
+    /// </summary>
 
     public double MaxMovementMM =>
         new[]
@@ -22,9 +52,28 @@ public sealed class RecoveryCandidateResult
         }.Max();
 }
 
+
+/// <summary>
+/// Represents the result of the recovery optimization process, including the selected recovery candidate,
+/// </summary>
 public sealed class RecoveryOptimizationResult
 {
+
+    /// <summary>
+    /// Gets or sets the selected recovery candidate result, which represents the best recovery strategy chosen from the evaluated candidates.
+    /// </summary>
     public RecoveryCandidateResult Selected { get; set; } = new();
-    public List<RecoveryCandidateResult> Candidates { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the list of recovery candidate results, which includes all evaluated
+    /// candidates during the recovery optimization process.
+    /// </summary>
+    public List<RecoveryCandidateResult> Candidates { get; set; } = [];
+
+
+    /// <summary>
+    /// Gets or sets the reason for selecting the best recovery candidate, which provides
+    /// insight into why the chosen strategy was preferred over others.
+    /// </summary>
     public string SelectionReason { get; set; } = string.Empty;
 }

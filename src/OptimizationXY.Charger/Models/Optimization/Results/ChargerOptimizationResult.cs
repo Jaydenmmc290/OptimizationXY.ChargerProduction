@@ -1,32 +1,75 @@
 using OptimizationXY.Charger.Models.Optimization.Spindle;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace OptimizationXY.Charger.Models.Optimization.Results
+/// <summary>
+/// Represents the result of the charger optimization process, including offsets, scores, penalties, and candidate counts.
+/// </summary>
+namespace OptimizationXY.Charger.Models.Optimization.Results;
+
+public class ChargerOptimizationResult  
 {
-    public class ChargerOptimizationResult  // This class represents the result of an optimization process for a charger,
-                                            // including various metrics and penalties associated with the optimization.
-    {
-        public double OffsetXMM { get; set; }  // The offset in millimeters along the X-axis.
-        public double OffsetYMM { get; set; }  // The offset in millimeters along the Y-axis.
 
-        public double WaneScore { get; set; }  // A score representing the wane (deviation from ideal shape) of the charger.
-        public double DefectPenalty { get; set; } // A penalty score representing the presence of defects in the charger.
+    /// <summary>
+    /// Gets or sets the offset in millimeters along the X-axis for the optimized charger position.
+    /// </summary>
+    public double OffsetXMM { get; set; }  
+    /// <summary>
+    /// Gets or sets the offset in millimeters along the Y-axis for the optimized charger position.
+    /// </summary>
+    public double OffsetYMM { get; set; }  
 
-        public double MovementPenalty { get; set; }  // A penalty score representing the amount of movement applied to the charger, which may affect its performance.
+    /// <summary>
+    /// Gets or sets a score representing the wane (deviation from ideal shape) of the charger.
+    /// </summary>
+    public double WaneScore { get; set; }  
 
-        public double FinalScore { get; set; }  // The final score of the optimization, which may be a combination of the wane score and the various penalties.
+    /// <summary>
+    /// Gets or sets a penalty score representing the presence of defects in the charger.
+    /// </summary>
+    public double DefectPenalty { get; set; } 
 
-        public bool IsRecommended { get; set; }  // A boolean indicating whether the optimization result is recommended based on the final score and other criteria.
-        public double ImprovementPercent { get; set; }  // The percentage improvement of the optimization result compared to a baseline or previous result.
-        public int CoarseCandidates { get; set; }
+    /// <summary>
+    /// Gets or sets a penalty score representing the amount of movement applied to the charger, which may affect its performance.
+    /// </summary>
+    public double MovementPenalty { get; set; } 
 
-        public int MediumCandidates { get; set; }
+    /// <summary>
+    /// Gets or sets the final score of the optimization, which may be a combination of the wane score and the various penalties.
+    /// </summary>
+    public double FinalScore { get; set; }  
 
-        public int FineCandidates { get; set; }
-        public OptimizedSpindleMovement? SpindleMovement { get; set; }
-        public int TestedCandidates { get; set; }  // The number of candidate solutions that were tested during the optimization process.
+    /// <summary>
+    /// Gets or sets a value indicating whether the optimization result is recommended based on the final score and other criteria.
+    /// </summary>
+    public bool IsRecommended { get; set; }  
 
-    }
+    /// <summary>
+    /// Gets or sets the percentage improvement of the optimization result compared to a baseline or previous result.
+    /// </summary>
+    public double ImprovementPercent { get; set; }  
+
+    /// <summary>
+    /// Gets or sets the number of coarse candidates considered during the optimization process.
+    /// </summary>
+    public int CoarseCandidates { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of medium candidates considered during the optimization process.
+    /// </summary>
+    public int MediumCandidates { get; set; }
+    
+    /// <summary>
+    /// Gets or sets the number of fine candidates considered during the optimization process.
+    /// </summary>  
+    public int FineCandidates { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optimized spindle movement resulting from the charger optimization process.
+    /// </summary>
+    public OptimizedSpindleMovement? SpindleMovement { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of candidate solutions that were tested during the optimization process.
+    /// </summary>
+    public int TestedCandidates { get; set; }  
+
 }

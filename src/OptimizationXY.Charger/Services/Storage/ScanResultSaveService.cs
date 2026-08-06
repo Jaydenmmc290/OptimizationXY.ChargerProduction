@@ -2,10 +2,7 @@ using OptimizationXY.Charger.Services.Core;
 
 namespace OptimizationXY.Charger.Services.Storage;
 
-public sealed record ScanSaveResult(
-    string FolderPath,
-    int? DatabaseScanId,
-    string DatabaseStatus);
+public sealed record ScanSaveResult(string FolderPath,int? DatabaseScanId,string DatabaseStatus);
 
 /// <summary>
 /// Saves the file artifacts first, then optionally records the saved scan in SQL.
@@ -13,6 +10,12 @@ public sealed record ScanSaveResult(
 /// </summary>
 public sealed class ScanResultSaveService
 {
+
+    /// <summary>
+    /// Saves the current scan to disk and optionally to the database.
+    /// </summary>
+    /// <param name="state">The current pipeline state containing scan data and settings.</param>
+    /// <returns>A <see cref="ScanSaveResult"/> representing the outcome of the save operation.</returns>
     public static ScanSaveResult Save(PipelineState state)
     {
         ArgumentNullException.ThrowIfNull(state);

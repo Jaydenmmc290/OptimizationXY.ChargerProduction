@@ -3,10 +3,20 @@ using OptimizationXY.Charger.Services.Core;
 
 namespace OptimizationXY.Charger.Services.Production;
 
+/// <summary>
+/// Builds a PLC command payload from the current pipeline state, ensuring that all required data is present and valid.
+/// </summary>
 public static class PlcPayloadBuilder
 {
     private const int MaximumExactlyRepresentablePlcBlockCount = 16_000_000;
+    private const double MM_TO_INCHES = 1.0 / 25.4;  // Convert millimeters to inches for PLC transmission
 
+    /// <summary>
+    /// Builds a PLC command payload from the provided pipeline state.
+    /// </summary>
+    /// <param name="state">The current pipeline state containing all necessary information for building the PLC payload.</param>
+    /// <returns>A PlcCommandPayload object representing the command to be sent to the PLC.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the pipeline state is invalid or incomplete.</exception>
     public static PlcCommandPayload Build(PipelineState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -86,22 +96,27 @@ public static class PlcPayloadBuilder
         PlcCommandPayload payload = new()
         {
             BlockCount = blockCount,
-            HeadXMM = recommendation.CommandHeadXMM,
-            HeadYMM = recommendation.CommandHeadYMM,
-            TailXMM = recommendation.CommandTailXMM,
-            TailYMM = recommendation.CommandTailYMM,
-            SmallDiameterMM = state.Model.MinDiameterMM,
-            LargeDiameterMM = state.Model.MaxDiameterMM,
-            LargestMeasuredRadiusMM = largestRadiusMM,
-            SmallestMeasuredRadiusMM = smallestRadiusMM,
-            KnifeClearanceMM = knifeClearanceMM,
-            SafeCarriageRetractRadiusMM = largestRadiusMM + knifeClearanceMM
+            HeadXMM = recommendation.CommandHeadXMM * MM_TO_INCHES,
+            HeadYMM = recommendation.CommandHeadYMM * MM_TO_INCHES,
+            TailXMM = recommendation.CommandTailXMM * MM_TO_INCHES,
+            TailYMM = recommendation.CommandTailYMM * MM_TO_INCHES,
+            SmallDiameterMM = state.Model.MinDiameterMM * MM_TO_INCHES,
+            LargeDiameterMM = state.Model.MaxDiameterMM * MM_TO_INCHES,
+            LargestMeasuredRadiusMM = largestRadiusMM * MM_TO_INCHES,
+            SmallestMeasuredRadiusMM = smallestRadiusMM * MM_TO_INCHES,
+            KnifeClearanceMM = knifeClearanceMM * MM_TO_INCHES,
+            SafeCarriageRetractRadiusMM = (largestRadiusMM + knifeClearanceMM) * MM_TO_INCHES
         };
 
         ValidateFinite(payload.SafeCarriageRetractRadiusMM);
         return payload;
     }
 
+    /// <summary>
+    /// Validates that all provided double values are finite and within the range representable by a FLOAT in the PLC payload.
+    /// </summary>
+    /// <param name="values">The double values to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown if any value is not finite or outside the FLOAT range.</exception>
     private static void ValidateFinite(params double[] values)
     {
         if (values.Any(value =>

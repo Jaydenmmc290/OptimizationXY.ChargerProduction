@@ -51,6 +51,13 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Waits for the PLC ScanComplete signal to be asserted (true) with good quality.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the ScanComplete signal.</param>
+    /// <returns>A task that completes when the ScanComplete signal is asserted with good quality.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the PLC is disconnected or no scan cycle is active.</exception>
+    /// <exception cref="TimeoutException">Thrown if the wait times out before the ScanComplete signal is asserted with good quality.</exception>
     public async Task WaitForScanCompleteAsync(
         CancellationToken token = default)
     {
@@ -103,6 +110,9 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Initializes the XYRestricted connection and subscribes to tag change events.
+    /// </summary>
     public void Start()
     {
         ThrowIfDisposed();
@@ -145,6 +155,12 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Sends a payload to the PLC by writing the specified tags and optionally verifying the readback values.
+    /// </summary>
+    /// <param name="payload">The payload containing the tags and values to write to the PLC.</param>
+    /// <param name="token">A cancellation token to observe while sending the payload.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a PlcTransmissionRecord with the details of the transmission.</returns>
     public async Task<PlcTransmissionRecord> SendPayloadAsync(
         PlcCommandPayload payload,
         CancellationToken token = default)
@@ -232,6 +248,16 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Writes the specified tag and values to the PLC, and optionally verifies the readback values if required by settings.
+    /// </summary>
+    /// <param name="tag">The PLC tag to write.</param>
+    /// <param name="values">The values to write to the tag.</param>
+    /// <param name="written">A list to track the names of tags that have been written.</param>
+    /// <param name="token">A cancellation token to observe while writing and verifying the tag.</param>
+    /// <returns>A task that represents the asynchronous write and verify operation.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the PLC connection is lost or the readback quality is bad.</exception>
+    /// <exception cref="TimeoutException">Thrown when the readback operation times out.</exception>
     private async Task WriteAndVerifyAsync(
         XyTag tag,
         float[] values,
@@ -297,6 +323,11 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Handles tag data change events from the XYRestricted PLC connection. Updates internal state and raises events for ScanStart and ScanComplete changes.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The event data.</param>
     private void OnTagDataChanged(object? sender, TagDataChangedEventArgs e)
     {
         if (_disposed)
@@ -380,6 +411,11 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Flattens the numeric values from the TagDataChangedEventArgs into a single array of doubles, handling nested collections and string representations of numbers.
+    /// </summary>
+    /// <param name="e">The event data containing the values to flatten.</param>
+    /// <returns>An array of doubles representing the flattened numeric values.</returns>
     private static double[] FlattenNumericValues(TagDataChangedEventArgs e)
     {
         var values = new List<double>();
@@ -391,6 +427,11 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         return [.. values];
     }
 
+    /// <summary>
+    /// Recursively adds numeric values from the provided object to the output list, handling strings, collections, and convertible types.
+    /// </summary>
+    /// <param name="value">The value to process and extract numeric values from.</param>
+    /// <param name="output">The list to which numeric values will be added.</param>
     private static void AddNumeric(object? value, List<double> output)
     {
         if (value is null)
@@ -429,6 +470,14 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Compares two arrays of numeric values (expected and actual) to determine if they match within a specified tolerance.
+    /// Returns true if the arrays are of equal length and all corresponding elements are within the tolerance; otherwise, returns false.
+    /// </summary>
+    /// <param name="expected">The array of expected values.</param>
+    /// <param name="actual">The array of actual values.</param>
+    /// <param name="tolerance">The tolerance within which corresponding elements must match.</param>
+    /// <returns>True if the arrays match within the specified tolerance; otherwise, false.</returns>
     private static bool ValuesMatch(
          float[] expected,
         double[] actual,
@@ -446,6 +495,12 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         return true;
     }
 
+    /// <summary>
+    /// Converts an object to a boolean value. If the object is a boolean, it returns its value. If the object is null, it returns false. If the object can be parsed as a boolean string, it returns the parsed value. Otherwise, it attempts to
+    /// convert the object to a double and returns true if the absolute value is greater than 0.5; otherwise, it returns false.
+    /// </summary>
+    /// <param name="value">The value to convert to a boolean.</param>
+    /// <returns>True if the value represents a boolean true or a numeric value greater than 0.5; otherwise, false.</returns>
     private static bool ToBoolean(object? value)
     {
         if (value is bool boolean)
@@ -467,17 +522,29 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
+    /// <summary>
+    /// Logs a message using the NLog logger and raises the DiagnosticsMessage event with the same message.
+    /// </summary>
+    /// <param name="message">The message to log and raise as a diagnostics event.</param>
     private void Log(string message)
     {
         Logger.Info(message);
         DiagnosticsMessage?.Invoke(this, message);
     }
 
+    /// <summary>
+    /// Throws an ObjectDisposedException if the service has been disposed. This method is called at the
+    /// beginning of public methods to ensure that operations are not performed on a disposed instance.
+    /// </summary>
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
+    /// <summary>
+    /// Disposes of the XYRestricted connection and unsubscribes from tag change events.
+    /// This method is called during disposal to clean up resources associated with the PLC connection.
+    /// </summary>
     private void DisposeConnection()
     {
         if (_xy is null)
@@ -488,6 +555,10 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         _xy = null;
     }
 
+    /// <summary>
+    /// Disposes of the XyRestrictedPlcService instance, releasing all resources and notifying any
+    /// pending readback or scan complete waiters of the disposal.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

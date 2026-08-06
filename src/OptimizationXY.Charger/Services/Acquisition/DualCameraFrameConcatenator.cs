@@ -16,6 +16,16 @@ namespace OptimizationXY.Charger.Services.Acquisition;
 /// </summary>
 public static class DualCameraFrameConcatenator
 {
+    /// <summary>
+    /// Concatenates the head/tail camera frames into a single scan frame for each
+    /// synchronized pair.
+    /// </summary>
+    /// <param name="headFrames">The list of head camera frames.</param>
+    /// <param name="tailFrames">The list of tail camera frames.</param>
+    /// <param name="settings">The concatenation settings.</param>
+    /// <param name="angularStepDegrees">The angular step in degrees between frames.</param>
+    /// <returns>A list of concatenated scan frames.</returns>
+    /// <exception cref="InvalidOperationException"></exception>
     public static List<ScanFrame> ConcatenatePairs(
         IReadOnlyList<ScanFrame> headFrames,
         IReadOnlyList<ScanFrame> tailFrames,
@@ -93,6 +103,14 @@ public static class DualCameraFrameConcatenator
         }
     }
 
+    /// <summary>
+    /// Concatenates a single head/tail camera frame pair into a single scan frame.
+    /// </summary>
+    /// <param name="headSource">The head camera frame to concatenate.</param>
+    /// <param name="tailSource">The tail camera frame to concatenate.</param>
+    /// <param name="settings">The concatenation settings.</param>
+    /// <returns>The concatenated scan frame as a Mat.</returns>
+    /// <exception cref="InvalidOperationException"></exception>
     public static Mat Concatenate(
         Mat headSource,
         Mat tailSource,
@@ -152,6 +170,13 @@ public static class DualCameraFrameConcatenator
             settings.OverlapPixels);
     }
 
+    /// <summary>
+    /// Concatenates two images with a specified number of overlapping pixels. The overlapping region is combined using the maximum pixel value from both images.
+    /// </summary>
+    /// <param name="left">The left image to concatenate.</param>
+    /// <param name="right">The right image to concatenate.</param>
+    /// <param name="overlapPixels">The number of pixels to overlap between the two images.</param>
+    /// <returns>The concatenated image as a Mat.</returns>
     private static Mat ConcatenateWithOverlap(
         Mat left,
         Mat right,
@@ -226,6 +251,12 @@ public static class DualCameraFrameConcatenator
         return output;
     }
 
+    /// <summary>
+    /// Converts the source image to grayscale if it is not already. If the source image has 3 channels, it is assumed to be in BGR format; if it has 4 channels, it is assumed to be in BGRA format. If the source image has 1 channel, it is returned as-is. An exception is thrown for unsupported channel counts.
+    /// </summary>
+    /// <param name="source">The source image to convert to grayscale.</param>
+    /// <returns>A grayscale version of the source image.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the source image has an unsupported number of channels.</exception>
     private static Mat ToGray(Mat source)
     {
         if (source.NumberOfChannels == 1)
@@ -245,6 +276,14 @@ public static class DualCameraFrameConcatenator
         return gray;
     }
 
+    /// <summary>
+    /// Crops the source image by removing a specified number of pixels from the left and right sides. The resulting image will have a width of (source.Cols - cropLeft - cropRight). An exception is thrown if the cropping parameters would result in a non-positive width.
+    /// </summary>
+    /// <param name="source">The source image to crop.</param>
+    /// <param name="cropLeft">The number of pixels to remove from the left side of the image.</param>
+    /// <param name="cropRight">The number of pixels to remove from the right side of the image.</param>
+    /// <returns>A cropped version of the source image.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the cropping parameters would result in a non-positive width.</exception>
     private static Mat Crop(
         Mat source,
         int cropLeft,
@@ -269,6 +308,15 @@ public static class DualCameraFrameConcatenator
         return region.Clone();
     }
 
+    /// <summary>
+    /// Orients the source image by optionally flipping it horizontally and applying a vertical offset.
+    /// The vertical offset shifts the image up or down by the specified number of pixels, filling any empty space with black pixels. An exception is thrown if the vertical offset would move the entire image out of view.
+    /// </summary>
+    /// <param name="source">The source image to orient.</param>
+    /// <param name="reverseHorizontal">Whether to flip the image horizontally.</param>
+    /// <param name="verticalOffsetPixels">The number of pixels to shift the image vertically.</param>
+    /// <returns>An oriented version of the source image.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the vertical offset would move the entire image out of view.</exception>
     private static Mat Orient(
         Mat source,
         bool reverseHorizontal,
@@ -328,7 +376,13 @@ public static class DualCameraFrameConcatenator
 
         return shifted;
     }
-
+    
+    /// <summary>
+    /// Pads the source image to the specified target height by adding black pixels to the bottom if necessary.
+    /// </summary>
+    /// <param name="source">The source image to pad.</param>
+    /// <param name="targetHeight">The target height for the padded image.</param>
+    /// <returns>A new image padded to the target height.</returns>
     private static Mat PadToHeight(Mat source, int targetHeight)
     {
         if (source.Rows == targetHeight)
@@ -354,6 +408,11 @@ public static class DualCameraFrameConcatenator
         return padded;
     }
 
+    /// <summary>
+    /// Disposes of the images in the provided collection of ScanFrame objects. This method ensures that all Mat
+    /// objects (GrayImage, BinaryImage, OverlayImage) are properly disposed to free up unmanaged resources.
+    /// </summary>
+    /// <param name="frames">The collection of ScanFrame objects whose images are to be disposed.</param>
     private static void DisposeFrames(IEnumerable<ScanFrame> frames)
     {
         foreach (ScanFrame frame in frames)

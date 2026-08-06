@@ -12,6 +12,9 @@ using OptimizationXY.Charger.Services.Core;
 
 namespace OptimizationXY.Charger.UI.Forms;
 
+/// <summary>
+/// A Windows Forms wizard for guiding the user through the production setup and scanner calibration process.
+/// </summary>
 public sealed class ProductionSetupWizardForm : Form
 {
     private readonly ProductionSetupContext _context;
@@ -64,6 +67,11 @@ public sealed class ProductionSetupWizardForm : Form
     private readonly TextBox _calibrationNotes = new();
     private readonly Label _activationStatus = new();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ProductionSetupWizardForm"/> class with the specified production setup context.
+    /// </summary>
+    /// <param name="context">The production setup context.</param>
+    /// <exception cref="ArgumentNullException">Thrown when the <paramref name="context"/> is null.</exception>
     public ProductionSetupWizardForm(ProductionSetupContext context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -81,6 +89,12 @@ public sealed class ProductionSetupWizardForm : Form
         RefreshOverallStatus();
     }
 
+
+
+    /// <summary>
+    /// Handles the form's FormClosed event to dispose of the length calibration image and perform any necessary cleanup.
+    /// </summary>
+    /// <param name="e">The event data for the FormClosed event.</param>
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         Image? oldImage = _lengthCalibrationImage.Image;
@@ -89,6 +103,11 @@ public sealed class ProductionSetupWizardForm : Form
         base.OnFormClosed(e);
     }
 
+
+    /// <summary>
+    /// Builds the layout of the production setup wizard form, including the header, tabs, diagnostics area,
+    /// and footer with buttons for closing and opening folders.
+    /// </summary>
     private void BuildLayout()
     {
         var root = new TableLayoutPanel
@@ -169,6 +188,10 @@ public sealed class ProductionSetupWizardForm : Form
         root.Controls.Add(footer, 0, 3);
     }
 
+    /// <summary>
+    /// Builds the "Overview" tab page of the production setup wizard, providing information about machine-specific files,
+    /// </summary>
+    /// <returns>The constructed "Overview" tab page.</returns>
     private static TabPage BuildOverviewPage()
     {
         var page = NewPage("1. Overview");
@@ -193,6 +216,12 @@ public sealed class ProductionSetupWizardForm : Form
         return page;
     }
 
+
+    /// <summary>
+    /// Builds the "Local SQL Express" tab page of the production setup wizard, providing
+    /// controls for testing, creating, and saving the SQL Server Express database connection.
+    /// </summary>
+    /// <returns>The constructed "Local SQL Express" tab page.</returns>
     private TabPage BuildDatabasePage()
     {
         var page = NewPage("2. Local SQL Express");
@@ -230,6 +259,10 @@ public sealed class ProductionSetupWizardForm : Form
         return page;
     }
 
+    /// <summary>
+    /// Builds the "Cameras and Laser" tab page of the production setup wizard, providing controls for configuring
+    /// </summary>
+    /// <returns>The constructed "Cameras and Laser" tab page.</returns>
     private TabPage BuildCameraPage()
     {
         var page = NewPage("3. Cameras and Laser");
@@ -238,9 +271,10 @@ public sealed class ProductionSetupWizardForm : Form
 
         panel.Controls.Add(NewWrappedLabel(
             "Connect each production camera directly through Sapera. The program does not load a CCF file " +
-            "and does not change exposure, gain, pixel format, frame rate, image geometry, camera user sets, " +
-            "or trigger activation. It writes and verifies only TriggerSource: Line1 for Encoder mode or " +
-            "FixedRate for FrameRate mode."));
+            "and does not change exposure, gain, pixel format, frame rate, image geometry, camera user sets. " +
+            "Frame Rate mode disables external triggering by setting TriggerMode to Off. Encoder mode +" +
+            "enables FrameStart triggering from Line1 using a rising edge. When Encoder mode is selected, the preview will" +
+            "not update until encoder trigger pulses are received.\" "));
 
         ConfigureNumeric(_headDeviceIndex, 0M, 32M, 0, 0M);
         ConfigureNumeric(_tailDeviceIndex, 0M, 32M, 0, 0M);
@@ -324,6 +358,11 @@ public sealed class ProductionSetupWizardForm : Form
         return page;
     }
 
+
+    /// <summary>
+    /// Builds the "Axial Length Scale" tab page of the production setup wizard, providing controls for capturing an image,
+    /// </summary>
+    /// <returns></returns>
     private TabPage BuildLengthPage()
     {
         var page = NewPage("4. Axial Length Scale");
@@ -393,6 +432,11 @@ public sealed class ProductionSetupWizardForm : Form
         return page;
     }
 
+    /// <summary>
+    /// Builds the "Known References" tab page of the production setup wizard, providing controls for capturing and
+    /// managing known reference blocks for scanner calibration.
+    /// </summary>
+    /// <returns>The constructed "Known References" tab page.</returns>
     private TabPage BuildReferencePage()
     {
         var page = NewPage("5. Known References");
@@ -461,6 +505,10 @@ public sealed class ProductionSetupWizardForm : Form
         return page;
     }
 
+    /// <summary>
+    /// Builds the "Review and Activate" tab page of the production setup wizard, providing controls for reviewing calibration settings,
+    /// </summary>
+    /// <returns></returns>
     private TabPage BuildActivationPage()
     {
         var page = NewPage("6. Review and Activate");
@@ -507,12 +555,21 @@ public sealed class ProductionSetupWizardForm : Form
         return page;
     }
 
+    /// <summary>
+    /// Configures a ComboBox to display the available acquisition modes from the AcquisitionMode enum.
+    /// </summary>
+    /// <param name="combo">The ComboBox to configure.</param>
+
     private static void ConfigureModeCombo(ComboBox combo)
     {
         combo.DropDownStyle = ComboBoxStyle.DropDownList;
         combo.DataSource = Enum.GetValues<AcquisitionMode>();
     }
 
+
+    /// <summary>
+    /// Loads the current settings from the application settings into the form controls, including database connection string,
+    /// </summary>
     private void LoadCurrentSettings()
     {
         _connectionString.Text = string.IsNullOrWhiteSpace(
@@ -578,6 +635,10 @@ public sealed class ProductionSetupWizardForm : Form
 
     }
 
+    /// <summary>
+    /// Tests the SQL Server connection using the provided connection string and updates the database status label with the result.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     private async Task TestDatabaseAsync()
     {
         await RunBusyAsync("Testing SQL Server connection...", async () =>
@@ -593,6 +654,11 @@ public sealed class ProductionSetupWizardForm : Form
         });
     }
 
+
+    /// <summary>
+    /// Creates or upgrades the local SQL database using the provided connection string, updates the database status label,
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     private async Task CreateDatabaseAsync()
     {
         await RunBusyAsync("Creating or upgrading the local SQL database...", async () =>
@@ -612,6 +678,10 @@ public sealed class ProductionSetupWizardForm : Form
         });
     }
 
+    /// <summary>
+    /// Saves the database connection string and enables SQL saving in the application settings.
+    /// It validates the schema version and updates the database status label accordingly.
+    /// </summary>
     private void SaveDatabaseSettings()
     {
         try
@@ -636,6 +706,11 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+    /// <summary>
+    /// Saves the camera connection settings and attempts to reconnect the cameras using the updated settings.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the head or tail camera server name is not provided.</exception>
     private async Task SaveAndReconnectCamerasAsync()
     {
         await RunBusyAsync(
@@ -720,12 +795,22 @@ public sealed class ProductionSetupWizardForm : Form
                 RefreshCameraStatus(status);
                 RefreshOverallStatus();
 
-                Append(
-                    $"Camera reconnect complete. Head TriggerSource={head.TriggerSource}; " +
-                    $"Tail TriggerSource={tail.TriggerSource}. No other camera features were written.");
+               Append(
+                $"Camera reconnect complete. " +
+                $"Head mode={head.Mode}; Tail mode={tail.Mode}. " +
+                $"FrameRate uses TriggerMode=Off. " +
+                $"Encoder uses TriggerMode=On and TriggerSource=Line1.");
             });
     }
 
+
+    /// <summary>
+    /// Verifies the laser detection by capturing calibration frames and analyzing them. It checks if the number of
+    /// valid laser frames and average detected columns meet the commissioning threshold. If successful,
+    /// it updates the camera configuration snapshots and marks the laser as verified for this session.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the laser verification does not meet the commissioning threshold.</exception>
     private async Task VerifyLaserAsync()
     {
         if (!_physicalPositionConfirmed.Checked)
@@ -787,6 +872,11 @@ public sealed class ProductionSetupWizardForm : Form
         });
     }
 
+    /// <summary>
+    /// Captures a concatenated image for axial length calibration by taking a single calibration frame. It normalizes the image, displays
+    /// it in the UI, and prompts the user to click on the first and second physical marks for length measurement.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     private async Task CaptureLengthCalibrationImageAsync()
     {
         if (!ConfirmCalibrationSafety())
@@ -825,6 +915,13 @@ public sealed class ProductionSetupWizardForm : Form
         });
     }
 
+
+    /// <summary>
+    /// Handles mouse click events on the length calibration image. It maps the clicked point to the image coordinates and updates the start and end pixel values for length measurement.
+    /// After both marks are clicked, it calculates the length scale based on the known physical distance.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="e">The <see cref="MouseEventArgs"/> instance containing the event data.</param>
     private void LengthCalibrationImage_MouseClick(
         object? sender,
         MouseEventArgs e)
@@ -863,6 +960,11 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+    /// <summary>
+    /// Resets the length mark click count, clears the start and end pixel values, and optionally clears the calibration image.
+    /// It also updates the length status label to prompt the user for the next action.
+    /// </summary>
+    /// <param name="clearImage">If set to <c>true</c>, clears the calibration image.</param>
     private void ResetLengthMarks(bool clearImage = false)
     {
         _lengthMarkClickCount = 0;
@@ -882,6 +984,13 @@ public sealed class ProductionSetupWizardForm : Form
             : "Click the first physical mark, then the second physical mark.";
     }
 
+    /// <summary>
+    /// Attempts to map a point in the client coordinates of a PictureBox to the corresponding point in the zoomed image coordinates.
+    /// </summary>
+    /// <param name="pictureBox">The PictureBox containing the image.</param>
+    /// <param name="clientPoint">The point in the client coordinates of the PictureBox.</param>
+    /// <param name="imagePoint">When this method returns, contains the mapped point in the image coordinates, if the mapping was successful; otherwise, <see cref="Point.Empty"/>.</param>
+    /// <returns><c>true</c> if the point was successfully mapped; otherwise, <c>false</c>.</returns>
     private static bool TryMapZoomedImagePoint(
         PictureBox pictureBox,
         Point clientPoint,
@@ -916,6 +1025,10 @@ public sealed class ProductionSetupWizardForm : Form
         return true;
     }
 
+
+    /// <summary>
+    /// Calculates the length scale in pixels per millimeter based on the clicked start and end pixel positions and the known physical distance.
+    /// </summary>
     private void CalculateLengthScale()
     {
         decimal pixelSpan = Math.Abs(_endPixelX.Value - _startPixelX.Value);
@@ -940,6 +1053,9 @@ public sealed class ProductionSetupWizardForm : Form
             $"Calculated {result:F6} pixels/mm from {pixelSpan:F0} pixels over {_knownLengthMM.Value:F3} mm.";
     }
 
+    /// <summary>
+    /// Saves the calculated length scale in pixels per millimeter to the application settings, marking it as configured and recording the measurement timestamp.
+    /// </summary>
     private void SaveLengthScale()
     {
         if (!_lengthScaleMeasuredThisSession ||
@@ -964,6 +1080,12 @@ public sealed class ProductionSetupWizardForm : Form
             $"Length scale saved for calibration generation: {_lengthPixelsPerMM.Value:F6} pixels/mm.";
         RefreshOverallStatus();
     }
+
+    /// <summary>
+    /// Captures a known reference block for scanner calibration by taking multiple synchronized head/tail frames,
+    /// extracting the reference data, and adding it to the list of references.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
 
     private async Task CaptureReferenceAsync()
     {
@@ -1044,6 +1166,11 @@ public sealed class ProductionSetupWizardForm : Form
         });
     }
 
+    /// <summary>
+    /// Ensures that the camera configuration snapshots from the provided calibration capture batch match the previously stored snapshots.
+    /// </summary>
+    /// <param name="batch">The calibration capture batch containing the camera configuration snapshots to verify.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the camera configuration snapshots do not match the previously stored snapshots.</exception>
     private void EnsureSameCameraSnapshot(CalibrationCaptureBatch batch)
     {
         byte[] head = [.. batch.HeadCameraConfigurationSnapshot];
@@ -1064,6 +1191,12 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+    /// <summary>
+    /// Activates the scanner calibration by validating the collected references, generating a scanner lookup table,
+    /// and saving it as the active calibration package.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if the calibration cannot be activated due to insufficient or invalid references,
+    /// incomplete length calibration, or missing camera snapshots.</exception>
     private void ActivateCalibration()
     {
         try
@@ -1161,6 +1294,10 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+
+    /// <summary>
+    /// Invalidates the calibration-dependent setup by resetting relevant flags and clearing references, snapshots, and measurements.
+    /// </summary>
     private void InvalidateCalibrationDependentSetup()
     {
         _settings.Setup.CameraConfigurationVerified = false;
@@ -1189,6 +1326,9 @@ public sealed class ProductionSetupWizardForm : Form
             "Camera settings were reconnected. Laser verification, axial length scale, references, and active-calibration approval were invalidated for safety.");
     }
 
+    /// <summary>
+    /// Configures the reference grid DataGridView with appropriate columns, styles, and properties for displaying calibration reference summaries.
+    /// </summary>
     private void ConfigureReferenceGrid()
     {
         _referenceGrid.Dock = DockStyle.Fill;
@@ -1262,6 +1402,10 @@ public sealed class ProductionSetupWizardForm : Form
         });
     }
 
+    /// <summary>
+    /// Refreshes the reference grid DataGridView with the current list of calibration references, updating the displayed data and
+    /// the reference status label with counts and distinct radii information.
+    /// </summary>
     private void RefreshReferenceGrid()
     {
         _referenceGrid.DataSource = null;
@@ -1279,6 +1423,9 @@ public sealed class ProductionSetupWizardForm : Form
             $"minimum required: 2.";
     }
 
+    /// <summary>
+    /// Removes the currently selected calibration reference from the list of references, if any, and refreshes the reference grid and overall status.
+    /// </summary>
     private void RemoveSelectedReference()
     {
         if (_referenceGrid.CurrentRow?.DataBoundItem is not
@@ -1298,6 +1445,12 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+    /// <summary>
+    /// Attempts to show the camera preview for either the head or tail camera by invoking the provided action. If an
+    /// exception occurs during the preview, it displays an error message.
+    /// </summary>
+    /// <param name="showPreview">The action to invoke to show the camera preview.</param>
+    /// <param name="position">A string indicating the position of the camera (e.g., "head" or "tail").</param>
     private void ShowCameraPreview(Action showPreview, string position)
     {
         try
@@ -1311,6 +1464,10 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+    /// <summary>
+    /// Refreshes the camera status display with the current connection and configuration information for both the head and tail cameras.
+    /// </summary>
+    /// <param name="status">The current status of the camera hardware. If null, the status will be retrieved from the context.</param>
     private void RefreshCameraStatus(CameraHardwareStatus? status = null)
     {
         status ??= _context.GetCameraStatus();
@@ -1327,6 +1484,11 @@ public sealed class ProductionSetupWizardForm : Form
             $"Mode: {tail.Mode} | TriggerSource: {tail.TriggerSource}";
     }
 
+
+    /// <summary>
+    /// Refreshes the overall status display with the current readiness of various setup components, including database configuration, camera verification, physical position confirmation,
+    /// laser detection, length calibration, known reference counts, active calibration status, and operating mode.
+    /// </summary>
     private void RefreshOverallStatus()
     {
         int distinctRadii = _references
@@ -1345,11 +1507,29 @@ public sealed class ProductionSetupWizardForm : Form
             $"Mode: {_settings.Production.OperatingMode}";
     }
 
+
+    /// <summary>
+    /// Returns a display-friendly string for the camera serial number, showing "unavailable" if the value is null or whitespace.
+    /// </summary>
+    /// <param name="value">The camera serial number to display.</param>
+    /// <returns>A display-friendly string for the camera serial number.</returns>
     private static string DisplaySerial(string value) =>
         string.IsNullOrWhiteSpace(value) ? "unavailable" : value;
 
+
+    /// <summary>
+    /// Returns a string indicating whether a setup component is "ready" or "needed" based on the provided boolean value.
+    /// </summary>
+    /// <param name="value">A boolean value indicating the readiness of a setup component.</param>
+    /// <returns>A string indicating whether the setup component is "ready" or "needed".</returns>
     private static string Flag(bool value) => value ? "ready" : "needed";
 
+
+    /// <summary>
+    /// Prompts the user with a safety confirmation dialog before performing calibration-related operations, ensuring that machine motion is inhibited,
+    /// the knife is retracted, the reference is secured, no person is inside the guarded area, and the PLC cannot start a normal production scan.
+    /// </summary>
+    /// <returns>True if the user confirms the safety conditions; otherwise, false.</returns>
     private bool ConfirmCalibrationSafety()
     {
         DialogResult result = MessageBox.Show(
@@ -1363,12 +1543,26 @@ public sealed class ProductionSetupWizardForm : Form
         return result == DialogResult.Yes;
     }
 
+
+    /// <summary>
+    /// Saves the current application settings to persistent storage and writes the
+    /// production setup status, ensuring that any changes made during the setup process are preserved.
+    /// </summary>
     private void SaveSettings()
     {
         AppSettingsStore.Save(_settings);
         _ = ProductionSetupStatusWriter.Write(_settings);
     }
 
+
+    /// <summary>
+    /// Runs an asynchronous operation while displaying a busy cursor and disabling the form, appending a message to the diagnostics log.
+    /// If an exception occurs during
+    /// the operation, it shows an error message. After the operation completes, it re-enables the form and restores the cursor.
+    /// </summary>
+    /// <param name="message">The message to append to the diagnostics log.</param>
+    /// <param name="operation">The asynchronous operation to run.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task RunBusyAsync(string message, Func<Task> operation)
     {
         try
@@ -1390,6 +1584,10 @@ public sealed class ProductionSetupWizardForm : Form
         }
     }
 
+    /// <summary>
+    /// Appends a message to the diagnostics log with a timestamp and also logs the message to the application context.
+    /// </summary>
+    /// <param name="message">The message to append to the diagnostics log and log to the application context.</param>
     private void Append(string message)
     {
         string line = $"[{DateTime.Now:HH:mm:ss}] {message}";
@@ -1397,6 +1595,11 @@ public sealed class ProductionSetupWizardForm : Form
         _context.LogMessage("[Setup] " + message);
     }
 
+    /// <summary>
+    /// Displays an error message to the user in a message box and appends the error details to the diagnostics log.
+    /// </summary>
+    /// <param name="title">The title of the error message.</param>
+    /// <param name="exception">The exception containing the error details.</param>
     private void ShowError(string title, Exception exception)
     {
         Append(title + ": " + exception.Message);
@@ -1408,11 +1611,22 @@ public sealed class ProductionSetupWizardForm : Form
             MessageBoxIcon.Error);
     }
 
+
+    /// <summary>
+    /// Creates a new TabPage with the specified text and sets its padding to 8 pixels on all sides.
+    /// </summary>
+    /// <param name="text">The text to display on the TabPage.</param>
+    /// <returns>The newly created TabPage.</returns>
     private static TabPage NewPage(string text) => new(text)
     {
         Padding = new Padding(8)
     };
 
+
+    /// <summary>
+    /// Creates a new vertical FlowLayoutPanel with top-down flow direction, no wrapping, auto-scrolling enabled, and padding of 8 pixels on all sides.
+    /// </summary>
+    /// <returns>The newly created FlowLayoutPanel.</returns>
     private static FlowLayoutPanel NewVerticalPanel() => new()
     {
         Dock = DockStyle.Fill,
@@ -1422,6 +1636,12 @@ public sealed class ProductionSetupWizardForm : Form
         Padding = new Padding(8)
     };
 
+
+    /// <summary>
+    /// Creates a new Label with the specified text, bold font style, auto-sizing enabled, and margin settings for spacing.
+    /// </summary>
+    /// <param name="text">The text to display on the Label.</param>
+    /// <returns>The newly created Label.</returns>
     private static Label NewHeading(string text) => new()
     {
         Text = text,
@@ -1430,6 +1650,12 @@ public sealed class ProductionSetupWizardForm : Form
         Margin = new Padding(3, 6, 3, 8)
     };
 
+
+    /// <summary>
+    /// Creates a new Label with the specified text, auto-sizing enabled, a maximum width of 980 pixels for wrapping, and margin settings for spacing.
+    /// </summary>
+    /// <param name="text">The text to display on the Label.</param>
+    /// <returns>The newly created Label.</returns>
     private static Label NewWrappedLabel(string text) => new()
     {
         Text = text,
@@ -1438,6 +1664,13 @@ public sealed class ProductionSetupWizardForm : Form
         Margin = new Padding(3, 4, 3, 10)
     };
 
+    /// <summary>
+    /// Creates a new TableLayoutPanel with two columns, where the first column contains a bold label
+    /// and the second column contains a path label. The panel is auto-sized and has margin settings for spacing.
+    /// </summary>
+    /// <param name="label">The text to display on the bold label.</param>
+    /// <param name="path">The text to display on the path label.</param>
+    /// <returns>The newly created TableLayoutPanel.</returns>
     private static TableLayoutPanel NewPathLabel(string label, string path)
     {
         var row = new TableLayoutPanel
@@ -1464,6 +1697,14 @@ public sealed class ProductionSetupWizardForm : Form
         return row;
     }
 
+    /// <summary>
+    /// Creates a new TableLayoutPanel with two columns, where the first column contains a label and the second
+    /// column contains a specified control (e.g., TextBox, NumericUpDown).
+    /// </summary>
+    /// <param name="label">The text to display on the label.</param>
+    /// <param name="control">The control to display in the second column (e.g., TextBox, NumericUpDown).</param>
+    /// <param name="width">The width of the control.</param>
+    /// <returns>The newly created TableLayoutPanel.</returns>
     private static TableLayoutPanel NewLabeledControl(
         string label,
         Control control,
@@ -1489,6 +1730,15 @@ public sealed class ProductionSetupWizardForm : Form
         return row;
     }
 
+
+    /// <summary>
+    /// Creates a new vertical FlowLayoutPanel with a label and a specified control (e.g., TextBox, NumericUpDown) arranged
+    /// inline, with the control having a specified width.
+    /// </summary>
+    /// <param name="label">The text to display on the label.</param>
+    /// <param name="control">The control to display below the label (e.g., TextBox, NumericUpDown).</param>
+    /// <param name="width">The width of the control.</param>
+    /// <returns>The newly created FlowLayoutPanel.</returns>
     private static FlowLayoutPanel NewInlineLabeledControl(
         string label,
         Control control,
@@ -1507,6 +1757,15 @@ public sealed class ProductionSetupWizardForm : Form
         return panel;
     }
 
+    /// <summary>
+    /// Configures a NumericUpDown control with specified minimum, maximum, decimal places, and initial value, ensuring that the value is
+    /// clamped within the defined range.
+    /// </summary>
+    /// <param name="control">The NumericUpDown control to configure.</param>
+    /// <param name="minimum">The minimum value allowed.</param>
+    /// <param name="maximum">The maximum value allowed.</param>
+    /// <param name="decimalPlaces">The number of decimal places to display.</param>
+    /// <param name="value">The initial value to set.</param>
     private static void ConfigureNumeric(
         NumericUpDown control,
         decimal minimum,
@@ -1521,6 +1780,13 @@ public sealed class ProductionSetupWizardForm : Form
         control.Value = Math.Clamp(value, minimum, maximum);
     }
 
+    /// <summary>
+    /// Clamps a double value to a specified decimal range, converting it to decimal and handling overflow or non-finite values.
+    /// </summary>
+    /// <param name="value">The double value to clamp.</param>
+    /// <param name="minimum">The minimum value allowed.</param>
+    /// <param name="maximum">The maximum value allowed.</param>
+    /// <returns>The clamped decimal value.</returns>
     private static decimal ClampDecimal(
         double value,
         decimal minimum,
@@ -1544,6 +1810,12 @@ public sealed class ProductionSetupWizardForm : Form
         return Math.Clamp(converted, minimum, maximum);
     }
 
+
+    /// <summary>
+    /// Opens the specified folder path in the system's file explorer, ensuring that the application data directory
+    /// exists and creating the folder if it does not already exist.
+    /// </summary>
+    /// <param name="path">The folder path to open.</param>
     private static void OpenFolder(string path)
     {
         ApplicationPaths.EnsureCreated();

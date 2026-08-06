@@ -4,10 +4,19 @@ using System.Text.Json;
 using OptimizationXY.Charger.Infrastructure;
 using OptimizationXY.Charger.Models.Calibration;
 
+
+/// <summary>
+/// Provides methods to manage the scanner calibration package, including activation, validation, and restoration of calibration data.
+/// </summary>
+
 namespace OptimizationXY.Charger.Services.Calibration;
 
 public static class CalibrationPackageStore
 {
+
+    /// <summary>
+    /// Defines the required file names for a complete scanner calibration package.
+    /// </summary>
     private static readonly string[] PackageFileNames =
     [
         "scanner-lookup-table.json",
@@ -17,12 +26,21 @@ public static class CalibrationPackageStore
         "sha256-manifest.txt"
     ];
 
+
+    /// <summary>
+    /// Defines the JSON serialization options used for reading and writing calibration package files.
+    /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>
+    /// Ensures that the active scanner calibration package is valid. If the active package is invalid,
+    /// attempts to restore the newest valid archive. Throws an exception if no valid package can be found.
+    /// </summary>
+    /// <exception cref="InvalidDataException">Thrown if no complete, integrity-checked scanner calibration package is active.</exception>
     public static void EnsureActivePackageValid()
     {
         ApplicationPaths.EnsureCreated();
@@ -46,6 +64,14 @@ public static class CalibrationPackageStore
         }
     }
 
+    /// <summary>
+    /// Activates a new scanner calibration package by validating the provided lookup table and camera configuration snapshots.
+    /// </summary>
+    /// <param name="table">The scanner lookup table to activate.</param>
+    /// <param name="headCameraConfiguration">The head camera configuration snapshot.</param>
+    /// <param name="tailCameraConfiguration">The tail camera configuration snapshot.</param>
+    /// <returns>The path to the activated scanner lookup table.</returns>
+    /// <exception cref="InvalidDataException">Thrown if the scanner calibration cannot be activated due to invalid data.</exception>
     public static string Activate(
         ScannerLookupTable table,
         byte[] headCameraConfiguration,
@@ -149,6 +175,14 @@ public static class CalibrationPackageStore
         }
     }
 
+    /// <summary>
+    /// Creates a staged scanner calibration package in the specified directory, including the lookup table,
+    /// metadata, camera configuration snapshots, and SHA-256 manifest.
+    /// </summary>
+    /// <param name="stagingDirectory">The directory in which to create the staged package.</param>
+    /// <param name="table">The scanner lookup table to include in the package.</param>
+    /// <param name="headCameraConfiguration">The head camera configuration snapshot.</param>
+    /// <param name="tailCameraConfiguration">The tail camera configuration snapshot.</param>
     private static void CreateStagedPackage(
         string stagingDirectory,
         ScannerLookupTable table,
@@ -170,6 +204,11 @@ public static class CalibrationPackageStore
         WriteManifest(stagingDirectory);
     }
 
+    /// <summary>
+    /// Builds a metadata object from the provided scanner lookup table, containing essential calibration information.
+    /// </summary>
+    /// <param name="table">The scanner lookup table from which to build the metadata.</param>
+    /// <returns>An object containing the metadata.</returns>
     private static object BuildMetadata(ScannerLookupTable table) => new
     {
         table.SchemaVersion,
@@ -192,6 +231,11 @@ public static class CalibrationPackageStore
         table.Quality
     };
 
+
+    /// <summary>
+    /// Removes legacy camera configuration files from the active calibration directory, if they exist.
+    /// These files are no longer used in the current calibration package format.
+    /// </summary>
     private static void RemoveLegacyActiveCameraFiles()
     {
         foreach (string fileName in new[] { "head-camera.ccf", "tail-camera.ccf" })
@@ -201,7 +245,10 @@ public static class CalibrationPackageStore
                 File.Delete(path);
         }
     }
-
+    
+    /// <summary>
+    /// Archives the current calibration package if it exists.
+    /// </summary>  
     private static void ArchiveCurrentCalibrationIfPresent()
     {
         if (!File.Exists(ApplicationPaths.CalibrationLookupTablePath))
@@ -231,6 +278,10 @@ public static class CalibrationPackageStore
         }
     }
 
+    /// <summary>
+    /// Attempts to restore the newest valid scanner calibration package from the archive directory.
+    /// </summary>
+    /// <returns>True if a valid package was restored; otherwise, false.</returns>
     private static bool TryRestoreNewestArchive()
     {
         if (IsActivePackageValid())
@@ -274,6 +325,11 @@ public static class CalibrationPackageStore
         return false;
     }
 
+
+    /// <summary>
+    /// Checks if the active scanner calibration package is valid by validating the package directory.
+    /// </summary>
+    /// <returns>True if the active package is valid; otherwise, false.</returns>
     private static bool IsActivePackageValid()
     {
         try
@@ -288,6 +344,13 @@ public static class CalibrationPackageStore
         }
     }
 
+    /// <summary>
+    /// Validates the scanner calibration package in the specified directory by checking for required files, verifying the SHA-256 manifest,
+    /// </summary>
+    /// <param name="directory">The directory containing the calibration package to validate.</param>
+    /// <param name="expectedCalibrationId">The expected calibration identifier, or null to skip this check.</param>
+    /// <exception cref="FileNotFoundException">Thrown if a required file is missing.</exception>
+    /// <exception cref="InvalidDataException">Thrown if the calibration package contains invalid data.</exception>
     private static void ValidatePackageDirectory(
         string directory,
         string? expectedCalibrationId = null)
@@ -328,7 +391,13 @@ public static class CalibrationPackageStore
             Path.Combine(directory, "tail-camera-configuration.snapshot"));
         VerifySnapshotHashes(table, head, tail);
     }
-
+    
+    /// <summary>
+    /// Verifies that the metadata in the specified JSON file matches the provided scanner lookup table.
+    /// </summary>
+    /// <param name="metadataPath">The path to the metadata JSON file.</param>
+    /// <param name="table">The scanner lookup table to compare against.</param>
+    /// <exception cref="InvalidDataException">Thrown if the metadata does not match the lookup table.</exception>
     private static void VerifyMetadata(
         string metadataPath,
         ScannerLookupTable table)
@@ -364,6 +433,13 @@ public static class CalibrationPackageStore
         }
     }
 
+    /// <summary>
+    /// Verifies that the SHA-256 hashes of the provided head and tail camera configuration snapshots match the hashes recorded in the scanner lookup table.
+    /// </summary>
+    /// <param name="table">The scanner lookup table containing the expected hashes.</param>
+    /// <param name="head">The head camera configuration snapshot.</param>
+    /// <param name="tail">The tail camera configuration snapshot.</param>
+    /// <exception cref="InvalidDataException">Thrown if the snapshot hashes do not match the expected values.</exception>
     private static void VerifySnapshotHashes(
         ScannerLookupTable table,
         byte[] head,
@@ -386,6 +462,14 @@ public static class CalibrationPackageStore
         }
     }
 
+    /// <summary>
+    /// Replaces a file at the destination path with the source file atomically. The source file is copied to a temporary
+    /// file, and then the temporary file is moved to the destination path, overwriting any existing file.
+    /// If the source file does not exist, a FileNotFoundException is thrown.
+    /// </summary>
+    /// <param name="sourcePath">The path to the source file.</param>
+    /// <param name="destinationPath">The path to the destination file.</param>
+    /// <exception cref="FileNotFoundException">Thrown if the source file does not exist.</exception>
     private static void ReplaceFileAtomically(
         string sourcePath,
         string destinationPath)
@@ -412,7 +496,12 @@ public static class CalibrationPackageStore
             }
         }
     }
+    
 
+    /// <summary>
+    /// Removes any temporary ".new" files in the active calibration directory that may have been left over from
+    /// a previous activation attempt.
+    /// </summary>
     private static void RemoveTemporaryActiveFiles()
     {
         foreach (string fileName in PackageFileNames)
@@ -428,6 +517,10 @@ public static class CalibrationPackageStore
         }
     }
 
+
+    /// <summary>
+    /// Deletes all files in the active calibration directory that are part of the scanner calibration package.
+    /// </summary>
     private static void DeleteActivePackage()
     {
         foreach (string fileName in PackageFileNames)
@@ -443,6 +536,14 @@ public static class CalibrationPackageStore
         }
     }
 
+
+    /// <summary>
+    /// Loads and validates a scanner lookup table from the specified JSON file path. If the
+    /// loaded table is invalid, an InvalidDataException is thrown.
+    /// </summary>
+    /// <param name="path">The path to the JSON file containing the scanner lookup table.</param>
+    /// <returns>The loaded and validated scanner lookup table.</returns>
+    /// <exception cref="InvalidDataException">Thrown if the loaded table is invalid.</exception>
     private static ScannerLookupTable LoadAndValidate(string path)
     {
         string json = File.ReadAllText(path, Encoding.UTF8);
@@ -458,6 +559,15 @@ public static class CalibrationPackageStore
         return table;
     }
 
+
+    /// <summary>
+    /// Writes a value to a JSON file atomically. The value is serialized to JSON and written to a temporary file,
+    /// which is then moved to the specified path, overwriting any existing
+    /// file. If an error occurs during writing or moving, the temporary file is deleted.
+    /// </summary>
+    /// <typeparam name="T">The type of the value to serialize to JSON.</typeparam>
+    /// <param name="path">The path to the JSON file to write.</param>
+    /// <param name="value">The value to serialize and write to the JSON file.</param>
     private static void WriteJsonAtomic<T>(string path, T value)
     {
         string temporaryPath = path + ".tmp";
@@ -480,6 +590,11 @@ public static class CalibrationPackageStore
         }
     }
 
+    
+    /// <summary>
+    /// Writes a SHA-256 manifest file for the specified directory. The manifest contains the SHA-256 hash of each file in the directory, excluding the manifest file itself.
+    /// </summary>
+    /// <param name="directory">The directory for which to write the manifest.</param>
     private static void WriteManifest(string directory)
     {
         string manifestPath = Path.Combine(directory, "sha256-manifest.txt");
@@ -498,7 +613,11 @@ public static class CalibrationPackageStore
             lines,
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
-
+    
+    /// <summary>
+    /// Verifies a SHA-256 manifest file for the specified directory. The manifest contains the SHA-256 hash of each file in the directory, excluding the manifest file itself.
+    /// </summary>
+    /// <param name="directory">The directory for which to verify the manifest.</param>
     private static void VerifyManifest(string directory)
     {
         string manifestPath = Path.Combine(directory, "sha256-manifest.txt");
@@ -554,12 +673,11 @@ public static class CalibrationPackageStore
             }
         }
 
-        string[] expectedManifestFiles = PackageFileNames
+        string[] expectedManifestFiles = [.. PackageFileNames
             .Where(fileName => !string.Equals(
                 fileName,
                 "sha256-manifest.txt",
-                StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+                StringComparison.OrdinalIgnoreCase))];
 
         if (expectedManifestFiles.Any(fileName => !seenFileNames.Contains(fileName)))
         {

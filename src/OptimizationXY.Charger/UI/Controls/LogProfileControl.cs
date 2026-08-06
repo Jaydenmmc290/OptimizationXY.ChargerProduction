@@ -8,9 +8,16 @@ namespace OptimizationXY.Charger.UI.Controls;
 /// </summary>
 public sealed partial class LogProfileControl : Control
 {
-    private IReadOnlyList<LogProfilePoint> _profilePoints =
-        Array.Empty<LogProfilePoint>();
 
+    /// <summary>
+    /// The list of log profile points to display. This is a read-only list of <see cref="LogProfilePoint"/> objects.
+    /// </summary>
+    private IReadOnlyList<LogProfilePoint> _profilePoints =
+        [];
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LogProfileControl"/> class.
+    /// </summary>
     public LogProfileControl()
     {
         DoubleBuffered = true;
@@ -19,12 +26,21 @@ public sealed partial class LogProfileControl : Control
         Dock = DockStyle.Fill;
     }
 
+    /// <summary>
+    /// Sets the log profile points to display in the control. The control will be invalidated and redrawn after setting the profile.
+    /// </summary>
+    /// <param name="profilePoints">The list of log profile points to display.</param>
     public void SetProfile(IReadOnlyList<LogProfilePoint>? profilePoints)
     {
-        _profilePoints = profilePoints ?? Array.Empty<LogProfilePoint>();
+        _profilePoints = profilePoints ?? [];
         Invalidate();
     }
 
+    /// <summary>
+    /// Overrides the OnPaint method to draw the log profile control. It draws a grid, the log profile, and any missing scan sections.
+    /// If there are no valid profile points, it displays a message indicating that no processed log profile is available.
+    /// </summary>
+    /// <param name="e">A <see cref="PaintEventArgs"/> that contains the event data.</param>
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -49,6 +65,11 @@ public sealed partial class LogProfileControl : Control
         DrawProfile(e.Graphics, area);
     }
 
+    /// <summary>
+    /// Draws a grid on the specified graphics surface within the given area. The grid consists of vertical lines dividing the area into five equal sections and a horizontal dashed line at the center.
+    /// </summary>
+    /// <param name="graphics">The graphics surface on which to draw the grid.</param>
+    /// <param name="area">The area within which to draw the grid.</param>
     private static void DrawGrid(Graphics graphics, RectangleF area)
     {
         using Pen gridPen = new(Color.Gainsboro, 1F);
@@ -71,6 +92,12 @@ public sealed partial class LogProfileControl : Control
             area.Top + area.Height / 2F);
     }
 
+    /// <summary>
+    /// Draws the log profile on the specified graphics surface within the given area. It calculates the minimum and maximum positions and radii from the profile points, converts them to pixel coordinates,
+    /// and draws filled polygons representing valid segments of the log profile. Missing scan sections are highlighted in red.
+    /// </summary>
+    /// <param name="graphics">The graphics surface on which to draw the log profile.</param>
+    /// <param name="area">The area within which to draw the log profile.</param>
     private void DrawProfile(Graphics graphics, RectangleF area)
     {
         double minPosition = _profilePoints.Min(point => point.PositionInches);
@@ -105,12 +132,11 @@ public sealed partial class LogProfileControl : Control
             if (segment.Count < 2)
                 continue;
 
-            PointF[] top = segment.Select(point => Convert(point, true)).ToArray();
-            PointF[] bottom = segment
+            PointF[] top = [.. segment.Select(point => Convert(point, true))];
+            PointF[] bottom = [.. segment
                 .AsEnumerable()
                 .Reverse()
-                .Select(point => Convert(point, false))
-                .ToArray();
+                .Select(point => Convert(point, false))];
             PointF[] polygon = [.. top, .. bottom];
 
             graphics.FillPolygon(woodBrush, polygon);
@@ -149,6 +175,11 @@ public sealed partial class LogProfileControl : Control
         graphics.DrawString("Missing scan sections are shown in red", labelFont, labelBrush, area.Left, area.Bottom + 4F);
     }
 
+    /// <summary>
+    /// Gets the valid segments of log profile points. A valid segment is defined as a contiguous sequence of points where each point is valid and
+    /// has a positive radius. The method yields each valid segment as a list of <see cref="LogProfilePoint"/> objects.
+    /// </summary>
+    /// <returns>An enumerable of lists of <see cref="LogProfilePoint"/> representing the valid segments.</returns>
     private IEnumerable<List<LogProfilePoint>> GetValidSegments()
     {
         var segment = new List<LogProfilePoint>();
@@ -164,7 +195,7 @@ public sealed partial class LogProfileControl : Control
             if (segment.Count > 0)
             {
                 yield return segment;
-                segment = new List<LogProfilePoint>();
+                segment = [];
             }
         }
 
@@ -172,6 +203,13 @@ public sealed partial class LogProfileControl : Control
             yield return segment;
     }
 
+
+    /// <summary>
+    /// Draws a centered message on the specified graphics surface. The message is drawn using a
+    /// specified font and color, and it is centered both horizontally and vertically within the control's client area.
+    /// </summary>
+    /// <param name="graphics">The graphics surface on which to draw the message.</param>
+    /// <param name="message">The message to be drawn.</param>
     private void DrawCenteredMessage(Graphics graphics, string message)
     {
         using Font font = new("Segoe UI", 15F, FontStyle.Regular);

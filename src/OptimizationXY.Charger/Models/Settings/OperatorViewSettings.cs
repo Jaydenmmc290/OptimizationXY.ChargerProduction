@@ -13,7 +13,7 @@ public sealed class OperatorViewSettings
 
     /// <summary>
     /// Zero-based monitor index. The default selects the second monitor when
-    /// present and safely falls back to the primary monitor.
+    /// present and safely falls back to the primary monitor. 
     /// </summary>
     public int DisplayIndex { get; set; } = 1;
 

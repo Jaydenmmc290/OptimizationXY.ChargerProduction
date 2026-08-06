@@ -3,20 +3,36 @@ using System.Text.Json;
 using OptimizationXY.Charger.Infrastructure;
 using OptimizationXY.Charger.Models.Calibration;
 
+/// <summary>
+/// Provides storage and retrieval of the scanner lookup table used for calibration.
+/// </summary>
 namespace OptimizationXY.Charger.Services.Calibration;
 
 public static class LookupTableStore
 {
-    private static readonly object Sync = new();
+    private static readonly Lock Sync = new();
 
+
+    /// <summary>
+    /// JSON serialization options for reading and writing the scanner lookup table.
+    /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
     };
 
+    /// <summary>
+    /// Gets the file path for the scanner lookup table JSON file.
+    /// </summary>
     public static string FilePath => ApplicationPaths.CalibrationLookupTablePath;
 
+    /// <summary>
+    /// Loads the scanner lookup table from the JSON file.
+    /// </summary>
+    /// <returns>The loaded <see cref="ScannerLookupTable"/>.</returns>
+    /// <exception cref="FileNotFoundException">Thrown if the JSON file does not exist.</exception>
+    /// <exception cref="InvalidDataException">Thrown if the JSON file is invalid or the table is not valid.</exception>
     public static ScannerLookupTable Load()
     {
         lock (Sync)
@@ -48,6 +64,12 @@ public static class LookupTableStore
         }
     }
 
+
+    /// <summary>
+    /// Validates the loaded scanner lookup table to ensure it meets production requirements.
+    /// </summary>
+    /// <param name="table">The scanner lookup table to validate.</param>
+    /// <exception cref="InvalidDataException">Thrown if the table is null or not valid for production use.</exception>
     private static void ValidateProductionTable(
         ScannerLookupTable? table)
     {

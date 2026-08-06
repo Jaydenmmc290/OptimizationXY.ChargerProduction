@@ -2,14 +2,22 @@ using System.Globalization;
 using OptimizationXY.Charger.Infrastructure;
 
 namespace OptimizationXY.Charger.Services.Production;
-
+/// <summary>
+/// Provides functionality to manage the production sequence number, ensuring that it is persisted across application runs and
+/// that it does not exceed the maximum representable value for PLC FLOATs.
+/// </summary>
 public static class ProductionSequenceStore
 {
-    private static readonly object Sync = new();
+    private static readonly Lock Sync = new();
 
     private static string SequencePath =>
         Path.Combine(ApplicationPaths.ConfigDirectory, "production-sequence.txt");
 
+    /// <summary>
+    /// Gets the next production sequence number, incrementing the stored value and ensuring it does not exceed the maximum representable PLC FLOAT value.
+    /// </summary>
+    /// <returns>The next production sequence number.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the production sequence file is invalid or the sequence has reached its maximum value.</exception>
     public static int GetNext()
     {
         lock (Sync)

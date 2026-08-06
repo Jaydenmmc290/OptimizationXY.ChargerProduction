@@ -157,6 +157,16 @@ public sealed class LogProcessingCoordinator
         }
     }
 
+
+    /// <summary>
+    /// Verifies that the completed capture matches the active scanner calibration.
+    /// </summary>
+    /// <param name="calibration">The active scanner calibration to verify against.</param>
+    /// <param name="headConfiguration">The head camera configuration snapshot from the capture.</param>
+    /// <param name="tailConfiguration">The tail camera configuration snapshot from the capture.</param>
+    /// <param name="acquisitionSettings">The camera acquisition settings used for the capture.</param>
+    /// <param name="frames">The collection of ScanFrame objects representing the captured frames.</param>
+    /// <exception cref="InvalidOperationException"></exception>
     private static void VerifyCaptureMatchesCalibration(
         ScannerLookupTable calibration,
         byte[]? headConfiguration,
@@ -254,6 +264,11 @@ public sealed class LogProcessingCoordinator
         }
     }
 
+    /// <summary>
+    /// Prepares the production command by building the PLC payload and evaluating production readiness.
+    /// </summary>
+    /// <param name="plcConnected">Indicates whether the PLC is connected.</param>
+    /// <returns>A report detailing the production readiness status.</returns>
     public ProductionReadinessReport PrepareProductionCommand(bool plcConnected)
     {
         var state = PipelineState.Instance;
@@ -310,6 +325,10 @@ public sealed class LogProcessingCoordinator
         return state.ProductionReadiness;
     }
 
+    /// <summary>
+    /// Records a PLC transmission event.
+    /// </summary>
+    /// <param name="record">The PLC transmission record to log.</param>
     public static void RecordPlcTransmission(PlcTransmissionRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);

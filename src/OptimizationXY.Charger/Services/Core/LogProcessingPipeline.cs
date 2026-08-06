@@ -10,8 +10,6 @@ using OptimizationXY.Charger.Models.Optimization.Recovery;
 using OptimizationXY.Charger.Models.Optimization.Spindle;
 using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Analysis;
-using OptimizationXY.Charger.Services.Calibration;
-using OptimizationXY.Charger.Services.Configuration;
 using OptimizationXY.Charger.Services.Defects;
 using OptimizationXY.Charger.Services.Geometry;
 using OptimizationXY.Charger.Services.Input;
@@ -23,8 +21,6 @@ using OptimizationXY.Charger.Services.Optimization.Wane;
 using OptimizationXY.Charger.Services.PointCloud;
 using OptimizationXY.Charger.Services.Preprocessing;
 using OptimizationXY.Charger.Services.Profile;
-using OptimizationXY.Charger.Services.Scan;
-using OptimizationXY.Charger.Services.Storage;
 using OptimizationXY.Charger.Visualization;
 using System.Diagnostics;
 using OptimizationXY.Charger.Models.Core;
@@ -33,12 +29,23 @@ using OptimizationXY.Charger.Models.Analysis;
 
 namespace OptimizationXY.Charger.Services.Core;
 
+/// <summary>
+/// Represents the main processing pipeline for log scanning and analysis. This class is responsible for loading
+/// scan frames, processing them to build profiles, constructing point clouds, fitting centerlines, building
+/// radius fields, binning radius data, analyzing ovality, and detecting defects.
+/// It maintains the state of the pipeline and provides methods to execute each step in the processing workflow.
+/// </summary>
 public sealed class LogProcessingPipeline
 {
     private static readonly Lazy<LogProcessingPipeline> _instance =
         new(() => new LogProcessingPipeline());
 
-    // filter to stop bad reading on end to mess with profile build
+    /// <summary>
+    /// Filters out bad profile ends from the given log profile based on a minimum valid end diameter fraction.
+    /// </summary>
+    /// <param name="profile">The log profile to filter.</param>
+    /// <param name="MinValidEndDiameterFraction">The minimum valid end diameter fraction.</param>
+    /// <returns>The filtered log profile.</returns>
     private static List<LogProfileColumn> FilterBadProfileEnds(List<LogProfileColumn> profile, double MinValidEndDiameterFraction)
     {
         if (profile == null || profile.Count < 20)
@@ -72,6 +79,14 @@ public sealed class LogProcessingPipeline
             .Take(end - start + 1)];
     }
 
+    /// <summary>
+    /// Builds a log profile from a given scan frame using the provided scanner lookup table.
+    /// </summary>
+    /// <param name="frame">The scan frame to process.</param>
+    /// <param name="lookupTable">The scanner lookup table.</param>
+    /// <param name="token">The cancellation token.</param>
+    /// <returns>The built log profile.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the profile cannot be built due to invalid data or calibration.</exception>
     private List<LogProfileColumn> BuildProfileFromFrame(
         ScanFrame frame,
         ScannerLookupTable lookupTable,
@@ -135,7 +150,12 @@ public sealed class LogProcessingPipeline
                 _state.Settings.RotatingScan.MinValidEndDiameterFraction));
     }
 
-    // trim the ends of the centerline slices to avoid bad data at the log ends
+    /// <summary>
+    /// Trims the ends of the local centerline slices to remove unreliable data at the log ends.
+    /// </summary>
+    /// <param name="slices">The list of local centerline slices to trim.</param>
+    /// <param name="trimFraction">The fraction of slices to trim from each end.</param>
+    /// <returns>The trimmed list of local centerline slices.</returns>
     private static List<LocalCenterlineSlice> TrimCenterlineEnds(List<LocalCenterlineSlice> slices, double trimFraction = 0.03)
     {
         if (slices == null || slices.Count < 10)
@@ -157,7 +177,12 @@ public sealed class LogProcessingPipeline
             .Take(ordered.Count - trimCount * 2)];
     }
 
-    // find the first index where a stable run of valid diameters occurs
+    /// <summary>
+    /// Finds the first index where a stable run of valid diameters occurs.
+    /// </summary>
+    /// <param name="profile">The list of log profile columns to search.</param>
+    /// <param name="minValidDiameter">The minimum valid diameter.</param>
+    /// <returns>The index of the first stable start.</returns>
     private static int FindStableStart(List<LogProfileColumn> profile, double minValidDiameter)
     {
         int requiredRun = 5;
@@ -182,7 +207,12 @@ public sealed class LogProcessingPipeline
         return 0;
     }
 
-    // find the last index where a stable run of valid diameters occurs
+    /// <summary>
+    /// Finds the last index where a stable run of valid diameters occurs.
+    /// </summary>
+    /// <param name="profile">The list of log profile columns to search.</param>
+    /// <param name="minValidDiameter">The minimum valid diameter.</param>
+    /// <returns>The index of the last stable end.</returns>
     private static int FindStableEnd(List<LogProfileColumn> profile, double minValidDiameter)
     {
         int requiredRun = 5;
@@ -207,7 +237,15 @@ public sealed class LogProcessingPipeline
         return profile.Count - 1;
     }
 
-    // validate the proposed tail/head spindle movements against machine limits and warnings
+    /// <summary>
+    /// Validates the proposed tail/head spindle movements against machine limits and warnings.
+    /// </summary>
+    /// <param name="tailXMM">The tail X movement in millimeters.</param>
+    /// <param name="tailYMM">The tail Y movement in millimeters.</param>
+    /// <param name="headXMM">The head X movement in millimeters.</param>
+    /// <param name="headYMM">The head Y movement in millimeters.</param>
+    /// <param name="limits">The machine limit settings.</param>
+    /// <returns>A list of warning messages.</returns>
     private static List<string> ValidateMachineMovement(double tailXMM, double tailYMM, double headXMM, double headYMM,
 OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     {
@@ -221,7 +259,14 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         return warnings;
     }
 
-    //check a single axis movement against machine limits and warnings
+    /// <summary>
+    /// Checks a single axis movement against its maximum allowed and warning thresholds, adding messages to the warnings list as appropriate.
+    /// </summary>
+    /// <param name="name"></param>
+    /// <param name="valueMM"></param>
+    /// <param name="maxAllowedMM"></param>
+    /// <param name="warningMM"></param>
+    /// <param name="warnings"></param>
     private static void CheckAxis(
         string name,
         double valueMM,
@@ -245,53 +290,35 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         }
     }
 
-    // Singleton instance of the LogProcessingPipeline
+    /// <summary>
+    /// Gets the singleton instance of the LogProcessingPipeline.
+    /// </summary>
     public static LogProcessingPipeline Instance => _instance.Value;
 
-    // Singleton instance of the PipelineState
-
+    /// <summary>
+    /// Singleton instance of the PipelineState.
+    /// </summary>
     private readonly PipelineState _state = PipelineState.Instance;
 
-    // Private constructor to prevent external instantiation
+    /// <summary>
+    /// Private constructor to prevent external instantiation.
+    /// </summary>
     private LogProcessingPipeline()
     {
     }
 
-    // Public property to access the current state of the pipeline
-    public PipelineState State => _state;
+    /// <summary>
+    /// Public property to access the current state of the pipeline.
+    /// </summary>
 
-    // ------------------------------------------------------------
-    // LOAD ROTATING SCAN FOLDER
-    // Clears old state, stores selected folder path, and loads all scan frames.
-    // ------------------------------------------------------------
-    public void LoadRotatingScanFolder(string folderPath, CancellationToken token)
-    {
-        token.ThrowIfCancellationRequested();
 
-        var state = PipelineState.Instance;  // Use the singleton instance of PipelineState
 
-        RunTimed("Reset Rotating Scan State", () =>
-        {
-            state.ScanFrames.Clear();
-            state.PointCloud.Clear();
-            state.DisplayPointCloud.Clear();
-        });
-
-        state.ScanFrames = RunTimed("Load Scan Frames From Folder", () =>
-            ScanFrameLoader.LoadFromFolder(folderPath)); // Load all scan frames from the specified folder
-
-        state.DiagnosticsReport +=
-            "ROTATING SCAN LOAD\r\n" +
-            $"Frames loaded: {state.ScanFrames.Count}\r\n" +
-            $"Angle step: {(360.0 / state.ScanFrames.Count):F2} deg\r\n" +
-            $"First frame: {Path.GetFileName(state.ScanFrames.First().ImagePath)}\r\n" +
-            $"Last frame: {Path.GetFileName(state.ScanFrames.Last().ImagePath)}\r\n\r\n";
-    }
 
     // ------------------------------------------------------------
     // PROCESS ROTATING SCAN FRAMES
     // Processes each frame in the rotating scan folder, building a profile for each.
     // ------------------------------------------------------------
+   
     internal void ProcessRotatingScanFrames(ScannerLookupTable lookupTable, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -357,6 +384,11 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // _state.PointCloud        = raw measured scanner data
     // _state.DisplayPointCloud = filled / averaged display-only data
     // ------------------------------------------------------------
+    /// <summary>
+    /// Builds the rotating scan point cloud from the processed scan frames, using the calibration data and application settings.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the scan frames or calibration data are missing or invalid.</exception>
     public void BuildRotatingScanPointCloud(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -429,6 +461,11 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // FIT ROTATING SCAN CENTERLINE
     // ------------------------------------------------------------
 
+    /// <summary>
+    /// Fits the centerline of the log from the rotating scan point cloud using PCA (Principal Component Analysis) and local centerline fitting.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the point cloud is missing or the centerline fit fails.</exception>
     public void FitRotatingScanCenterline(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -490,6 +527,12 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // Converts point cloud into centerline-relative radius/angle data.
     // Output is raw R(z, theta) field for ovality, wane, and rotation.
     // ------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the radius field from the raw point cloud and fitted centerline, producing a list of radius field points with Z and angle information.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the point cloud is missing or the centerline fit fails.</exception>
     public void BuildRadiusField(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -536,6 +579,12 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // BIN ROTATING SCAN RADIUS FIELD
     // Bins the R(z, theta) field from the rotating scan point cloud.
     // ------------------------------------------------------------
+
+    /// <summary>
+    /// Bins the radius field points into discrete Z and angle bins based on the application settings, producing a binned radius field for further analysis.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the radius field is missing or empty.</exception>
     public void BinRotatingScanRadiusField(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -592,6 +641,11 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // Analyzes true R(z, theta) field for ovality patterns.
     // Supports folders with fewer than 36 rotating images.
     // ------------------------------------------------------------
+    /// <summary>
+    /// Analyzes the binned radius field for ovality patterns.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the binned radius field is missing or empty.</exception>
     public void AnalyzeOvality(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -633,6 +687,12 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // ------------------------------------------------------------
     // ANALYZE RADIUS DEFECTS
     // ------------------------------------------------------------
+
+    /// <summary>
+    /// Analyzes the binned radius field for radius defects based on the defect thresholds specified in the application settings.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the binned radius field is missing or empty.</exception>
     public void AnalyzeRadiusDefects(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -662,7 +722,7 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         double goodPercent = total > 0 ? map.GoodCount * 100.0 / total : 0.0;  // Calculate the percentage of good surface cells in the radius defect map for reporting
         double lowPercent = total > 0 ? map.LowCount * 100.0 / total : 0.0;  // Calculate the percentage of low wood / wane-risk surface cells in the radius defect map for reporting
         double severeLowPercent = total > 0 ? map.SevereLowCount * 100.0 / total : 0.0; // Calculate the percentage of severe low wood surface cells in the radius defect map for reporting
-       
+
 
         _state.DiagnosticsReport +=
             $"\r\nSURFACE CONDITION MAP\r\n" +
@@ -673,9 +733,15 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
             $"Deepest Low-Wood Area: {FormatDepthBelowSurface(map.MinErrorMM)}\r\n" +
             "\r\n" +
 
-            BuildSurfaceConditionMeaning(  goodPercent,lowPercent,severeLowPercent); // Append the meaning of the surface condition results to the diagnostics report for user interpretation
+            BuildSurfaceConditionMeaning(goodPercent, lowPercent, severeLowPercent); // Append the meaning of the surface condition results to the diagnostics report for user interpretation
 
     }
+
+    /// <summary>
+    /// Analyzes the radius defect patches from the radius defect map, grouping connected low-wood areas into individual patches for further analysis and reporting.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the radius defect map is missing or empty.</exception>
 
     public void AnalyzeDefectPatches(CancellationToken token)
     {
@@ -691,8 +757,8 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         _state.RadiusDefectPatches = RadiusDefectPatchBuilder.Build(_state.RadiusDefectMap); // Build the defect patches from the radius defect map, grouping connected low-wood areas into
                                                                                              // individual patches for further analysis
 
-        _state.DefectPatchAnalysis =DefectPatchAnalyzer.Analyze(_state.RadiusDefectPatches);  // Analyze the defect patches to compute statistics such
-                                                                                              // as patch count, total defect cells, average patch size, worst depth, and severity scores for reporting and optimization purposes
+        _state.DefectPatchAnalysis = DefectPatchAnalyzer.Analyze(_state.RadiusDefectPatches);  // Analyze the defect patches to compute statistics such
+                                                                                               // as patch count, total defect cells, average patch size, worst depth, and severity scores for reporting and optimization purposes
 
         var analysis = _state.DefectPatchAnalysis; // Store the result of the defect patch analysis in a local variable for easier access
 
@@ -748,6 +814,12 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // No charger center movement and no log rotation are used.
     // ------------------------------------------------------------
 
+    /// <summary>
+    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
+    /// scoring profile, producing the final spindle setup for the log.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
     public void OptimizeSpindleAxis(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -1194,10 +1266,19 @@ BuildFinalSpindleRecommendation(
 
     // ------------------------------------------------------------
     // GEOMETRY-ONLY SPINDLE OPTIMIZATION
-    // ------------------------------------------------------------
+    
     // Runs after the complete measurement/defect-analysis pipeline. Defect,
     // adaptive-risk, movement-penalty, and uniform-risk scores are reported
     // after selection only; they never influence the chosen geometry position.
+    // ------------------------------------------------------------
+
+
+    /// <summary>
+    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
+    /// scoring profile, producing the final spindle setup for the log.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
     public void OptimizeInscribedGeometry(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -1651,6 +1732,13 @@ BuildFinalSpindleRecommendation(
         }
     }
 
+
+    /// <summary>
+    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
+    /// scoring profile, producing the final spindle setup for the log.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
     public void OptimizeByVeneerRecovery(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -2025,8 +2113,12 @@ BuildFinalSpindleRecommendation(
         }
     }
 
-    private PeelSimulationResult BuildPeelForMovement(
-        OptimizedSpindleMovement movement)
+    /// <summary>
+    /// Builds a peel simulation result for a given spindle movement, using the current point cloud and settings.
+    /// </summary>
+    /// <param name="movement">The optimized spindle movement to simulate.</param>
+    /// <returns>A peel simulation result for the given spindle movement.</returns>
+    private PeelSimulationResult BuildPeelForMovement(OptimizedSpindleMovement movement)
     {
         return UnwrappedPeelViewBuilder.BuildSimulation(
             _state.PointCloud,
@@ -2039,8 +2131,12 @@ BuildFinalSpindleRecommendation(
             movement.HeadMoveYMM);
     }
 
-    private PeelSimulationResult BuildPeelForGeometry(
-        InscribedGeometryResult geometry)
+    /// <summary>
+    /// Builds a peel simulation result for a given inscribed geometry result, using the current point cloud and settings.
+    /// </summary>
+    /// <param name="geometry">The inscribed geometry result to simulate.</param>
+    /// <returns>A peel simulation result for the given inscribed geometry result.</returns>
+    private PeelSimulationResult BuildPeelForGeometry(InscribedGeometryResult geometry)
     {
         OptimizedSpindleMovement move =
             geometry.SpindleMovement;
@@ -2056,6 +2152,12 @@ BuildFinalSpindleRecommendation(
             move.HeadMoveYMM);
     }
 
+    /// <summary>
+    /// Builds a report for a given inscribed geometry result and its corresponding peel simulation result.
+    /// </summary>
+    /// <param name="geometry">The inscribed geometry result to report on.</param>
+    /// <param name="peel">The peel simulation result corresponding to the geometry.</param>
+    /// <returns>A string containing the report for the given inscribed geometry result and peel simulation result.</returns>
     private static string BuildInscribedGeometryReport(
         InscribedGeometryResult geometry,
         PeelSimulationResult peel)
@@ -2086,6 +2188,12 @@ BuildFinalSpindleRecommendation(
     // BUILD UNWRAPPED PEEL VIEW
     // Creates a flat view of the scanned log surface.
     // ------------------------------------------------------------
+
+    /// <summary>
+    /// Builds an unwrapped peel view from the scanned rotating point cloud, using the best-tested spindle-axis position.
+    /// </summary>
+    /// <param name="token">A cancellation token to observe while performing the operation.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the point cloud has not been built or if peel view settings are missing.</exception>
     public void BuildUnwrappedPeelView(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -2113,8 +2221,8 @@ tailYMM,
 headXMM,
 headYMM);
 
-_state.UnwrappedPeelView?.Dispose();
-_state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pipeline state
+        _state.UnwrappedPeelView?.Dispose();
+        _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pipeline state
 
         if (_state.FinalSpindleRecommendation is not null)
         {
@@ -2130,7 +2238,7 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
 
         _state.DiagnosticsReport +=
             "\r\nUNWRAPPED PEEL VIEW\r\n" +
-            "Status: Created from scanned rotating point cloud using best-tested spindle-axis position\r\n"+
+            "Status: Created from scanned rotating point cloud using best-tested spindle-axis position\r\n" +
             $"Peel Tail X: {FormatLength(tailXMM)}\r\n" +
             $"Peel Tail Y: {FormatLength(tailYMM)}\r\n" +
             $"Peel Head X: {FormatLength(headXMM)}\r\n" +
@@ -2155,13 +2263,23 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
     // Unit / Formatting Helpers
     // ------------------------------------------------------------
 
-    // Convert millimeters to inches.
+    /// <summary>
+    /// Converts a length from millimeters to inches.
+    /// </summary>
+    /// <param name="mm">The length in millimeters.</param>
+    /// <returns>The length in inches.</returns>
     private static double Inches(double mm)
     {
         return mm / 25.4;
     }
 
-    // Format a length in both inches and millimeters.
+    /// <summary>
+    /// Formats a length in both inches and millimeters.
+    /// </summary>
+    /// <param name="mm">The length in millimeters.</param>
+    /// <param name="inDecimals">The number of decimal places for inches.</param>
+    /// <param name="mmDecimals">The number of decimal places for millimeters.</param>
+    /// <returns>A formatted string representing the length in both inches and millimeters.</returns>
     private static string FormatLength(
         double mm,
         int inDecimals = 3,
@@ -2177,7 +2295,14 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             $"{mm.ToString(millimetersFormat, culture)} mm";
     }
 
-    // Format a range in both inches and millimeters.
+    /// <summary>
+    /// Formats a range of lengths in both inches and millimeters.
+    /// </summary>
+    /// <param name="startMM">The starting length in millimeters.</param>
+    /// <param name="endMM">The ending length in millimeters.</param>
+    /// <param name="inDecimals">The number of decimal places for inches.</param>
+    /// <param name="mmDecimals">The number of decimal places for millimeters.</param>
+    /// <returns>A formatted string representing the range of lengths in both inches and millimeters.</returns>
     private static string FormatLengthRange(
         double startMM,
         double endMM,
@@ -2196,7 +2321,13 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             $"{endMM.ToString(millimetersFormat, culture)} mm";
     }
 
-    // Format a signed length in both inches and millimeters.
+    /// <summary>
+    /// Formats a signed length in both inches and millimeters.
+    /// </summary>
+    /// <param name="mm">The length in millimeters.</param>
+    /// <param name="inDecimals">The number of decimal places for inches.</param>
+    /// <param name="mmDecimals">The number of decimal places for millimeters.</param>
+    /// <returns>A formatted string representing the signed length in both inches and millimeters.</returns>
     private static string FormatSignedLength(
         double mm,
         int inDecimals = 3,
@@ -2217,7 +2348,12 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             $"{millimeterSign}{mm.ToString(millimetersFormat, culture)} mm";
     }
 
-    // Format a depth below the expected surface.
+    /// <summary>
+    /// Formats a depth below the expected surface in inches, given a negative surface error in millimeters.
+    /// </summary>
+    /// <param name="mm">The negative surface error in millimeters.</param>
+    /// <param name="inDecimals">The number of decimal places for inches.</param>
+    /// <returns>A formatted string representing the depth below the expected surface in inches.</returns>
     private static string FormatDepthBelowSurface(
         double mm,
         int inDecimals = 3)
@@ -2231,7 +2367,13 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             "in below expected surface";
     }
 
-    // Format a score value with its unit.
+    /// <summary>
+    /// Formats a score value with its unit, using the current culture for formatting.
+    /// </summary>
+    /// <param name="value">The score value to format.</param>
+    /// <param name="unit">The unit of the score value.</param>
+    /// <returns>A formatted string representing the score value with its unit.</returns>
+
     private static string FormatScoreValue(double value, string unit)
     {
         CultureInfo culture = CultureInfo.CurrentCulture;
@@ -2244,7 +2386,13 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         return value.ToString("F3", culture) + " " + unit;
     }
 
-    // Convert a negative surface error to a positive depth in inches.
+
+
+    /// <summary>
+    /// Converts a negative surface error to a positive depth in inches.
+    /// </summary>
+    /// <param name="errorMM">The negative surface error in millimeters.</param>
+    /// <returns>The positive depth below the expected surface in inches.</returns>
     private static double DepthBelowSurfaceInches(double errorMM)
     {
         if (errorMM >= 0.0)
@@ -2259,8 +2407,15 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
     // Geometry / Movement Helpers
     // ------------------------------------------------------------
 
-    // Compute the maximum spindle movement in millimeters based on the tail and head X/Y movements, returning the larger of the two calculated distances
-    private static double MaxSpindleMovementMM(double tailXMM,double tailYMM,double headXMM,double headYMM)
+    /// <summary>
+    /// Computes the maximum spindle movement in millimeters based on the tail and head X/Y movements, returning the larger of the two calculated distances.
+    /// </summary>
+    /// <param name="tailXMM">The tail spindle movement in the X direction in millimeters.</param>
+    /// <param name="tailYMM">The tail spindle movement in the Y direction in millimeters.</param>
+    /// <param name="headXMM">The head spindle movement in the X direction in millimeters.</param>
+    /// <param name="headYMM">The head spindle movement in the Y direction in millimeters.</param>
+    /// <returns>The maximum spindle movement in millimeters.</returns>
+    private static double MaxSpindleMovementMM(double tailXMM, double tailYMM, double headXMM, double headYMM)
     {
         double tailMove = Math.Sqrt(tailXMM * tailXMM + tailYMM * tailYMM); // Calculate the Euclidean distance for the tail spindle movement based on its X and Y movements
         double headMove = Math.Sqrt(headXMM * headXMM + headYMM * headYMM); // Calculate the Euclidean distance for the head spindle movement based on its X and Y movements
@@ -2268,7 +2423,12 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         return Math.Max(tailMove, headMove); // Return the larger of the two calculated distances, representing the maximum spindle movement in millimeters
     }
 
-    // Compute the improvement percentage between a baseline score and a candidate score, returning 0.0 if the baseline score is effectively zero to avoid division by zero
+    /// <summary>
+    /// Computes the percentage improvement from a baseline score to a candidate score, returning 0.0 if the baseline score is effectively zero to avoid division by zero.
+    /// </summary>
+    /// <param name="baselineScore">The baseline score to compare against.</param>
+    /// <param name="candidateScore">The candidate score to compare.</param>
+    /// <returns>The percentage improvement from the baseline score to the candidate score.</returns>
     private static double ComputeImprovementPercent(double baselineScore, double candidateScore)
     {
         if (baselineScore <= 0.000001)
@@ -2281,6 +2441,10 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
     // Uniform Score Helpers
     // ------------------------------------------------------------
 
+    /// <summary>
+    /// Represents a component of the uniform score, including its name, measured value, unit, good and bad limits, weight percentage, and meaning.
+    /// It also calculates the risk percentage and weighted points based on the measured value and limits.
+    /// </summary>
     private sealed class UniformScoreResult
     {
         public string Title { get; set; } = string.Empty;
@@ -2290,12 +2454,26 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         public string Rating => GetUniformScoreRating(FinalScore);
     }
 
+
+    /// <summary>
+    /// Builds a uniform optimization score result based on the provided parameters, including average slice radius spread, adjusted low-wood risk,
+    /// deepest low-wood area, maximum spindle movement, out-of-round measurement, centerline sweep, and scoring settings.
+    /// </summary>
+    /// <param name="title">The title of the uniform score result.</param>
+    /// <param name="averageSliceRadiusSpreadMM">The average slice radius spread in millimeters.</param>
+    /// <param name="adjustedLowWoodRiskRemainingPercent">The adjusted low-wood risk remaining percentage.</param>
+    /// <param name="deepestLowWoodMM">The deepest low-wood area in millimeters.</param>
+    /// <param name="maxSpindleMovementMM">The maximum spindle movement in millimeters.</param>
+    /// <param name="outOfRoundMM">The out-of-round measurement in millimeters.</param>
+    /// <param name="centerlineSweepMM">The centerline sweep in millimeters.</param>
+    /// <param name="scoring">The scoring settings to use for calculating the uniform score.</param>
+    /// <returns>The uniform score result based on the provided parameters.</returns>
     private static UniformScoreResult BuildUniformOptimizationScore(
         string title,
         double averageSliceRadiusSpreadMM,
         double adjustedLowWoodRiskRemainingPercent,
-        
-        
+
+
         double deepestLowWoodMM,
         double maxSpindleMovementMM,
         double outOfRoundMM,
@@ -2370,6 +2548,18 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         return result;
     }
 
+    /// <summary>
+    /// Adds a score component to the uniform score result with the specified parameters, including name,
+    /// measured value, unit, good and bad limits, weight percentage, and meaning.
+    /// </summary>
+    /// <param name="result">The uniform score result to which the component will be added.</param>
+    /// <param name="name">The name of the score component.</param>
+    /// <param name="measuredValue">The measured value of the score component.</param>
+    /// <param name="unit">The unit of measurement for the score component.</param>
+    /// <param name="goodLimit">The good limit for the score component.</param>
+    /// <param name="badLimit">The bad limit for the score component.</param>
+    /// <param name="weightPercent">The weight percentage of the score component.</param>
+    /// <param name="meaning">The meaning or description of the score component.</param>
     private static void AddScoreComponent(
         UniformScoreResult result,
         string name,
@@ -2392,6 +2582,14 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         });
     }
 
+
+    /// <summary>
+    /// Builds a uniform score report string based on the provided title and uniform score result, including the final risk score, rating, and a breakdown of each score component with its
+    /// measured value, reference limits, risk percentage, weight percentage, contribution points, and meaning.
+    /// </summary>
+    /// <param name="title">The title of the uniform score report.</param>
+    /// <param name="score">The uniform score result to be included in the report.</param>
+    /// <returns>A string representing the formatted uniform score report.</returns>
     private static string BuildUniformScoreReport(string title, UniformScoreResult score)
     {
         var sb = new System.Text.StringBuilder();
@@ -2422,6 +2620,12 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         return sb.ToString();
     }
 
+
+    /// <summary>
+    /// Converts a final uniform score into a rating string based on predefined thresholds, indicating whether the score is considered good, cautionary, poor, or high risk.
+    /// </summary>
+    /// <param name="finalScore">The final uniform score to be converted into a rating.</param>
+    /// <returns>A string representing the rating corresponding to the final uniform score.</returns>
     private static string GetUniformScoreRating(double finalScore)
     {
         if (finalScore <= 25.0)
@@ -2440,7 +2644,11 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
     // Report Meaning Helpers
     // ------------------------------------------------------------
 
-    // Build a validation report for the binned radius field, including the number of slices, average radius spread, and average diameter, all formatted in inches
+    /// <summary>
+    /// Builds a validation report for the binned radius field, including the number of slices, average radius spread, and average diameter, all formatted in inches.
+    /// </summary>
+    /// <param name="ovalityPercent">The ovality percentage to be evaluated.</param>
+    /// <returns>A string representing the ovality rating.</returns>
     private static string GetOvalityRating(double ovalityPercent)
     {
         if (ovalityPercent < 3.0)  // If the ovality percentage is less than 3.0, return "Low" indicating a low level of ovality and good roundness
@@ -2451,7 +2659,11 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         return "High";
     }
 
-    // Convert the worst severity score into a risk rating string based on predefined thresholds, indicating whether the patch is considered low, moderate, or high risk
+    /// <summary>
+    /// Converts the worst severity score into a risk rating string based on predefined thresholds, indicating whether the patch is considered low, moderate, or high risk.
+    /// </summary>
+    /// <param name="worstSeverityScore">The worst severity score to be converted into a risk rating.</param>
+    /// <returns>A string representing the risk rating corresponding to the worst severity score.</returns>
     private static string GetPatchRiskRating(double worstSeverityScore)
     {
         if (worstSeverityScore < 50.0)  // If the worst severity score is less than 50.0, return "Low" indicating a low-risk patch
@@ -2463,7 +2675,12 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
         return "High";
     }
 
-    // Build a report explaining the meaning of the ovality measurement, including the roundness rating, worst slice difference, and implications for log shape and optimizer considerations
+    /// <summary>
+    /// Builds a report explaining the meaning of the ovality measurement, including the roundness rating, worst slice difference, and implications for log shape and optimizer considerations.
+    /// </summary>
+    /// <param name="ovalityMM">The ovality in millimeters to be evaluated.</param>
+    /// <param name="ovalityPercent">The ovality percentage to be evaluated.</param>
+    /// <returns>A string representing the meaning of the ovality measurement.</returns>
     private static string BuildOvalityMeaning(double ovalityMM, double ovalityPercent)
     {
         string rating = GetOvalityRating(ovalityPercent);  // Get the roundness rating based on the ovality percentage, indicating whether the log is considered low, moderate,
@@ -2479,8 +2696,14 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             "This does not automatically mean the log is bad; it means the optimizer should account for shape when choosing the spindle position.\r\n";
     }
 
-    // Build a report explaining the meaning of the surface condition measurement, including percentages of normal, low wood, and severe low wood areas, and implications for log shape and cutting risk
-    private static string BuildSurfaceConditionMeaning(double goodPercent,double lowPercent,double severeLowPercent )
+    /// <summary>
+    /// Builds a report explaining the meaning of the surface condition measurement, including percentages of normal, low wood, and severe low wood areas, and implications for log shape and cutting risk.
+    /// </summary>
+    /// <param name="goodPercent">The percentage of normal surface area.</param>
+    /// <param name="lowPercent">The percentage of low wood surface area.</param>
+    /// <param name="severeLowPercent">The percentage of severe low wood surface area.</param>
+    /// <returns>A string representing the meaning of the surface condition measurement.</returns>
+    private static string BuildSurfaceConditionMeaning(double goodPercent, double lowPercent, double severeLowPercent)
     {
 
         // Build the surface condition meaning report string with percentages of normal, low wood, and severe low wood areas, and implications for log shape and cutting risk
@@ -2492,7 +2715,10 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             $"\r\nSurface Summary: {goodPercent:F1}% normal, {lowPercent:F1}% low wood, {severeLowPercent:F1}% severe low wood\r\n";
     }
 
-    // Build a report explaining the meaning of the patch grouping, including how connected low-wood cells are grouped into patches and the implications for veneer recovery and defect assessment
+    /// <summary>
+    /// Builds a report explaining the meaning of the patch grouping, including how connected low-wood cells are grouped into patches and the implications for veneer recovery and defect assessment.
+    /// </summary>
+    /// <returns>A string representing the meaning of the patch grouping.</returns>
     private static string BuildPatchMeaning()
     {
         // Build the patch meaning report string with explanations of how connected low-wood cells are grouped into patches and the implications for veneer recovery and defect assessment
@@ -2503,8 +2729,14 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
             "High spots are not treated as major defect patches because they usually represent extra material, not missing material.\r\n";
     }
 
-    // Build a report explaining the meaning of the optimizer tradeoff, including changes in wane balance, low-wood defect risk, and internal search score, and how the recommended setup is chosen based on uniform risk score rather than wane score alone
-    private static string BuildOptimizerTradeoffMeaning(double waneDeltaMM,double defectDelta,double finalDelta)
+    /// <summary>
+    /// Builds a report explaining the meaning of the optimizer tradeoff, including changes in wane balance, low-wood defect risk, and internal search score, and how the recommended setup is chosen based on uniform risk score rather than wane score alone.
+    /// </summary>
+    /// <param name="waneDeltaMM">The change in wane balance in millimeters.</param>
+    /// <param name="defectDelta">The change in low-wood defect risk.</param>
+    /// <param name="finalDelta">The change in internal search score.</param>
+    /// <returns>A string representing the meaning of the optimizer tradeoff.</returns>
+    private static string BuildOptimizerTradeoffMeaning(double waneDeltaMM, double defectDelta, double finalDelta)
     {
 
         // Build the optimizer tradeoff meaning report string with explanations of changes in wane balance, low-wood defect risk, and internal search score,
@@ -2537,8 +2769,11 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
     // Validation Report Helpers
     // ------------------------------------------------------------
 
-    // Build a validation report for the point cloud, including the number of points, ranges for X, Y, and Z coordinates
-    // , length, average radius, and average diameter, all formatted in inches
+    /// <summary>
+    /// Builds a validation report for the point cloud, including the number of points, ranges for X, Y, and Z coordinates, length, average radius, and average diameter, all formatted in inches.
+    /// </summary>
+    /// <param name="points">The list of 3D points representing the point cloud.</param>
+    /// <returns>A string representing the point cloud validation report.</returns>
     private static string BuildPointCloudValidationReportInches(List<Point3D> points)
     {
         if (points == null || points.Count == 0)
@@ -2573,6 +2808,18 @@ _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pi
     // ------------------------------------------------------------
     // Build Diagnostics adaptive learning Report Helpers
     // ------------------------------------------------------------
+
+    /// <summary>
+    /// Builds an adaptive log diagnostics report based on the provided parameters, including low wood percentage,
+    /// severe low wood percentage, high spot percentage, deepest low wood depth, out-of-round measurement, and centerline sweep.
+    /// </summary>
+    /// <param name="lowWoodPercent">The percentage of low wood detected in the log.</param>
+    /// <param name="severeLowWoodPercent">The percentage of severe low wood detected in the log.</param>
+    /// <param name="highSpotPercent">The percentage of high spots detected in the log.</param>
+    /// <param name="deepestLowWoodMM">The depth of the deepest low wood detected in millimeters.</param>
+    /// <param name="outOfRoundMM">The out-of-round measurement in millimeters.</param>
+    /// <param name="centerlineSweepMM">The centerline sweep measurement in millimeters.</param>
+    /// <returns>An AdaptiveLogDiagnostics object containing the diagnostics report.</returns>
     private AdaptiveLogDiagnostics BuildAdaptiveLogDiagnostics(
 double lowWoodPercent,
 double severeLowWoodPercent,
@@ -2612,6 +2859,12 @@ double centerlineSweepMM)
         };
     }
 
+    /// <summary>
+    /// Rebuilds the radius defect map and related data structures using the
+    /// provided adaptive scoring profile, updating the state with the new defect map, patches, analysis, and heatmap.
+    /// </summary>
+    /// <param name="profile">The adaptive scoring profile to use for rebuilding the radius defects.</param>
+    /// <exception cref="InvalidOperationException">Thrown if the adaptive scoring profile is missing or if the bin radius field is not initialized.</exception>
     private void RebuildRadiusDefectsWithAdaptiveProfile(AdaptiveScoringProfile profile)
     {
         if (profile == null)
@@ -2645,7 +2898,13 @@ double centerlineSweepMM)
     // Final Recommendation Helper
     // ------------------------------------------------------------
 
-    // Build the final spindle recommendation based on the optimizer results, machine warnings, and movement constraints
+    /// <summary>
+    /// Builds the final spindle recommendation based on the optimizer results, machine warnings, and movement constraints.
+    /// </summary>
+    /// <param name="finalSetup">The final optimizer setup result.</param>
+    /// <param name="machineWarnings">A list of machine warnings.</param>
+    /// <param name="machineMoveAllowed">Indicates whether machine movement is allowed.</param>
+    /// <param name="baselineRiskScore">The baseline risk score.</param>
     private static FinalSpindleRecommendation BuildFinalSpindleRecommendation(
 ChargerOptimizationResult finalSetup,
 List<string> machineWarnings,
@@ -2744,7 +3003,11 @@ double maxSpindleMovementMM)
     // Timing Helpers
     // ------------------------------------------------------------
 
-    // Run a given action and measure the time it takes to execute, recording the elapsed time in milliseconds along with the step name in the pipeline state for later reporting
+    /// <summary>
+    /// Runs a given action and measures the time it takes to execute, recording the elapsed time in milliseconds along with the step name in the pipeline state for later reporting.
+    /// </summary>
+    /// <param name="stepName">The name of the pipeline step.</param>
+    /// <param name="action">The action to execute and time.</param>
     private void RunTimed(string stepName, Action action)
     {
         Stopwatch stopwatch = Stopwatch.StartNew();  // Start a stopwatch to measure the elapsed time for the given action
@@ -2765,6 +3028,14 @@ double maxSpindleMovementMM)
         }
     }
 
+    /// <summary>
+    /// Runs a given function and measures the time it takes to execute, recording the elapsed time in milliseconds
+    /// along with the step name in the pipeline state for later reporting, and returns the result of the function.
+    /// </summary>
+    /// <typeparam name="T">The return type of the function.</typeparam>
+    /// <param name="stepName">The name of the pipeline step.</param>
+    /// <param name="func">The function to execute and time.</param>
+    /// <returns>The result of the function.</returns>
     private T RunTimed<T>(string stepName, Func<T> func)
     {
         Stopwatch stopwatch = Stopwatch.StartNew();
@@ -2785,7 +3056,11 @@ double maxSpindleMovementMM)
         }
     }
 
-    // Build a timing report summarizing the elapsed time for each step in the pipeline, including the total time and individual step times in seconds
+    /// <summary>
+    /// Builds a timing report summarizing the elapsed time for each step in the pipeline, including the total time and individual step times in seconds.
+    /// </summary>
+    /// <param name="entries">The list of pipeline timing entries.</param>
+    /// <returns>A string representing the timing report.</returns>
     private static string BuildTimingReport(List<PipelineTimingEntry> entries)
     {
         if (entries == null || entries.Count == 0)
@@ -2811,6 +3086,9 @@ double maxSpindleMovementMM)
     /// in PipelineState. Both live acquisition and folder-based processing use
     /// this method so stage order cannot drift between entry points.
     /// </summary>
+    /// <param name="lookupTable">The scanner lookup table containing calibration data.</param>
+    /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
+    /// <param name="progress">An optional action to report progress messages.</param>
     internal void RunCurrentFramesPipeline(
         ScannerLookupTable lookupTable,
         CancellationToken token,
@@ -2970,44 +3248,5 @@ double maxSpindleMovementMM)
         }
     }
 
-    // ------------------------------------------------------------------------------------------------------------------------
-    // FULL ROTATING SCAN PIPELINE
-    // Runs the full rotating scan workflow in correct order.
-    // ------------------------------------------------------------------------------------------------------------------------
-    public void RunRotatingScanPipeline(string folderPath, CancellationToken token)
-    {
 
-        token.ThrowIfCancellationRequested();
-
-        RunTimed("Clear Pipeline State", () => _state.Clear());
-
-        if (_state.Settings.Diagnostics.IncludeSettingsSummary)
-        {
-            string settingsSummary = RunTimed("Build Settings Summary", () =>
-                AppSettingsDiagnosticsBuilder.BuildSummary(_state.Settings));
-
-            _state.DiagnosticsReport += settingsSummary + Environment.NewLine;
-        }
-
-        ScannerLookupTable lookupTable = RunTimed(
-            "Load Scanner Calibration",
-            LookupTableStore.Load);
-
-        RunTimed(
-            "Load Rotating Scan Folder",
-            () => LoadRotatingScanFolder(folderPath, token));
-
-        RunCurrentFramesPipeline(lookupTable, token);
-
-        RunTimed("Save Current Log Scan", SaveCurrentLogScan);
-
-    }
-
-    // ------------------------------------------------------------
-    // Folder and File Management
-    // ------------------------------------------------------------
-    private void SaveCurrentLogScan()
-    {
-        ScanResultSaveService.Save(_state);
-    }
 }

@@ -16,6 +16,16 @@ public static class VeneerRecoveryMetricsEvaluator
     private const double MillimetersPerInch = 25.4;
     private const double TwoPi = 2.0 * Math.PI;
 
+    /// <summary>
+    /// Evaluates the recovery metrics for a given binned radius field and spindle movement.    
+    /// </summary>
+    /// <param name="radiusField">The binned radius field points to evaluate.</param>
+    /// <param name="peelSettings">The peel view settings.</param>
+    /// <param name="usableSettings">The usable radius settings.</param>
+    /// <param name="waneSettings">The wane settings.</param>
+    /// <param name="recoverySettings">The recovery optimization settings.</param>
+    /// <param name="movement">The optimized spindle movement.</param>
+    /// <returns>The recovery search metrics.</returns>
     public static RecoverySearchMetrics Evaluate(
         IReadOnlyList<BinnedRadiusFieldPoint> radiusField,
         PeelViewSettings peelSettings,
@@ -230,6 +240,7 @@ public static class VeneerRecoveryMetricsEvaluator
             }
         }
 
+
         return new RecoverySearchMetrics
         {
             IsValid = true,
@@ -253,6 +264,15 @@ public static class VeneerRecoveryMetricsEvaluator
         };
     }
 
+    /// <summary>
+    /// Compares two recovery search metrics and determines if the candidate is better than the current.    
+    /// </summary>
+    /// <param name="candidate">The candidate recovery search metrics to evaluate.</param>
+    /// <param name="candidateMovementMM">The optimized spindle movement for the candidate.</param>
+    /// <param name="current">The current best recovery search metrics.</param>
+    /// <param name="currentMovementMM">The optimized spindle movement for the current best metrics.</param>
+    /// <param name="preferLowerMovementOnExactTie">Indicates whether to prefer candidates with lower movement in the event of an exact tie.</param>
+    /// <returns>True if the candidate is better than the current; otherwise, false.</returns>
     public static bool IsBetter(
         RecoverySearchMetrics candidate,
         double candidateMovementMM,
@@ -288,6 +308,11 @@ public static class VeneerRecoveryMetricsEvaluator
                candidateMovementMM < currentMovementMM;
     }
 
+    /// <summary>
+    /// Creates an invalid recovery search metrics instance with the specified reason.
+    /// </summary>
+    /// <param name="reason">The reason why the recovery search metrics are considered invalid.</param>
+    /// <returns>An invalid recovery search metrics instance.</returns>
     private static RecoverySearchMetrics Invalid(string reason) =>
         new()
         {
@@ -295,6 +320,14 @@ public static class VeneerRecoveryMetricsEvaluator
             InvalidReason = reason
         };
 
+    /// <summary>
+    /// Builds a list of peel radii starting from the outer radius down to the core radius, decrementing by the veneer
+    /// thickness for each revolution.
+    /// </summary>
+    /// <param name="outerRadiusMM">The outer radius in millimeters.</param>
+    /// <param name="coreRadiusMM">The core radius in millimeters.</param>
+    /// <param name="veneerThicknessMM">The veneer thickness in millimeters.</param>
+    /// <returns>A list of peel radii from the outer radius down to the core radius.</returns>
     private static List<double> BuildPeelRadii(
         double outerRadiusMM,
         double coreRadiusMM,
@@ -311,6 +344,11 @@ public static class VeneerRecoveryMetricsEvaluator
         return radii;
     }
 
+    /// <summary>
+    /// Normalizes an angle in degrees to the range [0, 360).
+    /// </summary>
+    /// <param name="angleDegrees">The angle in degrees to normalize.</param>
+    /// <returns>The normalized angle in the range [0, 360).</returns>
     private static double NormalizeAngle(double angleDegrees)
     {
         angleDegrees %= 360.0;
@@ -319,6 +357,14 @@ public static class VeneerRecoveryMetricsEvaluator
         return angleDegrees;
     }
 
+    /// <summary>
+    /// Calculates the specified percentile of a list of double values. The percentile should be in the range [0, 1],
+    /// where 0 represents the minimum value and 1 represents the maximum value. The method sorts the
+    /// values and interpolates between them to find the desired percentile.
+    /// </summary>
+    /// <param name="values">The list of double values.</param>
+    /// <param name="percentile">The desired percentile in the range [0, 1].</param>
+    /// <returns>The value at the specified percentile.</returns>
     private static double Percentile(
         List<double> values,
         double percentile)
@@ -339,6 +385,11 @@ public static class VeneerRecoveryMetricsEvaluator
         return sorted[lower] * (1.0 - weight) + sorted[upper] * weight;
     }
 
+    /// <summary>
+    /// Represents an adjusted surface cell with a radius and angle in radians, used for recovery metrics evaluation.
+    /// </summary>
+    /// <param name="RadiusMM">The radius of the surface cell in millimeters.</param>
+    /// <param name="AngleRadians">The angle of the surface cell in radians.</param>
     private readonly record struct AdjustedSurfaceCell(
         double RadiusMM,
         double AngleRadians);

@@ -3,7 +3,7 @@ namespace OptimizationXY.Charger.Models.Acquisition;
     /// <summary>
     /// Specifies how the camera acquires frames.
     /// </summary>
-    public enum AcquisitionMode
+    public enum AcquisitionMode 
     {
 
         /// Free-running frame rate mode — camera generates frames at a constant internal rate.

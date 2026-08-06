@@ -12,30 +12,35 @@ namespace OptimizationXY.Charger.Models.Acquisition;
 /// </summary>
 public sealed class CompletedLogCapture
 {
-    private readonly byte[] _headCameraConfigurationSnapshot;
-    private readonly byte[] _tailCameraConfigurationSnapshot;
+    private readonly byte[] _headCameraConfigurationSnapshot; // Exact head-camera-configuration snapshot at the time of capture.
+    private readonly byte[] _tailCameraConfigurationSnapshot; // Exact tail-camera-configuration snapshot at the time of capture.
 
-    public string LogId { get; }
+    public string LogId { get; } // Unique identifier for the log capture.
 
-    public ReadOnlyCollection<ScanFrame> Frames { get; }
+    public ReadOnlyCollection<ScanFrame> Frames { get; } // Full-length concatenated processing frames from the dual-camera capture.
 
-    public int HeadFrameCount { get; }
-    public int TailFrameCount { get; }
+    public int HeadFrameCount { get; } // Number of head frames captured during the log capture.
+    public int TailFrameCount { get; } // Number of tail frames captured during the log capture.
 
-    public int FramePairCount => Frames.Count;
-    public int TotalSourceFrameCount => HeadFrameCount + TailFrameCount;
+    public int FramePairCount => Frames.Count; // Number of frame pairs in the concatenated Frames collection.
+    public int TotalSourceFrameCount => HeadFrameCount + TailFrameCount; // Total number of source frames captured (head + tail).
 
-    public double CaptureDurationSeconds { get; }
-    public DateTime CaptureStartedUtc { get; }
-    public DateTime CaptureCompletedUtc { get; }
-    public int DroppedFrameCount { get; }
-    public AcquisitionMode AcquisitionMode { get; }
-    public string Notes { get; }
+    public double CaptureDurationSeconds { get; } // Duration of the log capture in seconds.
+    public DateTime CaptureStartedUtc { get; } // UTC timestamp when the log capture started.
+    public DateTime CaptureCompletedUtc { get; } // UTC timestamp when the log capture completed.
+    public int DroppedFrameCount { get; } // Number of frames dropped during the log capture (if any).
+    public AcquisitionMode AcquisitionMode { get; } // Mode of acquisition used during the log capture (e.g., FrameRate, Triggered, etc.).
+    public string Notes { get; } // Optional notes or comments associated with the log capture.
+
+    // The following properties expose the exact camera configuration snapshots as read-only memory.
     public ReadOnlyMemory<byte> HeadCameraConfigurationSnapshot =>
         new(_headCameraConfigurationSnapshot);
+
+    // The following properties expose the exact camera configuration snapshots as read-only memory.
     public ReadOnlyMemory<byte> TailCameraConfigurationSnapshot =>
         new(_tailCameraConfigurationSnapshot);
 
+    /// Constructor for creating a CompletedLogCapture instance.
     public CompletedLogCapture(
         string logId,
         IReadOnlyList<ScanFrame> concatenatedFrames,
@@ -74,6 +79,15 @@ public sealed class CompletedLogCapture
             throw new ArgumentException(
                 "The exact tail-camera-configuration snapshot is required.",
                 nameof(tailCameraConfigurationSnapshot));
+        }
+
+
+        // Validate that the head and tail frame counts match the concatenated frames count.
+        if (headFrameCount + tailFrameCount != concatenatedFrames.Count)
+        {
+            throw new ArgumentException(
+                "The sum of headFrameCount and tailFrameCount must equal the number of concatenated frames.",
+                nameof(concatenatedFrames));
         }
 
         LogId = logId;

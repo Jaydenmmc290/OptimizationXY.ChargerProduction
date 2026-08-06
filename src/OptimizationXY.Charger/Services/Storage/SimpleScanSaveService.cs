@@ -9,8 +9,14 @@ using OptimizationXY.Charger.Models.Calibration;
 using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Core;
 
+
+
 namespace OptimizationXY.Charger.Services.Storage;
 
+/// <summary>
+/// Provides functionality to save the current scan, including frames, overlays, calibration data, and other relevant information,
+/// to a structured folder on disk. It also handles retention of old scans based on user settings.
+/// </summary>
 public sealed class SimpleScanSaveService
 {
     private static readonly Logger Logger =
@@ -23,11 +29,22 @@ public sealed class SimpleScanSaveService
 
     private readonly string _rootFolder;
 
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SimpleScanSaveService"/> class,
+    /// setting the root folder for saved scans to the application's designated saved scans directory.
+    /// </summary>
     public SimpleScanSaveService()
     {
         _rootFolder = ApplicationPaths.SavedScansDirectory;
     }
 
+    /// <summary>
+    /// Saves the current scan data, including frames, overlays, calibration snapshots, and other relevant information,
+    /// to a structured folder on disk.
+    /// </summary>
+    /// <param name="state">The current pipeline state containing scan data and settings.</param>
+    /// <returns>The path to the folder where the scan data was saved.</returns>
     public string SaveCurrentScan(PipelineState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -96,6 +113,12 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>
+    /// Resolves the appropriate block folder for the current scan based on the provided current folder and day folder.
+    /// </summary>
+    /// <param name="currentFolder">The current folder of the scan.</param>
+    /// <param name="dayFolder">The folder corresponding to the current day.</param>
+    /// <returns>The path to the resolved block folder.</returns>
     private static string ResolveBlockFolder(
         string currentFolder,
         string dayFolder)
@@ -121,6 +144,11 @@ public sealed class SimpleScanSaveService
         return CreateNextBlockFolder(dayFolder);
     }
 
+    /// <summary>
+    /// Creates the next available block folder within the specified day folder. The block folders are named in the format "Block_0001", "Block_0002", etc.
+    /// </summary>
+    /// <param name="dayFolder">The folder corresponding to the current day.</param>
+    /// <returns>The path to the newly created block folder.</returns>
     private static string CreateNextBlockFolder(string dayFolder)
     {
         for (int blockNumber = 1; ; blockNumber++)
@@ -137,6 +165,11 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>
+    /// Creates the next available scan folder within the specified block folder. The scan folders are named in the format "Scan_0001", "Scan_0002", etc.
+    /// </summary>
+    /// <param name="blockFolder">The folder corresponding to the current block.</param>
+    /// <returns>The path to the newly created scan folder.</returns>
     private static string CreateNextScanFolder(string blockFolder)
     {
         for (int scanNumber = 1; ; scanNumber++)
@@ -153,6 +186,11 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>
+    /// Writes the diagnostics report from the pipeline state to a text file named "DiagnosticsReport.txt" in the specified scan folder.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the diagnostics report.</param>
+    /// <param name="scanFolder">The folder where the diagnostics report will be saved.</param>
     internal static void WriteDiagnosticsReport(
         PipelineState state,
         string scanFolder)
@@ -164,6 +202,13 @@ public sealed class SimpleScanSaveService
             new UTF8Encoding(false));
     }
 
+    /// <summary>
+    /// Saves the captured scan frames from the pipeline state to the specified frames folder. Each frame is saved with a sequentially numbered
+    /// filename, preserving the original image format if available, or defaulting to PNG if not.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the scan frames to be saved.</param>
+    /// <param name="framesFolder">The folder where the scan frames will be saved.</param>
+    /// <exception cref="IOException">Thrown if a captured frame cannot be saved.</exception>
     private static void SaveFrames(
         PipelineState state,
         string framesFolder)
@@ -221,6 +266,13 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>
+    /// Saves a manifest of the scan frames to a CSV file named "frames.csv" in the specified scan folder. The manifest includes
+    /// details such as sequence index, capture frame index, angle in degrees,
+    /// validity, profile point count, status message, source image path, and saved image path for each frame.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the scan frames to be saved.</param>
+    /// <param name="scanFolder">The folder where the scan frames manifest will be saved.</param>
     private static void SaveFrameManifest(
         PipelineState state,
         string scanFolder)
@@ -250,6 +302,11 @@ public sealed class SimpleScanSaveService
     private static string EscapeCsv(string? value) =>
         (value ?? string.Empty).Replace("\"", "\"\"");
 
+    /// <summary>
+    /// Saves the operator scan quality to a JSON file named "operator-scan-quality.json" in the specified scan folder.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the operator scan quality to be saved.</param>
+    /// <param name="scanFolder">The folder where the operator scan quality will be saved.</param>
     private static void SaveOperatorScanQuality(
         PipelineState state,
         string scanFolder)
@@ -274,6 +331,12 @@ public sealed class SimpleScanSaveService
         File.WriteAllText(path, json, new UTF8Encoding(false));
     }
 
+    /// <summary>
+    /// Saves the scanner calibration snapshot to a JSON file named "scanner-calibration.json" in the specified scan folder.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the scanner calibration snapshot to be saved.</param>
+    /// <param name="scanFolder">The folder where the scanner calibration snapshot will be saved.</param>
+    /// <exception cref="InvalidDataException">Thrown if the scanner calibration snapshot is missing or invalid.</exception>
     private static void SaveCalibrationSnapshot(
         PipelineState state,
         string scanFolder)
@@ -296,6 +359,12 @@ public sealed class SimpleScanSaveService
         File.WriteAllText(path, json, new UTF8Encoding(false));
     }
 
+
+    /// <summary>
+    /// Saves the camera configuration snapshots for both head and tail cameras to the specified scan folder. If the snapshots are not available,
+    /// </summary>
+    /// <param name="state">The pipeline state containing the camera configuration snapshots to be saved.</param>
+    /// <param name="scanFolder">The folder where the camera configuration snapshots will be saved.</param>
     private static void SaveCameraConfigurationSnapshots(
         PipelineState state,
         string scanFolder)
@@ -324,6 +393,17 @@ public sealed class SimpleScanSaveService
             required);
     }
 
+    /// <summary>
+    /// Saves a single camera configuration snapshot to the specified destination. If the snapshot is not available and is required,
+    /// an exception is thrown.
+    /// </summary>
+    /// <param name="capturedSnapshot">The captured camera configuration snapshot.</param>
+    /// <param name="ccfDirectory">The directory containing the camera configuration files.</param>
+    /// <param name="initializationMode">The camera initialization mode.</param>
+    /// <param name="configurationFileName">The name of the camera configuration file.</param>
+    /// <param name="destination">The destination path where the camera configuration snapshot will be saved.</param>
+    /// <param name="required">Indicates whether the camera configuration snapshot is required.</param>
+    /// <exception cref="InvalidDataException">Thrown if the camera configuration snapshot is required but missing.</exception>
     private static void SaveCameraConfigurationSnapshot(
         byte[]? capturedSnapshot,
         string ccfDirectory,
@@ -380,6 +460,12 @@ public sealed class SimpleScanSaveService
         File.Copy(source, destination, overwrite: false);
     }
 
+    /// <summary>
+    /// Saves the point cloud data from the pipeline state to a CSV file named "point_cloud.csv" in the specified
+    /// scan folder. Each point's X, Y, and Z coordinates are saved in millimeters with four decimal places of precision.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the point cloud data.</param>
+    /// <param name="scanFolder">The folder where the point cloud CSV file will be saved.</param>
     private static void SavePointCloud(
         PipelineState state,
         string scanFolder)
@@ -400,6 +486,12 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>
+    /// Saves the various overlay images from the pipeline state to the specified overlays folder.
+    /// Each overlay is saved as a PNG file with a descriptive name.
+    /// </summary>
+    /// <param name="state">The pipeline state containing the overlay images.</param>
+    /// <param name="overlaysFolder">The folder where the overlay PNG files will be saved.</param>
     private static void SaveOverlays(
         PipelineState state,
         string overlaysFolder)
@@ -439,6 +531,11 @@ public sealed class SimpleScanSaveService
             Path.Combine(overlaysFolder, "direct_recovery_refinement_peel.png"));
     }
 
+    /// <summary>
+    /// Saves the provided OpenCV Mat to the specified path if it is valid (not null and not empty). If the Mat is invalid, the method does nothing.
+    /// </summary>
+    /// <param name="mat">The OpenCV Mat to be saved.</param>
+    /// <param name="path">The file path where the Mat will be saved.</param>
     private static void SaveMatIfValid(Mat? mat, string path)
     {
         if (mat is null || mat.IsEmpty)
@@ -449,6 +546,10 @@ public sealed class SimpleScanSaveService
         CvInvoke.Imwrite(path, mat);
     }
 
+    /// <summary>
+    /// Deletes old saved scans based on the retention settings.
+    /// </summary>
+    /// <param name="settings">The scan storage settings containing retention configuration.</param>
     private void DeleteOldSavedScans(ScanStorageSettings settings)
     {
         if (!settings.AutoDeleteOldScans || !Directory.Exists(_rootFolder))
@@ -523,6 +624,14 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>
+    /// Attempts to create a UTC DateTime from the specified year, month, and day. Returns true if successful; otherwise, returns false.
+    /// </summary>
+    /// <param name="year">The year component of the date.</param>
+    /// <param name="month">The month component of the date.</param>
+    /// <param name="day">The day component of the date.</param>
+    /// <param name="value">When this method returns, contains the UTC DateTime if the conversion succeeded, or the default value if it failed.</param>
+    /// <returns>True if the UTC DateTime was successfully created; otherwise, false.</returns>
     private static bool TryCreateUtcDate(
         int year,
         int month,

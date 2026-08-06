@@ -1,5 +1,14 @@
+
+/// <summary>
+/// This file contains classes and enumerations related to production readiness checks and reports.
+/// </summary>
+
 namespace OptimizationXY.Charger.Models.Production;
 
+
+/// <summary>
+/// Represents the status of a production readiness check.
+/// </summary>
 public enum ProductionCheckStatus
 {
     Pass = 0,
@@ -7,6 +16,9 @@ public enum ProductionCheckStatus
     Block = 2
 }
 
+/// <summary>
+/// Represents a single production readiness check with its name, status, and message.
+/// </summary>
 public sealed class ProductionReadinessCheck
 {
     public string Name { get; set; } = string.Empty;
@@ -14,6 +26,9 @@ public sealed class ProductionReadinessCheck
     public string Message { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Represents a report of production readiness, including the evaluation time, PLC connection status, and a list of checks.
+/// </summary>
 public sealed class ProductionReadinessReport
 {
     public DateTime EvaluatedUtc { get; set; } = DateTime.UtcNow;
@@ -30,6 +45,10 @@ public sealed class ProductionReadinessReport
     public int WarningCount =>
         Checks.Count(check => check.Status == ProductionCheckStatus.Warning);
 
+    /// <summary>
+    /// Builds a summary string of the production readiness report.
+    /// </summary>
+    /// <returns>A string representing the summary of the report.</returns>
     public string BuildSummary()
     {
         var lines = new List<string>

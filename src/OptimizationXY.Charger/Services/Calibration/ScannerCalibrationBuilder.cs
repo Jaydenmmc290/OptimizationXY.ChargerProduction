@@ -5,10 +5,27 @@ using OptimizationXY.Charger.Models.Calibration;
 using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Preprocessing;
 
+
+/// <summary>
+/// Provides methods for building and analyzing scanner calibration data, including extracting reference captures,
+/// constructing lookup tables, and evaluating laser detection quality.
+/// </summary>
 namespace OptimizationXY.Charger.Services.Calibration;
 
 public static class ScannerCalibrationBuilder
 {
+
+    /// <summary>
+    /// Extracts a calibration reference from a batch of concatenated frames, detecting the laser stripe and computing stable lookup points.
+    /// </summary>
+    /// <param name="batch">The batch of concatenated frames to process.</param>
+    /// <param name="referenceName">The name of the calibration reference.</param>
+    /// <param name="measuredDiameterMM">The measured diameter in millimeters.</param>
+    /// <param name="radiusBandId">The radius band identifier.</param>
+    /// <returns>The extracted <see cref="CalibrationReferenceCapture"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown if the reference name is null or whitespace.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the measured diameter is not a positive finite value or the radius band ID is negative or zero.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if there are not enough concatenated frames or if laser detection fails on sufficient frames.</exception>
     public static CalibrationReferenceCapture ExtractReference(
         CalibrationCaptureBatch batch,
         string referenceName,
@@ -160,6 +177,24 @@ public static class ScannerCalibrationBuilder
         };
     }
 
+    /// <summary>
+    /// Builds a scanner lookup table from the provided calibration references, camera snapshots, and other metadata.
+    /// </summary>
+    /// <param name="settings">The application settings.</param>
+    /// <param name="operatorName">The name of the operator performing the calibration.</param>
+    /// <param name="lengthPixelsPerMM">The length in pixels per millimeter.</param>
+    /// <param name="references">The calibration reference captures.</param>
+    /// <param name="headCameraSnapshot">The snapshot of the head camera configuration.</param>
+    /// <param name="tailCameraSnapshot">The snapshot of the tail camera configuration.</param>
+    /// <param name="independentValidationCompleted">Indicates whether independent validation was completed.</param>
+    /// <param name="independentValidationMeanErrorMM">The mean error in millimeters from independent validation.</param>
+    /// <param name="independentValidationMaximumErrorMM">The maximum error in millimeters from independent validation.</param>
+    /// <param name="notes">Additional notes for the calibration.</param>
+    /// <returns>The constructed <see cref="ScannerLookupTable"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown if the reference name is null or whitespace.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the measured diameter is not a positive finite value or the radius band ID is negative or zero.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if there are not enough concatenated frames or if laser detection fails on sufficient frames.</exception>
+    /// <exception cref="InvalidDataException">Thrown if the constructed table is not valid for production use.</exception>
     public static ScannerLookupTable BuildTable(
         AppSettings settings,
         string operatorName,
@@ -285,6 +320,12 @@ public static class ScannerCalibrationBuilder
         return table;
     }
 
+    /// <summary>
+    /// Analyzes the laser detection in a calibration capture batch.
+    /// </summary>
+    /// <param name="batch">The calibration capture batch to analyze.</param>
+    /// <returns>A summary of the laser detection results.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if the batch is null.</exception>
     public static LaserDetectionSummary AnalyzeLaser(
         CalibrationCaptureBatch batch)
     {
@@ -334,7 +375,13 @@ public static class ScannerCalibrationBuilder
             MeanLaserY = yValues.Average()
         };
     }
-
+    
+    /// <summary>
+    /// Evaluates the repeatability of the scanner lookup table using held-out calibration references.
+    /// </summary>
+    /// <param name="table">The scanner lookup table to evaluate.</param>
+    /// <param name="references">The held-out calibration reference captures.</param>
+    /// <returns>A tuple containing the mean and maximum repeatability errors in millimeters.</returns>
     private static (double Mean, double Maximum) EvaluateHeldOutRepeatability(
         ScannerLookupTable table,
         IReadOnlyList<CalibrationReferenceCapture> references)
@@ -365,7 +412,12 @@ public static class ScannerCalibrationBuilder
             ? (double.NaN, double.NaN)
             : (errors.Average(), errors.Max());
     }
-
+    
+    /// <summary>
+    /// Rejects outliers from the given array of values using the median absolute deviation method.
+    /// </summary>
+    /// <param name="values">The array of values to process.</param>
+    /// <returns>A new array with outliers removed.</returns>
     private static double[] RejectOutliers(double[] values)
     {
         if (values.Length < 3)
@@ -383,7 +435,12 @@ public static class ScannerCalibrationBuilder
         return [.. values
             .Where(value => Math.Abs(value - median) <= tolerance)];
     }
-
+    
+    /// <summary>
+    /// Computes the median of the given values.
+    /// </summary>
+    /// <param name="values">The values to compute the median for.</param>
+    /// <returns>The median value.</returns>
     private static double Median(IEnumerable<double> values)
     {
         double[] sorted = [.. values.OrderBy(value => value)];
@@ -394,6 +451,12 @@ public static class ScannerCalibrationBuilder
             : sorted[middle];
     }
 
+    /// <summary>
+    /// Calculates the standard deviation of a list of double values.
+    /// </summary>
+    /// <param name="values">The list of double values to calculate the standard deviation for.</param>
+    /// <returns>The standard deviation of the values.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if the values list is null.</exception>
     private static double StandardDeviation(List<double> values)
     {
         if (values.Count < 2)
@@ -408,6 +471,11 @@ public static class ScannerCalibrationBuilder
         return Math.Sqrt(variance);
     }
 
+    /// <summary>
+    /// Computes the SHA-256 hash of the given byte array and returns it as a hexadecimal string.
+    /// </summary>
+    /// <param name="data">The byte array to compute the SHA-256 hash for.</param>
+    /// <returns>The SHA-256 hash a s a hexadecimal string.</returns>
     private static string ComputeSha256(byte[] data)
     {
         if (data.Length == 0)
@@ -419,6 +487,10 @@ public static class ScannerCalibrationBuilder
     }
 }
 
+/// <summary>
+/// Represents a summary of the laser detection results from a calibration capture batch,
+/// including frame counts, image dimensions, and laser position statistics.
+/// </summary>
 public sealed class LaserDetectionSummary
 {
     public int CapturedFrameCount { get; set; }

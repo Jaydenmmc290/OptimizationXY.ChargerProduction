@@ -1,5 +1,9 @@
 using OptimizationXY.Charger.Models.Calibration;
 
+
+/// <summary>
+/// Provides interpolation of radius values from a scanner lookup table based on image X and laser Y coordinates.
+/// </summary>
 namespace OptimizationXY.Charger.Services.Calibration;
 
 public static class LookupTableInterpolator
@@ -8,6 +12,16 @@ public static class LookupTableInterpolator
     private const int NearbyXWindowPixels = 24;
     private const double BoundaryTolerancePixels = 2.0;
 
+
+    /// <summary>
+    /// Interpolates the radius in millimeters from a scanner lookup table based on the provided image X coordinate and laser Y coordinate.
+    /// </summary>
+    /// <param name="table">The scanner lookup table.</param>
+    /// <param name="x">The image X coordinate.</param>
+    /// <param name="laserY">The laser Y coordinate.</param>
+    /// <returns>The interpolated radius in millimeters.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the lookup table is invalid or does not contain enough data for interpolation.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the provided coordinates are outside the valid range.</exception>
     public static double GetRadiusMM(
         ScannerLookupTable table,
         int x,
@@ -35,29 +49,27 @@ public static class LookupTableInterpolator
                 $"Laser Y must be finite and between 0 and {table.ImageHeight - 1} for the active calibration.");
         }
 
-        List<LookupPoint> nearbyByX = table.Points
+        List<LookupPoint> nearbyByX = [.. table.Points
             .Where(point => Math.Abs(point.X - x) <= NearbyXWindowPixels)
             .OrderBy(point => Math.Abs(point.X - x))
-            .Take(MaximumNearbyPoints)
-            .ToList();
+            .Take(MaximumNearbyPoints)];
 
         if (nearbyByX.Count < 2)
         {
-            nearbyByX = table.Points
+            List<LookupPoint> value = [.. table.Points
                 .OrderBy(point => Math.Abs(point.X - x))
-                .Take(MaximumNearbyPoints)
-                .ToList();
+                .Take(MaximumNearbyPoints)];
+            nearbyByX = value;
         }
 
-        List<CalibrationBand> bands = nearbyByX
+        List<CalibrationBand> bands = [.. nearbyByX
             .GroupBy(point => point.RadiusBandId > 0
                 ? point.RadiusBandId
                 : StableLegacyBandId(point.RadiusMM))
             .Select(group => new CalibrationBand(
                 LaserY: Median(group.Select(point => point.LaserY)),
                 RadiusMM: group.Average(point => point.RadiusMM)))
-            .OrderBy(band => band.LaserY)
-            .ToList();
+            .OrderBy(band => band.LaserY)];
 
         if (bands.Count < 2)
         {
@@ -108,12 +120,24 @@ public static class LookupTableInterpolator
                interpolation * (upper.RadiusMM - lower.RadiusMM);
     }
 
+
+    /// <summary>
+    /// Calculates a stable legacy band ID from a radius in millimeters.
+    /// </summary>
+    /// <param name="radiusMM">The radius in millimeters.</param>
+    /// <returns>The stable legacy band ID.</returns>
     private static int StableLegacyBandId(double radiusMM) =>
         checked((int)Math.Round(radiusMM * 1000.0));
-
+    
+    /// <summary>
+    /// Calculates the median of a sequence of double values.
+    /// </summary>
+    /// <param name="values">The sequence of double values.</param>
+    /// <returns>The median value.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the sequence is empty.</exception>
     private static double Median(IEnumerable<double> values)
     {
-        double[] sorted = values.OrderBy(value => value).ToArray();
+        double[] sorted = [.. values.OrderBy(value => value)];
 
         if (sorted.Length == 0)
         {
@@ -127,6 +151,11 @@ public static class LookupTableInterpolator
             : sorted[middle];
     }
 
+    /// <summary>
+    /// Represents a calibration band with a laser Y coordinate and a corresponding radius in millimeters.
+    /// </summary>
+    /// <param name="LaserY">The laser Y coordinate.</param>
+    /// <param name="RadiusMM">The radius in millimeters.</param>
     private sealed record CalibrationBand(
         double LaserY,
         double RadiusMM);

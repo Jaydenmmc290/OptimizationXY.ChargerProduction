@@ -9,6 +9,15 @@ namespace OptimizationXY.Charger.Services.Optimization.Recovery;
 /// </summary>
 public static class GeometryPeelSelector
 {
+    /// <summary>
+    /// Selects the geometry-only spindle result using actual fixed-axis circular
+    /// virtual-peel recovery. Geometry size is used only after peel-recovery ties.
+    /// </summary>
+    /// <param name="cylinder">The inscribed geometry result for the cylinder.</param>
+    /// <param name="cylinderPeel">The peel simulation result for the cylinder.</param>
+    /// <param name="oval">The inscribed geometry result for the oval.</param>
+    /// <param name="ovalPeel">The peel simulation result for the oval.</param>
+    /// <returns>The result of the geometry peel comparison.</returns>
     public static GeometryPeelComparisonResult Select(
         InscribedGeometryResult cylinder,
         PeelSimulationResult cylinderPeel,
@@ -78,6 +87,15 @@ public static class GeometryPeelSelector
         };
     }
 
+    /// <summary>
+    /// Compares two peel simulation results to determine which is better based on
+    /// usable full sheets, usable veneer length, rejected full sheets, and wane.
+    /// </summary>
+    /// <param name="left">The first peel simulation result to compare.</param>
+    /// <param name="right">The second peel simulation result to compare.</param>
+    /// <returns>
+    /// A positive value if the first result is better, a negative value if the second result is better, or zero if they are equal.
+    /// </returns>
     private static int ComparePeels(
         PeelSimulationResult left,
         PeelSimulationResult right)
@@ -118,6 +136,14 @@ public static class GeometryPeelSelector
                 left.TotalWaneAreaPercent);
     }
 
+    /// <summary>
+    /// Builds a reason string explaining why one peel simulation result was selected over another.
+    /// </summary>
+    /// <param name="winnerName">The name of the winning peel simulation result.</param>
+    /// <param name="winner">The winning peel simulation result.</param>
+    /// <param name="otherName">The name of the other peel simulation result.</param>
+    /// <param name="other">The other peel simulation result.</param>
+    /// <returns>A string explaining the reason for the selection.</returns>
     private static string BuildReason(
         string winnerName,
         PeelSimulationResult winner,
