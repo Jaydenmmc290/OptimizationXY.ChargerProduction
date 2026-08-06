@@ -19,6 +19,8 @@ From elevated PowerShell on the build computer:
 .\scripts\publish-production.ps1 -SaperaSdkDir "C:\Program Files\Teledyne DALSA\Sapera\Components\NET\Bin"
 ```
 
+"or powershell -ExecutionPolicy Bypass -File .\scripts\publish-production.ps1"
+
 The publish script requires settings schema 10 and verifies that both camera templates use `Programmatic` initialization with server name, device index, Mono8, exposure, gain, and trigger configuration. CCF files are not required in a production package.
 
 ## Install
