@@ -31,17 +31,35 @@ A camera feature or identity mismatch blocks processing until the calibrated set
 
 ## Calibration workflow
 
-1. Put the machine in calibration-safe state: motion inhibited, knife retracted, reference secured, guarded area clear.
-2. Connect both cameras using their Server name and Device index.
-3. Confirm physical head/tail assignment.
-4. Capture laser-verification frames.
-5. Measure and save the axial pixels-per-millimeter scale.
-6. Capture at least two known, constant-diameter references with different radii.
-7. (Optional) Complete independent validation measurements.
-8. Generate, validate, archive, and activate the calibration package.
-9. Complete the physical commissioning checklist before switching to Production mode.
+Complete the setup wizard in order. Camera registration must be finalized before dimensional calibration because the combined Head/Tail image is the coordinate system used by later calibration steps.
 
-The calibration package continues to preserve opaque camera-configuration snapshot files for integrity and backward compatibility. They are audit evidence; Sapera does not load them during normal programmatic camera connection.
+1. Put the machine in a calibration-safe state: machine motion inhibited, knife retracted, reference secured, guarded area clear, and normal PLC production scanning inhibited.
+2. Configure and verify the local SQL database.
+3. Connect both cameras using their final Sapera server name and device index.
+4. Select `Encoder` acquisition mode for production.
+5. Reconnect both cameras and verify their physical serial identities.
+6. Open both camera previews.
+7. Physically confirm that the Head/Dog preview shows the Head/Dog side and the Tail preview shows the Tail side.
+8. Open **Camera Alignment / Seam**.
+9. Configure Head/Tail image order and horizontal reversal.
+10. Configure Head and Tail crop values.
+11. Configure Tail vertical registration.
+12. Configure the Head/Tail overlap.
+13. Capture a combined preview and adjust the settings until a physical feature crosses the seam continuously with no duplicated or missing image region.
+14. Verify and save the camera seam.
+15. Verify the laser using the finalized combined-image geometry.
+16. Measure and save the axial pixels-per-millimeter scale.
+17. Capture at least two known constant-diameter references with different measured diameters.
+18. Complete independent validation measurements when available.
+19. Generate, validate, archive, and activate the scanner calibration package.
+20. Perform controlled dry scans.
+21. Complete PLC direction, travel-limit, knife-clearance, guarding, interlock, emergency-stop, and operator-display validation.
+22. Run final production-host validation.
+23. Record responsible-person commissioning approval.
+24. Enable Production mode only after all required release gates pass.
+
+Changing the Sapera camera identity, acquisition configuration, image crop, camera order, horizontal reversal, vertical offset, overlap, seam, or other calibration-critical geometry after scanner calibration invalidates the affected calibration. Restore the calibrated settings or repeat the scanner calibration before returning to production.
+
 
 ## Operator scan view
 

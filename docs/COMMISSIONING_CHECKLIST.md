@@ -9,17 +9,39 @@
 - [ ] SQL Express schema/test passes when database saving is enabled.
 - [ ] Host validation script has no BLOCK results.
 
-## Cameras and laser
+## Cameras, seam, and laser
 
-- [ ] Head camera uses the correct Sapera server and resource index.
-- [ ] Tail camera uses the correct Sapera server and resource index.
-- [ ] Head and tail expected serial numbers are populated, distinct, and match the physical cameras.
-- [ ] Both cameras use `Programmatic` initialization.
-- [ ] Both cameras use Encoder mode and the verified wired trigger source and activation edge.
-- [ ] Head preview physically shows the head/dog end.
-- [ ] Tail preview physically shows the tail end.
-- [ ] Laser stripe is visible, stable, and unsaturated across the usable field.
-- [ ] Camera/laser mounts are secured and marked against movement.
+* [ ] Head camera uses the correct Sapera server and resource index.
+* [ ] Tail camera uses the correct Sapera server and resource index.
+* [ ] Head and Tail expected serial numbers are populated, distinct, and match the physical cameras.
+* [ ] Both cameras use `Programmatic` initialization.
+* [ ] Both cameras use Encoder mode and the verified wired trigger configuration.
+* [ ] Head preview physically shows the Head/Dog end.
+* [ ] Tail preview physically shows the Tail end.
+* [ ] Head/Tail image order is correct.
+* [ ] Head horizontal reversal is correct.
+* [ ] Tail horizontal reversal is correct.
+* [ ] Head crop values are verified.
+* [ ] Tail crop values are verified.
+* [ ] Tail vertical offset is verified.
+* [ ] Head/Tail overlap is verified.
+* [ ] A common physical feature crosses the camera seam continuously.
+* [ ] No physical region is duplicated at the camera seam.
+* [ ] No physical region is missing at the camera seam.
+* [ ] Camera seam verification is saved in Production settings.
+* [ ] Laser stripe is visible, stable, and unsaturated across the usable combined field.
+* [ ] Camera and laser mounts are secured and marked against movement.
+
+## Scanner calibration
+
+* [ ] Camera seam was finalized before dimensional calibration.
+* [ ] Axial pixels-per-millimeter scale was measured with a traceable reference.
+* [ ] At least two different known radius bands were captured.
+* [ ] Repeatability and independent validation passed as required.
+* [ ] Active calibration ID matches runtime settings.
+* [ ] Camera configuration snapshots match the active calibration after connection.
+* [ ] Crop, orientation, vertical offset, seam, overlap, and image dimensions match the active calibration.
+
 
 ## Scanner calibration
 

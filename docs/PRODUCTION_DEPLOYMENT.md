@@ -257,34 +257,128 @@ Do not continue to unrestricted production operation if validation reports a fai
 
 ## 8. Complete first-run commissioning
 
-The first launch must be treated as commissioning, not normal production operation.
+The first launch on a production computer is a commissioning procedure, not normal production operation.
 
-1. Start the application in `Commissioning` mode.
-2. Open **Production Setup**.
-3. Enter the final Sapera server name and resource index for each camera.
-4. Set both cameras to `Encoder` trigger mode.
-5. 
-6. 
-7. Select the verified wired trigger source.
-8. Reconnect both cameras.
-9. Confirm that both live previews appear and update correctly.
-10. Physically confirm which camera is the head/dog camera and which is the tail camera.
-11. Complete laser calibration.
-12. Complete axial-scale calibration.
-13. Complete known-radius calibration.
-14. Perform dry scans without authorizing unrestricted machine movement.
-15. Confirm that the operator profile follows the physical block from head to tail.
-16. Confirm that `ScanStart` begins image capture.
-17. Confirm that `ScanComplete` ends acquisition and gates processing.
-18. Verify PLC X and Y sign conventions on both head and tail sides.
-19. Verify maximum movement limits.
-20. Verify carriage-retract behavior.
-21. Verify knife clearance.
-22. Verify all machine interlocks.
-23. Verify emergency-stop behavior.
-24. Run `validate-production-host.ps1` again after final settings and calibration are saved.
-25. Record approval from the responsible person.
-26. Enable Production mode only after commissioning and safety validation pass.
+Keep the application in **Commissioning** mode until every required scanner, PLC, machine-safety, and approval check has passed.
+
+### 8.1 Open Production Setup
+
+1. Start the installed XY Charger application.
+2. Confirm that the application is in **Commissioning** mode.
+3. Open **Production Setup / Calibration**.
+4. On **Step 1 - Overview**, confirm that the displayed runtime data root, settings path, calibration path, and saved-scan path are the XY Charger application.
+5. intended production locations.
+
+### 8.2 Configure SQL
+
+5. Open **Step 2 - Local SQL Express**.
+6. Test the configured SQL Server connection.
+7. Create or upgrade the `OptimizationXY` database if required.
+8. Save and enable SQL only after the expected schema version is verified.
+
+### 8.3 Connect and identify both cameras
+
+9. Open **Step 3 - Cameras**.
+10. Enter the final Sapera server name and zero-based device index for the Head/Dog camera.
+11. Enter the final Sapera server name and zero-based device index for the Tail camera.
+12. Use **Encoder** acquisition mode for production.
+13. Leave the expected serial number blank only for the first controlled connection if the application must learn the physical serial number.
+14. Select **Save Camera Settings and Reconnect**.
+15. Open the Head preview and confirm that it physically shows the Head/Dog side of the machine.
+16. Open the Tail preview and confirm that it physically shows the Tail side of the machine.
+17. Save the physical-side confirmation.
+
+Do not continue to dimensional calibration until the two physical camera assignments are correct.
+
+### 8.4 Align and verify the Head/Tail camera seam
+
+18. Open **Step 4 - Camera Alignment / Seam**.
+19. Place a straight or recognizable reference so that a common physical feature can be seen in the overlap region between both cameras.
+20. Set the Head/Tail image order and horizontal reversal options correctly.
+21. Adjust the Head and Tail crop values to remove unusable camera edges.
+22. Adjust the Tail vertical offset so the same physical feature appears at the same vertical position in both images.
+23. Adjust the overlap value so the two images meet without duplicating or removing part of the physical block.
+24. Select **Apply Settings and Capture Combined Preview**.
+25. Inspect the combined image at the seam.
+26. Repeat the adjustments and capture another preview until the same physical feature crosses the seam continuously with no duplicated region and no missing region.
+27. Check the camera-seam verification box.
+28. Select **Verify and Save Camera Seam**.
+
+The camera seam must be finalized before axial or known-reference calibration. Changing crop, reversal, camera order, vertical offset, overlap, or seam after calibration invalidates the affected scanner calibration and requires calibration to be repeated.
+
+### 8.5 Verify the laser
+
+29. With the final seam settings still active, select **Verify Laser**.
+30. Confirm that the laser stripe is visible, stable, and usable across the complete combined Head-to-Tail image.
+31. Do not continue until both **Camera Seam** and **Laser** report ready.
+
+### 8.6 Measure the axial length scale
+
+32. Open **Step 5 - Axial Length Scale**.
+33. Place two visible reference marks a precisely known physical distance apart.
+34. Capture the combined calibration image.
+35. Click the first reference mark.
+36. Click the second reference mark.
+37. Enter the true physical distance between the marks.
+38. Calculate `LengthPixelsPerMM`.
+39. Review the result and select **Save Length Scale**.
+
+### 8.7 Capture known diameter references
+
+40. Open **Step 6 - Known References**.
+41. Install the first known round reference.
+42. Measure its physical diameter accurately.
+43. Enter the operator name, reference name, and measured diameter.
+44. Confirm that the entered diameter is valid for the scanned reference.
+45. Select **Capture 36 Pairs and Add Reference**.
+46. Repeat the process using at least one additional reference with a different known diameter.
+47. Confirm that at least two distinct radius bands are accepted by the wizard.
+
+Do not change camera position, crop, orientation, seam, overlap, or vertical registration between reference captures.
+
+### 8.8 Generate and activate scanner calibration
+
+48. Open **Step 7 - Review and Activate**.
+49. Complete independent reference validation when available.
+50. Enter calibration notes and commissioning information as required.
+51. Confirm that SQL, Cameras, Physical Sides, Camera Seam, Laser, Length Scale, and the required known references all report ready.
+52. Select **Generate, Validate, Archive, and Activate Calibration**.
+53. Confirm that a valid calibration ID is generated and activated.
+
+Calibration activation does not authorize unrestricted machine operation. The system remains in Commissioning mode until physical machine commissioning is approved.
+
+### 8.9 Perform controlled machine commissioning
+
+54. Perform controlled dry scans without authorizing unrestricted charger or lathe movement.
+55. Confirm that the operator profile follows the physical block from Head/Dog to Tail.
+56. Confirm that the scanner acquires the expected synchronized Head/Tail frame pairs.
+57. Confirm that the PLC `ScanStart` rising edge starts exactly one capture cycle.
+58. Confirm that processing waits for the correct `ScanComplete` condition.
+59. Verify Head X and Y physical sign conventions.
+60. Verify Tail X and Y physical sign conventions.
+61. Verify machine travel and software movement limits.
+62. Verify carriage-retract behavior.
+63. Verify knife clearance.
+64. Verify PLC readback behavior.
+65. Verify guarding and machine interlocks.
+66. Verify emergency-stop and safe-restart behavior.
+67. Verify the operator scan-quality display using known good and deliberately failed scans.
+
+### 8.10 Final production validation
+
+68. Run the production-host validator again after the final settings and scanner calibration have been saved:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\validate-production-host.ps1 `
+  -ApplicationDirectory "C:\Program Files\OptimizationXY\Charger" `
+  -DataRoot "D:\OptimizationXYData" `
+  -SqlInstanceName "SQLEXPRESS"
+```
+
+69. Resolve every required production-readiness failure.
+70. Save at least one successful controlled dry-run package and its SHA-256 manifest.
+71. Record the responsible person's commissioning approval.
+72. Enable **Production** mode only after scanner calibration, PLC validation, machine-safety testing, controlled dry scans, host validation, and responsible-person approval have all passed.
 
 ## 9. Understand the production camera connection sequence
 

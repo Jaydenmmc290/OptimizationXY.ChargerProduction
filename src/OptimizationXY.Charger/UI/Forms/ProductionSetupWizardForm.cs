@@ -45,6 +45,25 @@ public sealed class ProductionSetupWizardForm : Form
     private readonly Label _cameraStatus = new();
     private readonly Label _laserStatus = new();
 
+    // Camera alignment / seam controls
+    private readonly CheckBox _headOnLeft = new();
+    private readonly CheckBox _reverseHeadHorizontal = new();
+    private readonly CheckBox _reverseTailHorizontal = new();
+
+    private readonly NumericUpDown _headCropLeftPixels = new();
+    private readonly NumericUpDown _headCropRightPixels = new();
+    private readonly NumericUpDown _tailCropLeftPixels = new();
+    private readonly NumericUpDown _tailCropRightPixels = new();
+    private readonly NumericUpDown _tailVerticalOffsetPixels = new();
+    private readonly NumericUpDown _overlapPixels = new();
+
+    private readonly CheckBox _cameraSeamConfirmed = new();
+    private readonly Label _cameraSeamStatus = new();
+    private readonly PictureBox _cameraSeamPreview = new();
+
+    private bool _cameraSeamPreviewCapturedThisSession;
+
+
     private readonly NumericUpDown _knownLengthMM = new();
     private readonly NumericUpDown _startPixelX = new();
     private readonly NumericUpDown _endPixelX = new();
@@ -97,9 +116,22 @@ public sealed class ProductionSetupWizardForm : Form
     /// <param name="e">The event data for the FormClosed event.</param>
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        Image? oldImage = _lengthCalibrationImage.Image;
+        Image? oldImage =
+    _lengthCalibrationImage.Image;
+
         _lengthCalibrationImage.Image = null;
+
         oldImage?.Dispose();
+
+
+        Image? oldSeamImage =
+            _cameraSeamPreview.Image;
+
+        _cameraSeamPreview.Image = null;
+
+        oldSeamImage?.Dispose();
+
+
         base.OnFormClosed(e);
     }
 
@@ -140,6 +172,7 @@ public sealed class ProductionSetupWizardForm : Form
         _tabs.TabPages.Add(BuildOverviewPage());
         _tabs.TabPages.Add(BuildDatabasePage());
         _tabs.TabPages.Add(BuildCameraPage());
+        _tabs.TabPages.Add(BuildCameraAlignmentPage());
         _tabs.TabPages.Add(BuildLengthPage());
         _tabs.TabPages.Add(BuildReferencePage());
         _tabs.TabPages.Add(BuildActivationPage());
@@ -211,7 +244,8 @@ public sealed class ProductionSetupWizardForm : Form
         panel.Controls.Add(NewPathLabel("Saved scans", ApplicationPaths.SavedScansDirectory));
 
         panel.Controls.Add(NewWrappedLabel(
-            "The setup form always leaves the machine in Commissioning mode. It does not certify physical safety, travel limits, PLC sign conventions, emergency stops, or knife clearance. Those approvals remain separate production release gates."));
+            "The setup form always leaves the machine in Commissioning mode. It does not certify physical safety, travel limits, PLC sign conventions," +
+            " emergency stops, or knife clearance. Those approvals remain separate production release gates."));
 
         return page;
     }
@@ -265,16 +299,18 @@ public sealed class ProductionSetupWizardForm : Form
     /// <returns>The constructed "Cameras and Laser" tab page.</returns>
     private TabPage BuildCameraPage()
     {
-        var page = NewPage("3. Cameras and Laser");
+        var page = NewPage("3. Cameras");
         var panel = NewVerticalPanel();
         page.Controls.Add(panel);
 
         panel.Controls.Add(NewWrappedLabel(
-            "Connect each production camera directly through Sapera. The program does not load a CCF file " +
-            "and does not change exposure, gain, pixel format, frame rate, image geometry, camera user sets. " +
-            "Frame Rate mode disables external triggering by setting TriggerMode to Off. Encoder mode +" +
-            "enables FrameStart triggering from Line1 using a rising edge. When Encoder mode is selected, the preview will" +
-            "not update until encoder trigger pulses are received.\" "));
+    "Use this page to identify and connect the two physical Genie Nano cameras. " +
+    "Enter the Sapera server and device index for the Head/Dog camera and Tail camera. " +
+    "For production, select Encoder mode. Encoder mode configures FrameStart triggering " +
+    "from Line1 using a rising edge. Frame Rate mode is only for controlled testing.\r\n\r\n" +
+    "After reconnecting, open both previews and physically verify that HEAD/DOG shows the " +
+    "head end of the machine and TAIL shows the tail end. Do not perform scanner calibration yet. " +
+    "Camera overlap and seam alignment are completed on Step 4."));
 
         ConfigureNumeric(_headDeviceIndex, 0M, 32M, 0, 0M);
         ConfigureNumeric(_tailDeviceIndex, 0M, 32M, 0, 0M);
@@ -314,7 +350,7 @@ public sealed class ProductionSetupWizardForm : Form
 
         var reconnect = new Button
         {
-            Text = "Reconnect Cameras",
+            Text = "Save Camera Settings and Reconnect",
             AutoSize = true
         };
         reconnect.Click += async (_, _) => await SaveAndReconnectCamerasAsync();
@@ -333,17 +369,12 @@ public sealed class ProductionSetupWizardForm : Form
         };
         showTail.Click += (_, _) => ShowCameraPreview(_context.ShowTailPreview, "tail");
 
-        var verifyLaser = new Button
-        {
-            Text = "Verify Laser",
-            AutoSize = true
-        };
-        verifyLaser.Click += async (_, _) => await VerifyLaserAsync();
+        
 
         buttons.Controls.Add(reconnect);
         buttons.Controls.Add(showHead);
         buttons.Controls.Add(showTail);
-        buttons.Controls.Add(verifyLaser);
+       
         panel.Controls.Add(buttons);
 
         panel.Controls.Add(NewHeading("Status"));
@@ -353,6 +384,199 @@ public sealed class ProductionSetupWizardForm : Form
 
         _laserStatus.AutoSize = true;
         _laserStatus.MaximumSize = new Size(980, 0);
+        panel.Controls.Add(_laserStatus);
+
+        panel.Controls.Add(NewWrappedLabel(
+    "NEXT: After both cameras are connected and their physical sides are confirmed, " +
+    "continue to Step 4 - Camera Alignment / Seam."));
+
+        return page;
+    }
+
+
+    /// <summary>
+    /// Builds the "Camera Alignment / Seam" tab page of the production setup wizard, providing controls for configuring
+    /// </summary>
+    /// <returns>The constructed TabPage for camera alignment and seam configuration.</returns>
+    private TabPage BuildCameraAlignmentPage()
+    {
+        var page = NewPage("4. Camera Alignment / Seam");
+        var panel = NewVerticalPanel();
+        page.Controls.Add(panel);
+
+        panel.Controls.Add(NewHeading(
+    "Align the Head/Dog and Tail camera images before calibration."));
+
+        panel.Controls.Add(NewWrappedLabel(
+            "Both cameras can see part of the same physical area. Use this page to remove unwanted " +
+            "camera edges, orient the images correctly, align them vertically, and define where the " +
+            "two images overlap.\r\n\r\n" +
+            "Place a straight or recognizable reference across the area seen by both cameras. " +
+            "Adjust the settings and repeatedly capture a combined preview until the same physical " +
+            "feature crosses the seam continuously with no duplicated section and no missing section."));
+
+        panel.Controls.Add(NewWrappedLabel(
+    "IMPORTANT: Finalize these settings before axial length or known-reference calibration. " +
+    "Changing these values later changes the combined scanner coordinate system and invalidates " +
+    "the existing scanner calibration."));
+
+        _headOnLeft.Text =
+            "Head / dog camera is on the LEFT side of the combined image.";
+        _headOnLeft.AutoSize = true;
+        panel.Controls.Add(_headOnLeft);
+
+        _reverseHeadHorizontal.Text =
+            "Reverse head image horizontally";
+        _reverseHeadHorizontal.AutoSize = true;
+        panel.Controls.Add(_reverseHeadHorizontal);
+
+        _reverseTailHorizontal.Text =
+            "Reverse tail image horizontally";
+        _reverseTailHorizontal.AutoSize = true;
+        panel.Controls.Add(_reverseTailHorizontal);
+
+        ConfigureNumeric(
+            _headCropLeftPixels,
+            0M,
+            10000M,
+            0,
+            0M);
+
+        ConfigureNumeric(
+            _headCropRightPixels,
+            0M,
+            10000M,
+            0,
+            0M);
+
+        ConfigureNumeric(
+            _tailCropLeftPixels,
+            0M,
+            10000M,
+            0,
+            0M);
+
+        ConfigureNumeric(
+            _tailCropRightPixels,
+            0M,
+            10000M,
+            0,
+            0M);
+
+        ConfigureNumeric(
+            _tailVerticalOffsetPixels,
+            -2000M,
+            2000M,
+            0,
+            0M);
+
+        ConfigureNumeric(
+            _overlapPixels,
+            0M,
+            10000M,
+            0,
+            0M);
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Head crop left (pixels)",
+                _headCropLeftPixels,
+                180));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Head crop right (pixels)",
+                _headCropRightPixels,
+                180));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Tail crop left (pixels)",
+                _tailCropLeftPixels,
+                180));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Tail crop right (pixels)",
+                _tailCropRightPixels,
+                180));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Tail vertical offset (pixels)",
+                _tailVerticalOffsetPixels,
+                180));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Head/tail overlap (pixels)",
+                _overlapPixels,
+                180));
+
+        var capturePreview = new Button
+        {
+            Text = "Apply Settings and Capture Combined Preview",
+            AutoSize = true
+        };
+
+        capturePreview.Click +=
+            async (_, _) => await CaptureCameraSeamPreviewAsync();
+
+        panel.Controls.Add(capturePreview);
+
+        _cameraSeamPreview.Width = 940;
+        _cameraSeamPreview.Height = 270;
+        _cameraSeamPreview.BorderStyle =
+            BorderStyle.FixedSingle;
+        _cameraSeamPreview.BackColor = Color.Black;
+        _cameraSeamPreview.SizeMode =
+            PictureBoxSizeMode.Zoom;
+
+        panel.Controls.Add(_cameraSeamPreview);
+
+        _cameraSeamConfirmed.Text =
+    "I verified that the same physical feature crosses the Head/Tail seam continuously, " +
+    "with no duplicated image region and no missing image region.";
+
+        _cameraSeamConfirmed.AutoSize = true;
+        panel.Controls.Add(_cameraSeamConfirmed);
+
+        var verifySeam = new Button
+        {
+            Text = "Verify and Save Camera Seam",
+            AutoSize = true
+        };
+
+        panel.Controls.Add(NewWrappedLabel(
+    "After the camera seam is verified and saved, verify that the laser stripe is visible, " +
+    "stable, and usable across the complete combined Head-to-Tail image."));
+
+        verifySeam.Click +=
+            (_, _) => VerifyCameraSeam();
+
+        panel.Controls.Add(verifySeam);
+
+        var verifyLaser = new Button
+        {
+            Text = "Verify Laser",
+            AutoSize = true
+        };
+
+        verifyLaser.Click +=
+            async (_, _) => await VerifyLaserAsync();
+
+        panel.Controls.Add(verifyLaser);
+
+        _cameraSeamStatus.AutoSize = true;
+        _cameraSeamStatus.MaximumSize =
+            new Size(980, 0);
+
+        panel.Controls.Add(_cameraSeamStatus);
+
+        _laserStatus.AutoSize = true;
+        _laserStatus.MaximumSize =
+            new Size(980, 0);
+
         panel.Controls.Add(_laserStatus);
 
         return page;
@@ -365,15 +589,16 @@ public sealed class ProductionSetupWizardForm : Form
     /// <returns></returns>
     private TabPage BuildLengthPage()
     {
-        var page = NewPage("4. Axial Length Scale");
+        var page = NewPage("5. Axial Length Scale");
         var panel = NewVerticalPanel();
         page.Controls.Add(panel);
 
         panel.Controls.Add(NewWrappedLabel(
-            "LengthPixelsPerMM converts image X distance along the block into millimeters. " +
-            "Place two visible marks a precisely known physical distance apart. Capture one " +
-            "concatenated image, click the first mark and then the second mark, enter the known " +
-            "distance, and let the wizard calculate the scale. This is separate from the radial lookup table."));
+    "Complete this step only after the Head/Tail camera seam and laser verification are finished. " +
+    "LengthPixelsPerMM converts image X distance along the complete Head-to-Tail block image into millimeters.\r\n\r\n" +
+    "Place two clearly visible marks a precisely known physical distance apart. Capture one combined " +
+    "camera image, click the first mark and then the second mark, enter the true physical distance, " +
+    "calculate the scale, and save it."));
 
         ConfigureNumeric(_knownLengthMM, 0.001M, 100000M, 3, 500M);
         ConfigureNumeric(_startPixelX, 0M, 100000M, 0, 0M);
@@ -439,7 +664,7 @@ public sealed class ProductionSetupWizardForm : Form
     /// <returns>The constructed "Known References" tab page.</returns>
     private TabPage BuildReferencePage()
     {
-        var page = NewPage("5. Known References");
+        var page = NewPage("6. Known References");
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -455,7 +680,11 @@ public sealed class ProductionSetupWizardForm : Form
         var input = NewVerticalPanel();
         input.AutoScroll = false;
         input.Controls.Add(NewWrappedLabel(
-            "Use a known round block or a carefully measured reference. Enter the measured diameter; radius is calculated automatically. The program captures synchronized head/tail frames, concatenates them using the production settings, detects the laser line, rejects unstable samples, averages each image column, and creates one physical radius band. At least two different diameters are required."));
+    "Use certified or carefully measured round references to calibrate image measurements to physical radius. " +
+    "Do not move either camera or change crop, orientation, vertical offset, overlap, or seam settings during this step.\r\n\r\n" +
+    "Enter the measured reference diameter. The system captures 36 synchronized Head/Tail pairs, " +
+    "combines them using the verified production camera seam settings, detects the laser, rejects unstable " +
+    "samples, and creates a physical radius reference band. At least two different known diameters are required."));
 
         _operatorName.Width = 350;
         _referenceName.Width = 350;
@@ -482,6 +711,11 @@ public sealed class ProductionSetupWizardForm : Form
             Text = "Capture 36 Pairs and Add Reference",
             AutoSize = true
         };
+
+        input.Controls.Add(NewWrappedLabel(
+    "Repeat this process with at least two different known diameters. " +
+    "The two references must not have the same measured diameter."));
+
         capture.Click += async (_, _) => await CaptureReferenceAsync();
         input.Controls.Add(capture);
         root.Controls.Add(input, 0, 0);
@@ -511,12 +745,16 @@ public sealed class ProductionSetupWizardForm : Form
     /// <returns></returns>
     private TabPage BuildActivationPage()
     {
-        var page = NewPage("6. Review and Activate");
+        var page = NewPage("7. Review and Activate");
         var panel = NewVerticalPanel();
         page.Controls.Add(panel);
 
         panel.Controls.Add(NewWrappedLabel(
-            "Activation writes a staged calibration package, reloads and validates it, verifies SHA-256 hashes, archives any previous active calibration, and then atomically replaces the active files. If activation fails, the newest valid archive is restored. With only two measured logs and no independent reference, the saved quality status remains CommissioningOnly."));
+     "Before generating the calibration, confirm that SQL, both cameras, physical Head/Tail assignment, " +
+     "camera seam, laser verification, axial length scale, and at least two different known reference " +
+     "diameters are complete.\r\n\r\n" +
+     "Activation creates the scanner calibration package, validates its contents and SHA-256 hashes, " +
+     "archives the previous calibration, and installs the new package as the active scanner calibration."));
 
         _independentValidationCompleted.Text =
             "An independent known reference was measured and checked against this calibration.";
@@ -538,6 +776,11 @@ public sealed class ProductionSetupWizardForm : Form
         _calibrationNotes.Multiline = true;
         _calibrationNotes.Height = 90;
         panel.Controls.Add(NewLabeledControl("Calibration notes", _calibrationNotes, 900));
+
+
+        panel.Controls.Add(NewWrappedLabel(
+    "Activating scanner calibration does NOT place the machine into unrestricted Production mode. " +
+    "Machine/PLC commissioning and responsible-person approval must still be completed."));
 
         var activate = new Button
         {
@@ -589,6 +832,57 @@ public sealed class ProductionSetupWizardForm : Form
         _tailAcquisitionMode.SelectedItem = tailCamera.Mode;
         _physicalPositionConfirmed.Checked =
             _settings.Setup.CameraPhysicalPositionsConfirmed;
+        DualCameraConcatenationSettings concatenation =
+    _settings.Acquisition.Concatenation;
+
+        _headOnLeft.Checked =
+            concatenation.HeadOnLeft;
+
+        _reverseHeadHorizontal.Checked =
+            concatenation.ReverseHeadHorizontal;
+
+        _reverseTailHorizontal.Checked =
+            concatenation.ReverseTailHorizontal;
+
+        _headCropLeftPixels.Value = ClampDecimal(
+            concatenation.HeadCropLeftPixels,
+            _headCropLeftPixels.Minimum,
+            _headCropLeftPixels.Maximum);
+
+        _headCropRightPixels.Value = ClampDecimal(
+            concatenation.HeadCropRightPixels,
+            _headCropRightPixels.Minimum,
+            _headCropRightPixels.Maximum);
+
+        _tailCropLeftPixels.Value = ClampDecimal(
+            concatenation.TailCropLeftPixels,
+            _tailCropLeftPixels.Minimum,
+            _tailCropLeftPixels.Maximum);
+
+        _tailCropRightPixels.Value = ClampDecimal(
+            concatenation.TailCropRightPixels,
+            _tailCropRightPixels.Minimum,
+            _tailCropRightPixels.Maximum);
+
+        _tailVerticalOffsetPixels.Value = ClampDecimal(
+            concatenation.TailVerticalOffsetPixels,
+            _tailVerticalOffsetPixels.Minimum,
+            _tailVerticalOffsetPixels.Maximum);
+
+        _overlapPixels.Value = ClampDecimal(
+            concatenation.OverlapPixels,
+            _overlapPixels.Minimum,
+            _overlapPixels.Maximum);
+
+        _cameraSeamConfirmed.Checked =
+            _settings.Production.CameraSeamCalibrationVerified;
+
+        _cameraSeamStatus.Text =
+            _settings.Production.CameraSeamCalibrationVerified
+                ? "Camera seam is VERIFIED for the currently saved concatenation geometry."
+                : "Camera seam still needs verification before laser and dimensional calibration.";
+
+
 
         _operatorName.Text = string.IsNullOrWhiteSpace(
             _settings.Production.CommissioningApprovedBy)
@@ -805,6 +1099,284 @@ public sealed class ProductionSetupWizardForm : Form
 
 
     /// <summary>
+    /// Applies the camera alignment settings from the form controls to the application settings.
+    /// </summary>
+    /// <returns>True if any settings were changed; otherwise, false.</returns>
+    private bool ApplyCameraAlignmentSettingsFromControls()
+    {
+        DualCameraConcatenationSettings concatenation =
+            _settings.Acquisition.Concatenation;
+
+        bool changed =
+            concatenation.HeadOnLeft !=
+                _headOnLeft.Checked ||
+
+            concatenation.ReverseHeadHorizontal !=
+                _reverseHeadHorizontal.Checked ||
+
+            concatenation.ReverseTailHorizontal !=
+                _reverseTailHorizontal.Checked ||
+
+            concatenation.HeadCropLeftPixels !=
+                decimal.ToInt32(_headCropLeftPixels.Value) ||
+
+            concatenation.HeadCropRightPixels !=
+                decimal.ToInt32(_headCropRightPixels.Value) ||
+
+            concatenation.TailCropLeftPixels !=
+                decimal.ToInt32(_tailCropLeftPixels.Value) ||
+
+            concatenation.TailCropRightPixels !=
+                decimal.ToInt32(_tailCropRightPixels.Value) ||
+
+            concatenation.TailVerticalOffsetPixels !=
+                decimal.ToInt32(_tailVerticalOffsetPixels.Value) ||
+
+            concatenation.OverlapPixels !=
+                decimal.ToInt32(_overlapPixels.Value);
+
+        concatenation.HeadOnLeft =
+            _headOnLeft.Checked;
+
+        concatenation.ReverseHeadHorizontal =
+            _reverseHeadHorizontal.Checked;
+
+        concatenation.ReverseTailHorizontal =
+            _reverseTailHorizontal.Checked;
+
+        concatenation.HeadCropLeftPixels =
+            decimal.ToInt32(_headCropLeftPixels.Value);
+
+        concatenation.HeadCropRightPixels =
+            decimal.ToInt32(_headCropRightPixels.Value);
+
+        concatenation.TailCropLeftPixels =
+            decimal.ToInt32(_tailCropLeftPixels.Value);
+
+        concatenation.TailCropRightPixels =
+            decimal.ToInt32(_tailCropRightPixels.Value);
+
+        concatenation.TailVerticalOffsetPixels =
+            decimal.ToInt32(_tailVerticalOffsetPixels.Value);
+
+        concatenation.OverlapPixels =
+            decimal.ToInt32(_overlapPixels.Value);
+
+        concatenation.Validate();
+
+        if (changed)
+        {
+            InvalidateAfterCameraGeometryChange();
+
+            SaveSettings();
+
+            Append(
+                "Camera seam geometry changed. " +
+                "Laser verification, length calibration, references, " +
+                "and active calibration were invalidated.");
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Captures a combined image for camera seam alignment after confirming the physical head/tail camera positions and applying the current settings.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    private async Task CaptureCameraSeamPreviewAsync()
+    {
+        if (!_physicalPositionConfirmed.Checked)
+        {
+            MessageBox.Show(
+                this,
+                "Confirm the physical head/tail camera positions on Step 3 first.",
+                "Camera Position Confirmation Required",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        ApplyCameraAlignmentSettingsFromControls();
+
+        if (!ConfirmCalibrationSafety())
+        {
+            return;
+        }
+
+        await RunBusyAsync(
+            "Capturing a combined image for camera seam alignment...",
+            async () =>
+            {
+                using CalibrationCaptureBatch batch =
+                    await _context.CaptureCalibrationFramesAsync(
+                        1,
+                        CancellationToken.None);
+
+                Mat source =
+                    batch.ConcatenatedFrames[0];
+
+                using Mat normalized = new();
+
+                CvInvoke.Normalize(
+                    source,
+                    normalized,
+                    0,
+                    255,
+                    Emgu.CV.CvEnum.NormType.MinMax,
+                    Emgu.CV.CvEnum.DepthType.Cv8U);
+
+                Bitmap bitmap =
+                    normalized.ToBitmap();
+
+                Image? oldImage =
+                    _cameraSeamPreview.Image;
+
+                _cameraSeamPreview.Image =
+                    bitmap;
+
+                oldImage?.Dispose();
+
+                _cameraSeamPreviewCapturedThisSession =
+                    true;
+
+                _cameraSeamConfirmed.Checked =
+                    false;
+
+                _settings.Production
+                    .CameraSeamCalibrationVerified =
+                    false;
+
+                SaveSettings();
+
+                _cameraSeamStatus.Text =
+                    $"Preview captured at {bitmap.Width} x {bitmap.Height}. " +
+                    "Adjust crop/overlap values and capture again until the seam " +
+                    "is correct, then check the verification box and save.";
+
+                Append(_cameraSeamStatus.Text);
+
+                RefreshOverallStatus();
+            });
+    }
+
+
+    /// <summary>
+    /// Verifies the camera seam alignment by checking if a combined seam preview has been captured and if the user has confirmed that
+    /// the physical feature lines up correctly across the seam. If both conditions are met, it marks the camera seam calibration as verified
+    /// in the application settings and saves the settings. It also updates the camera seam status label with the current overlap and tail
+    /// vertical offset values.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown if a combined seam preview has not been captured or if the seam verification box has not been checked.</exception>
+    private void VerifyCameraSeam()
+    {
+        try
+        {
+            ApplyCameraAlignmentSettingsFromControls();
+
+            if (!_cameraSeamPreviewCapturedThisSession)
+            {
+                throw new InvalidOperationException(
+                    "Capture a combined seam preview with the current settings before verifying the seam.");
+            }
+
+            if (!_cameraSeamConfirmed.Checked)
+            {
+                throw new InvalidOperationException(
+                    "Check the seam verification box after confirming that the same physical feature lines up correctly across the camera seam.");
+            }
+
+            _settings.Production
+                .CameraSeamCalibrationVerified = true;
+
+            SaveSettings();
+
+            _cameraSeamStatus.Text =
+                $"Camera seam VERIFIED. " +
+                $"Overlap={_settings.Acquisition.Concatenation.OverlapPixels} px; " +
+                $"tail vertical offset=" +
+                $"{_settings.Acquisition.Concatenation.TailVerticalOffsetPixels} px.";
+
+            Append(_cameraSeamStatus.Text);
+
+            RefreshOverallStatus();
+        }
+        catch (Exception ex)
+        {
+            ShowError(
+                "Camera seam verification failed",
+                ex);
+        }
+    }
+
+    /// <summary>
+    /// Invalidates the camera seam calibration and related settings after a change in camera geometry.
+    /// It resets various verification flags, clears snapshots and references, and updates the status labels accordingly.
+    /// </summary>
+    private void InvalidateAfterCameraGeometryChange()
+    {
+        _settings.Production
+            .CameraSeamCalibrationVerified = false;
+
+        _settings.Setup.LaserDetectionVerified =
+            false;
+
+        _settings.Setup.LengthCalibrationConfigured =
+            false;
+
+        _settings.Setup.PendingLengthPixelsPerMM =
+            0.0;
+
+        _settings.Setup.LengthCalibrationMeasuredUtc =
+            null;
+
+        _settings.Setup.ScannerCalibrationCreated =
+            false;
+
+        _settings.Setup
+            .ScannerCalibrationRepeatabilityVerified =
+            false;
+
+        _settings.Setup.ActiveCalibrationId =
+            string.Empty;
+
+        _settings.Setup.LastSetupCompletedUtc =
+            null;
+
+        _settings.Production.ScannerCalibrationVerified =
+            false;
+
+        _laserVerifiedThisSession = false;
+        _lengthScaleMeasuredThisSession = false;
+
+        _headCameraSnapshot = [];
+        _tailCameraSnapshot = [];
+
+        _references.Clear();
+        RefreshReferenceGrid();
+
+        _cameraSeamPreviewCapturedThisSession =
+            false;
+
+        _cameraSeamConfirmed.Checked =
+            false;
+
+        Image? oldImage =
+            _cameraSeamPreview.Image;
+
+        _cameraSeamPreview.Image =
+            null;
+
+        oldImage?.Dispose();
+
+        _laserStatus.Text =
+            "Laser verification required after camera seam geometry changes.";
+
+        _lengthStatus.Text =
+            "Length calibration required after camera seam geometry changes.";
+    }
+
+    /// <summary>
     /// Verifies the laser detection by capturing calibration frames and analyzing them. It checks if the number of
     /// valid laser frames and average detected columns meet the commissioning threshold. If successful,
     /// it updates the camera configuration snapshots and marks the laser as verified for this session.
@@ -813,6 +1385,18 @@ public sealed class ProductionSetupWizardForm : Form
     /// <exception cref="InvalidOperationException">Thrown if the laser verification does not meet the commissioning threshold.</exception>
     private async Task VerifyLaserAsync()
     {
+        if (!_settings.Production.CameraSeamCalibrationVerified)
+        {
+            MessageBox.Show(
+                this,
+                "Verify and save the camera seam before running laser verification.",
+                "Camera Seam Verification Required",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
         if (!_physicalPositionConfirmed.Checked)
         {
             MessageBox.Show(
@@ -879,6 +1463,19 @@ public sealed class ProductionSetupWizardForm : Form
     /// <returns>A task that represents the asynchronous operation.</returns>
     private async Task CaptureLengthCalibrationImageAsync()
     {
+
+        if (!_settings.Production.CameraSeamCalibrationVerified)
+        {
+            MessageBox.Show(
+                this,
+                "Verify and save the camera seam before capturing the axial length calibration image.",
+                "Camera Seam Verification Required",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
         if (!ConfirmCalibrationSafety())
         {
             return;
@@ -1201,6 +1798,12 @@ public sealed class ProductionSetupWizardForm : Form
     {
         try
         {
+            if (!_settings.Production.CameraSeamCalibrationVerified)
+            {
+                throw new InvalidOperationException(
+                    "Verify and save the camera seam before generating the scanner calibration.");
+            }
+
             if (_references.Count < 2)
             {
                 throw new InvalidOperationException(
@@ -1500,6 +2103,7 @@ public sealed class ProductionSetupWizardForm : Form
             $"SQL: {Flag(_settings.Setup.DatabaseConfigured)} | " +
             $"Cameras: {Flag(_settings.Setup.CameraConfigurationVerified)} | " +
             $"Physical sides: {Flag(_settings.Setup.CameraPhysicalPositionsConfirmed)} | " +
+            $"Camera seam: {Flag(_settings.Production.CameraSeamCalibrationVerified)} | " +
             $"Laser: {Flag(_settings.Setup.LaserDetectionVerified)} | " +
             $"Length scale: {Flag(_settings.Setup.LengthCalibrationConfigured)} | " +
             $"Known radius bands this session: {distinctRadii}/2 | " +

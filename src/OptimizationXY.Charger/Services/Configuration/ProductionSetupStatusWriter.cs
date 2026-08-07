@@ -33,7 +33,7 @@ public static class ProductionSetupStatusWriter
 
         var record = new
         {
-            SchemaVersion = 3,
+            SchemaVersion = 4,
             UpdatedUtc = DateTime.UtcNow,
             Environment.MachineName,
             WindowsIdentity = Environment.UserDomainName + "\\" + Environment.UserName,
@@ -53,7 +53,7 @@ public static class ProductionSetupStatusWriter
             },
             Cameras = new
             {
-                HeadServer = settings.Acquisition.HeadCamera.ServerName,
+                HeadServer = settings.Acquisition.HeadCamera.ServerName, 
                 TailServer = settings.Acquisition.TailCamera.ServerName,
                 HeadExpectedSerial = settings.Acquisition.HeadCamera.ExpectedSerialNumber,
                 TailExpectedSerial = settings.Acquisition.TailCamera.ExpectedSerialNumber,
@@ -61,10 +61,43 @@ public static class ProductionSetupStatusWriter
                 TailDeviceIndex = settings.Acquisition.TailCamera.DeviceIndex,
                 HeadCameraInitialization = settings.Acquisition.HeadCamera.GetInitializationDescription(),
                 TailCameraInitialization = settings.Acquisition.TailCamera.GetInitializationDescription(),
+
                 settings.Setup.CameraConfigurationVerified,
                 settings.Setup.CameraPhysicalPositionsConfirmed,
-                settings.Setup.LaserDetectionVerified
+                settings.Production.CameraSeamCalibrationVerified,
+                settings.Setup.LaserDetectionVerified,
+
+                Concatenation = new
+                {
+                    settings.Acquisition.Concatenation.HeadOnLeft,
+
+                    settings.Acquisition.Concatenation
+            .ReverseHeadHorizontal,
+
+                    settings.Acquisition.Concatenation
+            .ReverseTailHorizontal,
+
+                    settings.Acquisition.Concatenation
+            .HeadCropLeftPixels,
+
+                    settings.Acquisition.Concatenation
+            .HeadCropRightPixels,
+
+                    settings.Acquisition.Concatenation
+            .TailCropLeftPixels,
+
+                    settings.Acquisition.Concatenation
+            .TailCropRightPixels,
+
+                    settings.Acquisition.Concatenation
+            .TailVerticalOffsetPixels,
+
+                    settings.Acquisition.Concatenation
+            .OverlapPixels
+                }
+
             },
+
             Calibration = new
             {
                 settings.Setup.LengthCalibrationConfigured,

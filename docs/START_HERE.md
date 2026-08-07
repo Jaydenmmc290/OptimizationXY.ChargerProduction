@@ -14,12 +14,14 @@ This release uses settings schema 10, a separate lathe-operator scan-quality scr
 1. Install the 64-bit Sapera runtime and verify both cameras appear in Sapera Configuration/CamExpert.
 2. Install the application with `install-production.ps1`.
 3. Start the application in Commissioning mode.
-4. In Production Setup, enter each camera's Sapera server, resource index, Mono8, exposure, gain, Encoder mode, and trigger source. Leave serial blank only for the first controlled connection so the wizard can learn and lock the physical assignment.
-5. Reconnect, show both previews, and physically confirm head/dog versus tail.
-6. Complete laser verification, axial scale, known-radius calibration, and independent validation.
-7. Verify the operator form on the lathe monitor and test good, warning, and failed scans.
-8. Verify PLC ScanStart/ScanComplete behavior, XY signs, limits, readback, knife clearance, guarding, and interlocks.
-9. Run `validate-production-host.ps1`.
-10. Record approval, then enable Production mode.
+4. In Production Setup, configure each camera's Sapera server, device index, expected physical serial number, and   acquisition mode.
+5. Reconnect both cameras, open both previews, and physically confirm Head/Dog versus Tail.
+6. Configure and verify Head/Tail crop, orientation, vertical offset, overlap, and camera seam.
+7. Verify the laser using the finalized combined image.
+8. Complete axial length scale, known-radius calibration, and independent validation when available.
+9. Verify the operator form on the lathe monitor and test good, warning, and failed scans.
+10. Verify PLC ScanStart/ScanComplete behavior, XY signs, limits, readback, knife clearance, guarding, and interlocks.
+11. Run `validate-production-host.ps1`.
+12. Record approval, then enable Production mode.
 
 See `PRODUCTION_SETUP_WIZARD.md`, `PRODUCTION_DEPLOYMENT.md`, `COMMISSIONING_CHECKLIST.md`, and `IMPLEMENTATION_VALIDATION_REPORT.md` for the complete procedure and remaining machine-acceptance requirements.
