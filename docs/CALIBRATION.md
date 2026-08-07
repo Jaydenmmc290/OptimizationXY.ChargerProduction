@@ -18,7 +18,7 @@ The two `.snapshot` files are deterministic JSON records created from the live d
 
 Use **Setup / Calibration** in Commissioning mode:
 
-1. Connect the final head and tail cameras with their production server names, resource indices, serial assignments, Mono8 format, exposure, gain, and trigger settings.
+1. Connect the final head and tail cameras with their production server names, resource indices, serial assignments and trigger settings.
 2. Confirm the physical head/dog and tail assignments in the previews.
 3. Verify the laser line.
 4. Capture the final concatenated image and calculate axial pixels/mm from two known-distance marks.

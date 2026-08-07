@@ -263,9 +263,9 @@ The first launch must be treated as commissioning, not normal production operati
 2. Open **Production Setup**.
 3. Enter the final Sapera server name and resource index for each camera.
 4. Set both cameras to `Encoder` trigger mode.
-5. Set both cameras to `Mono8`.
-6. Enter and verify the final exposure and gain for each camera.
-7. Select the verified wired trigger source and activation edge.
+5. 
+6. 
+7. Select the verified wired trigger source.
 8. Reconnect both cameras.
 9. Confirm that both live previews appear and update correctly.
 10. Physically confirm which camera is the head/dog camera and which is the tail camera.
@@ -294,11 +294,10 @@ For each camera, the application performs this sequence:
 2. Creates `SapAcqDevice` without a CCF when using programmatic mode.
 3. Calls `SapAcqDevice.Create()`.
 4. Checks whether required camera features are available.
-5. Applies pixel format, exposure, gain, and trigger or frame-rate features.
-6. Reads the supported values back from the camera.
-7. Creates an immutable configuration snapshot.
-8. Creates the image buffer, transfer object, and view.
-9. Starts acquisition.
+5. Reads Trigger source and writes to it if needed for Encoder or Fixed Rate
+6. Creates the image buffer, transfer object, and view.
+7. Starts acquisition.
+
 
 When `RequireConfiguredFeatures` is enabled, a missing or rejected required feature blocks the camera connection. Do not bypass this failure without determining which feature or value was rejected.
 

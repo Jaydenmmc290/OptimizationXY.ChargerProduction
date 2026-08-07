@@ -4,10 +4,9 @@
 
 - Direct `SapAcqDevice` initialization by Sapera server name and device/resource index.
 - Physical camera identity binding: the setup wizard learns each camera serial on first controlled connection, saves the head/tail assignment, and future mismatches fail closed.
-- Programmatic GenICam feature application for Mono8, exposure, gain, trigger mode/source/activation, and free-running frame rate when selected.
 - Required-feature fail-closed behavior with per-feature diagnostics.
 - Immutable, deterministic camera-configuration snapshots for calibration and production audit hashing.
-- Setup-wizard fields for server, resource index, acquisition mode, pixel format, exposure, gain, and trigger source.
+- Setup-wizard fields for server, resource index, acquisition mode, and trigger source.
 - Calibration invalidation whenever camera identity/features or acquisition geometry changes.
 - Separate full-screen operator form with processed radius profile, missing-section highlighting, scan metrics, and PLC tag state.
 - Scan-quality analyzer built from the existing `PipelineState.BinnedRadiusField`, `ScanFrames`, geometry bin sizes, and acquisition frame target.

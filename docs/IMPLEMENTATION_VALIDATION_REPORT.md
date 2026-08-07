@@ -35,7 +35,7 @@ For each camera, programmatic connection now follows this order:
 2. create `SapAcqDevice(location)` with no CCF;
 3. call `SapAcqDevice.Create()`;
 4. read and lock the physical camera serial number;
-5. check and apply production features such as `Mono8`, exposure, gain, and trigger/frame-rate mode;
+5. check and apply trigger/frame-rate mode;
 6. read back supported feature and image-geometry values;
 7. freeze a deterministic JSON configuration snapshot for calibration and scan auditing;
 8. create the Sapera buffer, transfer, and view resources.
