@@ -199,7 +199,7 @@ metrics.ColumnStyles.Add(
         MinimumSize = new Size(1024, 700);
         Name = "OperatorScanQualityForm";
         StartPosition = FormStartPosition.CenterScreen;
-        Text = "XY Charger - Lathe Operator Scan Check";
+        Text = "XY - Lathe Operator Scan Check";
 
         ResumeLayout(false);
     }

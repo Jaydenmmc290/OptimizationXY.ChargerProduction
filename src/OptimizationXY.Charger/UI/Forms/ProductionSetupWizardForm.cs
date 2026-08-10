@@ -96,7 +96,7 @@ public sealed class ProductionSetupWizardForm : Form
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _settings = PipelineState.Instance.Settings;
 
-        Text = "Optimization XY Charger - Production Setup and Scanner Calibration";
+        Text = "Optimization XY - Production Setup and Scanner Calibration";
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(1050, 720);
         Size = new Size(1180, 790);

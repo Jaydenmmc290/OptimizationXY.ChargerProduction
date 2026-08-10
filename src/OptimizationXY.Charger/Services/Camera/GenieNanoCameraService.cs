@@ -418,6 +418,15 @@ public sealed class GenieNanoCameraService : IDisposable
             ? "<unavailable>"
             : value;
     }
+
+
+
+    /// <summary>
+    /// Reads a string feature value from the specified SapAcqDevice, throwing an exception if the feature is unavailable or cannot be read.
+    /// </summary>
+    /// <param name="device">The SapAcqDevice from which to read the feature.</param>
+    /// <param name="location">The SapLocation associated with the device.</param>
+    /// <returns>The camera serial number as a string.</returns>
     private static string ReadCameraSerialNumber(
         SapAcqDevice device,
         SapLocation location)

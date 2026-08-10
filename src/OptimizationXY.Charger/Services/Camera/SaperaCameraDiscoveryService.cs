@@ -11,6 +11,11 @@ namespace OptimizationXY.Charger.Services.Camera;
 /// </summary>
 public static class SaperaCameraDiscoveryService
 {
+
+    /// <summary>
+    /// Discovers all cameras currently visible to Sapera and returns their serial numbers.
+    /// </summary>
+    /// <returns>A read-only list of discovered cameras.</returns>
     public static IReadOnlyList<DiscoveredCamera> Discover()
     {
         var cameras = new List<DiscoveredCamera>();
@@ -78,6 +83,13 @@ public static class SaperaCameraDiscoveryService
             .ThenBy(camera => camera.DeviceIndex)];
     }
 
+
+    /// <summary>
+    /// Gets the serial number of the specified SapAcqDevice, throwing an exception if the serial number is unavailable or cannot be read.
+    /// </summary>
+    /// <param name="cameras">The collection of discovered cameras to search.</param>
+    /// <param name="assignedSerialNumber">The serial number of the camera to find.</param>
+    /// <returns>The discovered camera with the specified serial number, or null if not found.</returns>
     public static DiscoveredCamera? FindAssignedCamera(
         IEnumerable<DiscoveredCamera> cameras,
         string assignedSerialNumber)

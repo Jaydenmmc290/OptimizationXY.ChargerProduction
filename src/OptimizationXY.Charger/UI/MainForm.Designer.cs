@@ -350,7 +350,7 @@ namespace OptimizationXY.Charger.UI
             Controls.Add(BtnProductionSetup);
             Controls.Add(groupBoxOverlay);
             Name = "MainForm";
-            Text = "Optimization XY Charger";
+            Text = "Optimization XY";
             Load += MainForm_Load;
             groupBoxOverlay.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)pictureBoxLogOverlay).EndInit();
