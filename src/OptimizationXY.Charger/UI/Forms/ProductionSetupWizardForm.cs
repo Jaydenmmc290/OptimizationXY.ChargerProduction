@@ -33,12 +33,12 @@ public sealed class ProductionSetupWizardForm : Form
     private readonly TextBox _connectionString = new();
     private readonly Label _databaseStatus = new();
 
-    private readonly TextBox _headServer = new();
-    private readonly TextBox _tailServer = new();
-    private readonly NumericUpDown _headDeviceIndex = new();
-    private readonly NumericUpDown _tailDeviceIndex = new();
-    private readonly TextBox _headExpectedSerial = new();
-    private readonly TextBox _tailExpectedSerial = new();
+    private readonly ComboBox _headCameraSelection = new();
+    private readonly ComboBox _tailCameraSelection = new();
+    
+    private readonly Label _headCameraIdentity = new();
+    private readonly Label _tailCameraIdentity = new();
+    private readonly List<DiscoveredCamera> _discoveredCameras = [];
     private readonly ComboBox _headAcquisitionMode = new();
     private readonly ComboBox _tailAcquisitionMode = new();
     private readonly CheckBox _physicalPositionConfirmed = new();
@@ -304,30 +304,62 @@ public sealed class ProductionSetupWizardForm : Form
         page.Controls.Add(panel);
 
         panel.Controls.Add(NewWrappedLabel(
-    "Use this page to identify and connect the two physical Genie Nano cameras. " +
-    "Enter the Sapera server and device index for the Head/Dog camera and Tail camera. " +
-    "For production, select Encoder mode. Encoder mode configures FrameStart triggering " +
-    "from Line1 using a rising edge. Frame Rate mode is only for controlled testing.\r\n\r\n" +
-    "After reconnecting, open both previews and physically verify that HEAD/DOG shows the " +
-    "head end of the machine and TAIL shows the tail end. Do not perform scanner calibration yet. " +
-    "Camera overlap and seam alignment are completed on Step 4."));
+      "The application automatically discovers Sapera acquisition cameras connected " +
+      "to this computer. You do not need to type a Sapera server name or camera serial number.\r\n\r\n" +
 
-        ConfigureNumeric(_headDeviceIndex, 0M, 32M, 0, 0M);
-        ConfigureNumeric(_tailDeviceIndex, 0M, 32M, 0, 0M);
+      "Select which discovered physical camera is mounted at the Head/Dog position and " +
+      "which is mounted at the Tail position. The application reads and saves each camera's " +
+      "serial number automatically. Sapera server names and device indexes are treated only " +
+      "as runtime locations and may change.\r\n\r\n" +
+
+      "After assigning both cameras, reconnect them, open both previews, and physically " +
+      "verify Head/Dog versus Tail. Then continue to Step 4 for image alignment."));
+
         ConfigureModeCombo(_headAcquisitionMode);
         ConfigureModeCombo(_tailAcquisitionMode);
 
+        _headCameraSelection.DropDownStyle =
+    ComboBoxStyle.DropDownList;
+
+        _tailCameraSelection.DropDownStyle =
+            ComboBoxStyle.DropDownList;
+
         panel.Controls.Add(NewHeading("Head / Dog Camera"));
-        panel.Controls.Add(NewLabeledControl("Sapera server", _headServer, 500));
-        panel.Controls.Add(NewLabeledControl("Device index", _headDeviceIndex, 160));
-        panel.Controls.Add(NewLabeledControl("Expected serial (blank to learn)", _headExpectedSerial, 360));
-        panel.Controls.Add(NewLabeledControl("Acquisition mode", _headAcquisitionMode, 240));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Discovered camera",
+                _headCameraSelection,
+                600));
+
+        _headCameraIdentity.AutoSize = true;
+        panel.Controls.Add(_headCameraIdentity);
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Acquisition mode",
+                _headAcquisitionMode,
+                240));
+
 
         panel.Controls.Add(NewHeading("Tail Camera"));
-        panel.Controls.Add(NewLabeledControl("Sapera server", _tailServer, 500));
-        panel.Controls.Add(NewLabeledControl("Device index", _tailDeviceIndex, 160));
-        panel.Controls.Add(NewLabeledControl("Expected serial (blank to learn)", _tailExpectedSerial, 360));
-        panel.Controls.Add(NewLabeledControl("Acquisition mode", _tailAcquisitionMode, 240));
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Discovered camera",
+                _tailCameraSelection,
+                600));
+
+        _tailCameraIdentity.AutoSize = true;
+        panel.Controls.Add(_tailCameraIdentity);
+
+        panel.Controls.Add(
+            NewLabeledControl(
+                "Acquisition mode",
+                _tailAcquisitionMode,
+                240));
+
+       
 
         _physicalPositionConfirmed.Text =
             "I verified that the head preview shows the head/dog side and the tail preview shows the tail side.";
@@ -341,40 +373,86 @@ public sealed class ProductionSetupWizardForm : Form
         };
         panel.Controls.Add(_physicalPositionConfirmed);
 
-        var buttons = new FlowLayoutPanel
+        var refreshCameras = new Button
         {
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true
+            Text = "Refresh Connected Cameras",
+            AutoSize = true
         };
+
+        refreshCameras.Click += (_, _) =>
+        {
+            RefreshDiscoveredCameraList();
+        };
+
 
         var reconnect = new Button
         {
-            Text = "Save Camera Settings and Reconnect",
+            Text = "Save Camera Assignment and Reconnect",
             AutoSize = true
         };
-        reconnect.Click += async (_, _) => await SaveAndReconnectCamerasAsync();
+
+        reconnect.Click += async (_, _) =>
+        {
+            await SaveAndReconnectCamerasAsync();
+        };
+
+        var showBoth = new Button
+        {
+            Text = "Show Both Camera Previews",
+            AutoSize = true
+        };
+
+        showBoth.Click += (_, _) =>
+        {
+            ShowCameraPreview(
+                _context.ShowHeadPreview,
+                "head");
+
+            ShowCameraPreview(
+                _context.ShowTailPreview,
+                "tail");
+        };
 
         var showHead = new Button
         {
-            Text = "Show Head Preview",
+            Text = "Show Head Camera",
             AutoSize = true
         };
-        showHead.Click += (_, _) => ShowCameraPreview(_context.ShowHeadPreview, "head");
+
+        showHead.Click += (_, _) =>
+        {
+            ShowCameraPreview(
+                _context.ShowHeadPreview,
+                "head");
+        };
+
 
         var showTail = new Button
         {
-            Text = "Show Tail Preview",
+            Text = "Show Tail Camera",
             AutoSize = true
         };
-        showTail.Click += (_, _) => ShowCameraPreview(_context.ShowTailPreview, "tail");
 
-        
+        showTail.Click += (_, _) =>
+        {
+            ShowCameraPreview(
+                _context.ShowTailPreview,
+                "tail");
+        };
 
+
+        var buttons = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = true
+        };
+
+        buttons.Controls.Add(refreshCameras);
         buttons.Controls.Add(reconnect);
+        buttons.Controls.Add(showBoth);
         buttons.Controls.Add(showHead);
         buttons.Controls.Add(showTail);
-       
+
         panel.Controls.Add(buttons);
 
         panel.Controls.Add(NewHeading("Status"));
@@ -408,12 +486,22 @@ public sealed class ProductionSetupWizardForm : Form
     "Align the Head/Dog and Tail camera images before calibration."));
 
         panel.Controls.Add(NewWrappedLabel(
-            "Both cameras can see part of the same physical area. Use this page to remove unwanted " +
-            "camera edges, orient the images correctly, align them vertically, and define where the " +
-            "two images overlap.\r\n\r\n" +
-            "Place a straight or recognizable reference across the area seen by both cameras. " +
-            "Adjust the settings and repeatedly capture a combined preview until the same physical " +
-            "feature crosses the seam continuously with no duplicated section and no missing section."));
+     "1. Place a straight board, bar, tape line, or other recognizable reference " +
+     "where BOTH cameras can see it.\r\n\r\n" +
+
+     "2. Use Head/Tail orientation first so the machine runs continuously from " +
+     "Head/Dog to Tail.\r\n\r\n" +
+
+     "3. Use the crop controls only to remove unusable outer image edges.\r\n\r\n" +
+
+     "4. Adjust Tail Vertical Offset until the same physical feature is at the same " +
+     "height in both images.\r\n\r\n" +
+
+     "5. Adjust Overlap until the shared feature appears exactly once — not doubled " +
+     "and not missing.\r\n\r\n" +
+
+     "6. Capture another preview after each change. Save the seam only when the " +
+     "transition is continuous."));
 
         panel.Controls.Add(NewWrappedLabel(
     "IMPORTANT: Finalize these settings before axial length or known-reference calibration. " +
@@ -507,11 +595,91 @@ public sealed class ProductionSetupWizardForm : Form
                 _tailVerticalOffsetPixels,
                 180));
 
+        var verticalNudgeButtons =
+    new FlowLayoutPanel
+    {
+        AutoSize = true,
+        WrapContents = false
+    };
+
+        foreach (int amount in new[] { -10, -1, 1, 10 })
+        {
+            int delta = amount;
+
+            var button = new Button
+            {
+                Text = delta > 0
+                    ? $"+{delta}px"
+                    : $"{delta}px",
+
+                AutoSize = true
+            };
+
+            button.Click += (_, _) =>
+            {
+                decimal next =
+                    _tailVerticalOffsetPixels.Value +
+                    delta;
+
+                _tailVerticalOffsetPixels.Value =
+                    Math.Clamp(
+                        next,
+                        _tailVerticalOffsetPixels.Minimum,
+                        _tailVerticalOffsetPixels.Maximum);
+
+                InvalidateAfterCameraGeometryChange();
+            };
+
+            verticalNudgeButtons.Controls.Add(button);
+        }
+
+        panel.Controls.Add(verticalNudgeButtons);
+
         panel.Controls.Add(
             NewLabeledControl(
                 "Head/tail overlap (pixels)",
                 _overlapPixels,
                 180));
+
+        var overlapNudgeButtons =
+    new FlowLayoutPanel
+    {
+        AutoSize = true,
+        WrapContents = false
+    };
+
+        foreach (int amount in new[] { -10, -1, 1, 10 })
+        {
+            int delta = amount;
+
+            var button = new Button
+            {
+                Text = delta > 0
+                    ? $"+{delta}px"
+                    : $"{delta}px",
+
+                AutoSize = true
+            };
+
+            button.Click += (_, _) =>
+            {
+                decimal next =
+                    _overlapPixels.Value +
+                    delta;
+
+                _overlapPixels.Value =
+                    Math.Clamp(
+                        next,
+                        _overlapPixels.Minimum,
+                        _overlapPixels.Maximum);
+
+                InvalidateAfterCameraGeometryChange();
+            };
+
+            overlapNudgeButtons.Controls.Add(button);
+        }
+
+        panel.Controls.Add(overlapNudgeButtons);
 
         var capturePreview = new Button
         {
@@ -524,8 +692,8 @@ public sealed class ProductionSetupWizardForm : Form
 
         panel.Controls.Add(capturePreview);
 
-        _cameraSeamPreview.Width = 940;
-        _cameraSeamPreview.Height = 270;
+        _cameraSeamPreview.Width = 1000;
+        _cameraSeamPreview.Height = 450;
         _cameraSeamPreview.BorderStyle =
             BorderStyle.FixedSingle;
         _cameraSeamPreview.BackColor = Color.Black;
@@ -820,16 +988,39 @@ public sealed class ProductionSetupWizardForm : Form
             ? SqlDatabaseSetupService.DefaultConnectionString
             : _settings.Database.ConnectionString;
 
-        CameraDeviceSettings headCamera = _settings.Acquisition.HeadCamera;
-        CameraDeviceSettings tailCamera = _settings.Acquisition.TailCamera;
-        _headServer.Text = headCamera.ServerName;
-        _tailServer.Text = tailCamera.ServerName;
-        _headDeviceIndex.Value = ClampDecimal(headCamera.DeviceIndex, _headDeviceIndex.Minimum, _headDeviceIndex.Maximum);
-        _tailDeviceIndex.Value = ClampDecimal(tailCamera.DeviceIndex, _tailDeviceIndex.Minimum, _tailDeviceIndex.Maximum);
-        _headExpectedSerial.Text = headCamera.ExpectedSerialNumber;
-        _tailExpectedSerial.Text = tailCamera.ExpectedSerialNumber;
-        _headAcquisitionMode.SelectedItem = headCamera.Mode;
-        _tailAcquisitionMode.SelectedItem = tailCamera.Mode;
+        CameraDeviceSettings headCamera =
+    _settings.Acquisition.HeadCamera;
+
+        CameraDeviceSettings tailCamera =
+            _settings.Acquisition.TailCamera;
+
+
+        // Acquisition modes can be loaded immediately.
+        _headAcquisitionMode.SelectedItem =
+            headCamera.Mode;
+
+        _tailAcquisitionMode.SelectedItem =
+            tailCamera.Mode;
+
+
+        // Show the currently assigned physical identity.
+        // The actual ComboBox selection is populated after camera discovery.
+        _headCameraIdentity.Text =
+            string.IsNullOrWhiteSpace(headCamera.AssignedSerialNumber)
+                ? "No Head / Dog camera has been assigned."
+                : $"Assigned Head / Dog serial: {headCamera.AssignedSerialNumber}";
+
+        _tailCameraIdentity.Text =
+            string.IsNullOrWhiteSpace(tailCamera.AssignedSerialNumber)
+                ? "No Tail camera has been assigned."
+                : $"Assigned Tail serial: {tailCamera.AssignedSerialNumber}";
+
+
+        // Discover the cameras currently connected to this computer and,
+        // when possible, select the saved Head and Tail serial numbers.
+        RefreshDiscoveredCameraList();
+
+
         _physicalPositionConfirmed.Checked =
             _settings.Setup.CameraPhysicalPositionsConfirmed;
         DualCameraConcatenationSettings concatenation =
@@ -1008,95 +1199,323 @@ public sealed class ProductionSetupWizardForm : Form
     private async Task SaveAndReconnectCamerasAsync()
     {
         await RunBusyAsync(
-            "Saving camera connection and applying the selected acquisition mode...",
+            "Saving camera assignments and reconnecting cameras...",
             async () =>
             {
-                CameraDeviceSettings head = _settings.Acquisition.HeadCamera;
-                CameraDeviceSettings tail = _settings.Acquisition.TailCamera;
-
-                string previousHeadServer = head.ServerName;
-                string previousTailServer = tail.ServerName;
-                int previousHeadIndex = head.DeviceIndex;
-                int previousTailIndex = tail.DeviceIndex;
-                string previousHeadSerial = head.ExpectedSerialNumber;
-                string previousTailSerial = tail.ExpectedSerialNumber;
-
-                string headServer = _headServer.Text.Trim();
-                string tailServer = _tailServer.Text.Trim();
-                if (string.IsNullOrWhiteSpace(headServer) ||
-                    string.IsNullOrWhiteSpace(tailServer))
+                if (_headCameraSelection.SelectedItem is not DiscoveredCamera selectedHead)
                 {
                     throw new InvalidOperationException(
-                        "Enter a Sapera server name for both the head and tail cameras.");
+                        "Select the physical Head / Dog camera.");
                 }
 
-                head.InitializationMode = CameraInitializationMode.Programmatic;
-                tail.InitializationMode = CameraInitializationMode.Programmatic;
-                head.ServerName = headServer;
-                tail.ServerName = tailServer;
-                head.DeviceIndex = decimal.ToInt32(_headDeviceIndex.Value);
-                tail.DeviceIndex = decimal.ToInt32(_tailDeviceIndex.Value);
-                head.ExpectedSerialNumber = _headExpectedSerial.Text.Trim();
-                tail.ExpectedSerialNumber = _tailExpectedSerial.Text.Trim();
-                head.Mode = _headAcquisitionMode.SelectedItem is AcquisitionMode headMode
-                    ? headMode
-                    : AcquisitionMode.Encoder;
-                tail.Mode = _tailAcquisitionMode.SelectedItem is AcquisitionMode tailMode
-                    ? tailMode
-                    : AcquisitionMode.Encoder;
-                head.TriggerSource = head.Mode == AcquisitionMode.Encoder
-                    ? "Line1"
-                    : "FixedRate";
-                tail.TriggerSource = tail.Mode == AcquisitionMode.Encoder
-                    ? "Line1"
-                    : "FixedRate";
+                if (_tailCameraSelection.SelectedItem is not DiscoveredCamera selectedTail)
+                {
+                    throw new InvalidOperationException(
+                        "Select the physical Tail camera.");
+                }
 
-                bool connectionIdentityChanged =
-                    !string.Equals(previousHeadServer, head.ServerName, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(previousTailServer, tail.ServerName, StringComparison.OrdinalIgnoreCase) ||
-                    previousHeadIndex != head.DeviceIndex ||
-                    previousTailIndex != tail.DeviceIndex ||
-                    !string.Equals(previousHeadSerial, head.ExpectedSerialNumber, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(previousTailSerial, tail.ExpectedSerialNumber, StringComparison.OrdinalIgnoreCase);
+                if (string.Equals(
+                    selectedHead.SerialNumber,
+                    selectedTail.SerialNumber,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "The same physical camera cannot be assigned to both Head / Dog and Tail.");
+                }
 
-                if (connectionIdentityChanged)
+                CameraDeviceSettings head =
+                    _settings.Acquisition.HeadCamera;
+
+                CameraDeviceSettings tail =
+                    _settings.Acquisition.TailCamera;
+
+
+                // ---------------------------------------------------------
+                // Remember the physical camera assignments BEFORE changing
+                // anything. Calibration should only be invalidated when the
+                // actual physical camera assignment changes.
+                // ---------------------------------------------------------
+                string previousHeadSerial =
+                    head.AssignedSerialNumber;
+
+                string previousTailSerial =
+                    tail.AssignedSerialNumber;
+
+
+                // ---------------------------------------------------------
+                // Assign the currently discovered Sapera runtime locations.
+                //
+                // ServerName and DeviceIndex are NOT permanent identities.
+                // They are simply where Sapera currently sees each camera.
+                // ---------------------------------------------------------
+                head.ServerName =
+                    selectedHead.ServerName;
+
+                head.DeviceIndex =
+                    selectedHead.DeviceIndex;
+
+                tail.ServerName =
+                    selectedTail.ServerName;
+
+                tail.DeviceIndex =
+                    selectedTail.DeviceIndex;
+
+
+                // ---------------------------------------------------------
+                // Save the physical serial numbers as the permanent
+                // Head / Tail camera identities.
+                // ---------------------------------------------------------
+                head.AssignedSerialNumber =
+                    selectedHead.SerialNumber;
+
+                tail.AssignedSerialNumber =
+                    selectedTail.SerialNumber;
+
+
+                // ---------------------------------------------------------
+                // Programmatic configuration
+                // ---------------------------------------------------------
+                head.InitializationMode =
+                    CameraInitializationMode.Programmatic;
+
+                tail.InitializationMode =
+                    CameraInitializationMode.Programmatic;
+
+
+                // ---------------------------------------------------------
+                // Acquisition mode
+                // ---------------------------------------------------------
+                head.Mode =
+                    _headAcquisitionMode.SelectedItem is AcquisitionMode headMode
+                        ? headMode
+                        : AcquisitionMode.Encoder;
+
+                tail.Mode =
+                    _tailAcquisitionMode.SelectedItem is AcquisitionMode tailMode
+                        ? tailMode
+                        : AcquisitionMode.Encoder;
+
+
+                // ---------------------------------------------------------
+                // Trigger source
+                //
+                // Encoder  -> external Line1
+                // FrameRate -> camera internal FixedRate
+                // ---------------------------------------------------------
+                head.TriggerSource =
+                    head.Mode == AcquisitionMode.Encoder
+                        ? "Line1"
+                        : "FixedRate";
+
+                tail.TriggerSource =
+                    tail.Mode == AcquisitionMode.Encoder
+                        ? "Line1"
+                        : "FixedRate";
+
+
+                // ---------------------------------------------------------
+                // Calibration should ONLY be invalidated if the physical
+                // Head/Tail assignment changed.
+                //
+                // Sapera changing Nano-M1920_1 to Nano-M1920_2 should NOT
+                // invalidate calibration.
+                // ---------------------------------------------------------
+                bool physicalCameraAssignmentChanged =
+                    !string.Equals(
+                        previousHeadSerial,
+                        head.AssignedSerialNumber,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    !string.Equals(
+                        previousTailSerial,
+                        tail.AssignedSerialNumber,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (physicalCameraAssignmentChanged)
+                {
                     InvalidateCalibrationDependentSetup();
 
-                SaveSettings();
-                CameraHardwareStatus status = await _context.ReconnectCamerasAsync();
+                    Append(
+                        "Physical camera assignment changed. " +
+                        "Scanner calibration-dependent setup has been invalidated.");
+                }
 
+
+                // Save the discovered assignments before reconnecting.
+                SaveSettings();
+
+
+                // ---------------------------------------------------------
+                // Reconnect using the selected cameras.
+                // ---------------------------------------------------------
+                CameraHardwareStatus status =
+                    await _context.ReconnectCamerasAsync();
+
+
+                // ---------------------------------------------------------
+                // Verify the serial numbers reported by the cameras after
+                // the real connection.
+                // ---------------------------------------------------------
                 if (status.HeadConnected &&
                     !string.IsNullOrWhiteSpace(status.HeadSerialNumber))
                 {
-                    head.ExpectedSerialNumber = status.HeadSerialNumber;
-                    _headExpectedSerial.Text = status.HeadSerialNumber;
+                    if (!string.Equals(
+                        head.AssignedSerialNumber,
+                        status.HeadSerialNumber,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Head / Dog camera identity changed during connection. " +
+                            $"Selected serial '{head.AssignedSerialNumber}', " +
+                            $"but connected camera reported '{status.HeadSerialNumber}'.");
+                    }
+
+                    head.AssignedSerialNumber =
+                        status.HeadSerialNumber;
                 }
+
 
                 if (status.TailConnected &&
                     !string.IsNullOrWhiteSpace(status.TailSerialNumber))
                 {
-                    tail.ExpectedSerialNumber = status.TailSerialNumber;
-                    _tailExpectedSerial.Text = status.TailSerialNumber;
+                    if (!string.Equals(
+                        tail.AssignedSerialNumber,
+                        status.TailSerialNumber,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Tail camera identity changed during connection. " +
+                            $"Selected serial '{tail.AssignedSerialNumber}', " +
+                            $"but connected camera reported '{status.TailSerialNumber}'.");
+                    }
+
+                    tail.AssignedSerialNumber =
+                        status.TailSerialNumber;
                 }
 
+
+                // ---------------------------------------------------------
+                // Camera setup is verified only when both cameras connected
+                // and both programmatic configurations were applied.
+                // ---------------------------------------------------------
                 _settings.Setup.CameraConfigurationVerified =
                     status.HeadConnected &&
                     status.TailConnected &&
                     status.HeadConfigurationLoaded &&
                     status.TailConfigurationLoaded;
 
+
                 SaveSettings();
+
                 RefreshCameraStatus(status);
                 RefreshOverallStatus();
 
-               Append(
-                $"Camera reconnect complete. " +
-                $"Head mode={head.Mode}; Tail mode={tail.Mode}. " +
-                $"FrameRate uses TriggerMode=Off. " +
-                $"Encoder uses TriggerMode=On and TriggerSource=Line1.");
+
+                Append(
+                    $"Camera reconnect complete. " +
+                    $"Head={head.ServerName} [{head.DeviceIndex}], " +
+                    $"Serial={head.AssignedSerialNumber}, Mode={head.Mode}. " +
+                    $"Tail={tail.ServerName} [{tail.DeviceIndex}], " +
+                    $"Serial={tail.AssignedSerialNumber}, Mode={tail.Mode}. " +
+                    $"FrameRate uses TriggerMode=Off. " +
+                    $"Encoder uses TriggerMode=On and TriggerSource=Line1.");
             });
     }
 
+    private void RefreshDiscoveredCameraList()
+    {
+        _discoveredCameras.Clear();
+
+        _headCameraSelection.Items.Clear();
+        _tailCameraSelection.Items.Clear();
+
+        IReadOnlyList<DiscoveredCamera> discovered;
+
+        try
+        {
+            discovered =
+                _context.DiscoverCameras();
+        }
+        catch (Exception ex)
+        {
+            _cameraStatus.Text =
+                "Camera discovery failed: " +
+                ex.Message;
+
+            Append(_cameraStatus.Text);
+            return;
+        }
+
+        _discoveredCameras.AddRange(discovered);
+
+        foreach (DiscoveredCamera camera in _discoveredCameras)
+        {
+            _headCameraSelection.Items.Add(camera);
+            _tailCameraSelection.Items.Add(camera);
+        }
+
+        CameraDeviceSettings head =
+            _settings.Acquisition.HeadCamera;
+
+        CameraDeviceSettings tail =
+            _settings.Acquisition.TailCamera;
+
+        SelectAssignedCamera(
+            _headCameraSelection,
+            head.AssignedSerialNumber);
+
+        SelectAssignedCamera(
+            _tailCameraSelection,
+            tail.AssignedSerialNumber);
+
+        _headCameraIdentity.Text =
+            string.IsNullOrWhiteSpace(head.AssignedSerialNumber)
+                ? "No Head / Dog camera assigned."
+                : $"Assigned Head / Dog serial: {head.AssignedSerialNumber}";
+
+        _tailCameraIdentity.Text =
+            string.IsNullOrWhiteSpace(tail.AssignedSerialNumber)
+                ? "No Tail camera assigned."
+                : $"Assigned Tail serial: {tail.AssignedSerialNumber}";
+
+        _cameraStatus.Text =
+            discovered.Count switch
+            {
+                0 =>
+                    "No Sapera acquisition cameras discovered.",
+
+                1 =>
+                    "1 Sapera acquisition camera discovered. Two are required.",
+
+                _ =>
+                    $"{discovered.Count} Sapera acquisition cameras discovered."
+            };
+
+        Append(_cameraStatus.Text);
+    }
+
+    private static void SelectAssignedCamera(
+    ComboBox comboBox,
+    string serialNumber)
+    {
+        if (string.IsNullOrWhiteSpace(serialNumber))
+            return;
+
+        for (int i = 0; i < comboBox.Items.Count; i++)
+        {
+            if (comboBox.Items[i] is not DiscoveredCamera camera)
+                continue;
+
+            if (string.Equals(
+                camera.SerialNumber,
+                serialNumber,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                comboBox.SelectedIndex = i;
+                return;
+            }
+        }
+    }
 
     /// <summary>
     /// Applies the camera alignment settings from the form controls to the application settings.

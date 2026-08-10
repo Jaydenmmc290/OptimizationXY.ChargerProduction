@@ -67,11 +67,11 @@ public static class AppSettingsValidator
                 "Head and tail cameras cannot use the same Sapera server and device index.");
         }
 
-        if (!string.IsNullOrWhiteSpace(head.ExpectedSerialNumber) &&
-            !string.IsNullOrWhiteSpace(tail.ExpectedSerialNumber) &&
+        if (!string.IsNullOrWhiteSpace(head.AssignedSerialNumber) &&
+            !string.IsNullOrWhiteSpace(tail.AssignedSerialNumber) &&
             string.Equals(
-                head.ExpectedSerialNumber.Trim(),
-                tail.ExpectedSerialNumber.Trim(),
+                head.AssignedSerialNumber.Trim(),
+                tail.AssignedSerialNumber.Trim(),
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -107,8 +107,7 @@ public static class AppSettingsValidator
     {
         if (camera.Position != expectedPosition)
             throw new InvalidOperationException($"{expectedPosition} camera position is incorrect.");
-        if (string.IsNullOrWhiteSpace(camera.ServerName))
-            throw new InvalidOperationException($"{expectedPosition} camera ServerName is required.");
+        
         if (camera.DeviceIndex < 0)
             throw new InvalidOperationException($"{expectedPosition} camera DeviceIndex cannot be negative.");
         if (camera.BufferCount < 4)

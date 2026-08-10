@@ -190,11 +190,17 @@ metrics.ColumnStyles.Add(
         BackColor = Color.White;
         ClientSize = new Size(1280, 800);
         Controls.Add(mainLayout);
-        ControlBox = false;
+
+        ControlBox = true;
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
+        MinimizeBox = true;
+
         MinimumSize = new Size(1024, 700);
         Name = "OperatorScanQualityForm";
-        StartPosition = FormStartPosition.Manual;
+        StartPosition = FormStartPosition.CenterScreen;
         Text = "XY Charger - Lathe Operator Scan Check";
+
         ResumeLayout(false);
     }
 

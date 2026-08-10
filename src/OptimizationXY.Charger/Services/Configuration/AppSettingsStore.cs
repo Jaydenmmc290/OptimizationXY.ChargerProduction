@@ -135,12 +135,12 @@ public static class AppSettingsStore
             settings.Acquisition.HeadCamera ??= new CameraDeviceSettings
             {
                 Position = CameraPosition.Head,
-                ServerName = "Nano-M1920_1"
+                
             };
             settings.Acquisition.TailCamera ??= new CameraDeviceSettings
             {
                 Position = CameraPosition.Tail,
-                ServerName = "Nano-M1920_2"
+                
             };
         }
 
@@ -177,8 +177,8 @@ public static class AppSettingsStore
                 CameraInitializationMode.Programmatic;
             settings.Acquisition.TailCamera.InitializationMode =
                 CameraInitializationMode.Programmatic;
-            settings.Acquisition.HeadCamera.ExpectedSerialNumber = string.Empty;
-            settings.Acquisition.TailCamera.ExpectedSerialNumber = string.Empty;
+            settings.Acquisition.HeadCamera.AssignedSerialNumber = string.Empty;
+            settings.Acquisition.TailCamera.AssignedSerialNumber = string.Empty;
 
             settings.Setup.CameraConfigurationVerified = false;
             settings.Setup.CameraPhysicalPositionsConfirmed = false;

@@ -52,6 +52,13 @@ public sealed class GenieNanoCameraService : IDisposable
         ArgumentNullException.ThrowIfNull(panelCameraView);
         settings.Validate();
 
+        if (string.IsNullOrWhiteSpace(settings.ServerName))
+        {
+            throw new InvalidOperationException(
+                $"{settings.Position} camera has not been resolved to a Sapera device. " +
+                "Run camera discovery and assign the physical camera first.");
+        }
+
         try
         {
             Disconnect();
@@ -94,14 +101,14 @@ public sealed class GenieNanoCameraService : IDisposable
                     "The camera serial number could not be read. Production camera identity cannot be verified.");
             }
 
-            if (!string.IsNullOrWhiteSpace(settings.ExpectedSerialNumber) &&
+            if (!string.IsNullOrWhiteSpace(settings.AssignedSerialNumber) &&
                 !string.Equals(
-                    settings.ExpectedSerialNumber.Trim(),
+                    settings.AssignedSerialNumber.Trim(),
                     ConnectedSerialNumber,
                     StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"Camera identity mismatch for {settings.Position}. Expected serial '{settings.ExpectedSerialNumber}', connected serial '{ConnectedSerialNumber}'. Clear or correct the expected serial in Production Setup only when intentionally replacing a camera, then recalibrate.");
+                    $"Camera identity mismatch for {settings.Position}. Expected serial '{settings.AssignedSerialNumber}', connected serial '{ConnectedSerialNumber}'. Clear or correct the expected serial in Production Setup only when intentionally replacing a camera, then recalibrate.");
             }
 
             var appliedFeatures = new SortedDictionary<string, object?>(StringComparer.Ordinal)

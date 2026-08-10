@@ -100,15 +100,22 @@ public static class ProductionReadinessEvaluator
                 ? "Both cameras are opened directly by Sapera server/device index and reject missing production-critical features."
                 : "Production requires Programmatic camera initialization with RequireConfiguredFeatures enabled for both cameras.");
 
-        string headExpectedSerial = settings.Acquisition.HeadCamera.ExpectedSerialNumber?.Trim() ?? string.Empty;
-        string tailExpectedSerial = settings.Acquisition.TailCamera.ExpectedSerialNumber?.Trim() ?? string.Empty;
+        string headAssignedSerial =
+     settings.Acquisition.HeadCamera
+         .AssignedSerialNumber?.Trim() ??
+     string.Empty;
+
+        string tailAssignedSerial =
+            settings.Acquisition.TailCamera
+                .AssignedSerialNumber?.Trim() ??
+            string.Empty;
         bool configuredCameraIdentity =
-            !string.IsNullOrWhiteSpace(headExpectedSerial) &&
-            !string.IsNullOrWhiteSpace(tailExpectedSerial) &&
-            !string.Equals(headExpectedSerial, tailExpectedSerial, StringComparison.OrdinalIgnoreCase);
+            !string.IsNullOrWhiteSpace(headAssignedSerial) &&
+            !string.IsNullOrWhiteSpace(tailAssignedSerial) &&
+            !string.Equals(headAssignedSerial, tailAssignedSerial, StringComparison.OrdinalIgnoreCase);
         bool capturedCameraIdentity =
-            SnapshotSerialMatches(state.HeadCameraConfigurationSnapshot, headExpectedSerial) &&
-            SnapshotSerialMatches(state.TailCameraConfigurationSnapshot, tailExpectedSerial);
+            SnapshotSerialMatches(state.HeadCameraConfigurationSnapshot, headAssignedSerial) &&
+            SnapshotSerialMatches(state.TailCameraConfigurationSnapshot, tailAssignedSerial);
         bool cameraIdentityBound = configuredCameraIdentity && capturedCameraIdentity;
 
         Add(
@@ -118,8 +125,10 @@ public static class ProductionReadinessEvaluator
                 ? ProductionCheckStatus.Pass
                 : ProductionCheckStatus.Block,
             cameraIdentityBound
-                ? $"Head serial {headExpectedSerial} and tail serial {tailExpectedSerial} match the capture-time Sapera snapshots."
-                : "Production requires two distinct expected camera serial numbers, and each capture-time direct-camera snapshot must match its assigned physical camera.");
+    ? $"Head camera serial {headAssignedSerial} and Tail camera serial " +
+      $"{tailAssignedSerial} match the capture-time camera snapshots."
+    : "Production requires two distinct physical cameras to be assigned as " +
+      "Head and Tail, and the capture-time camera identities must match those assignments.");
 
         bool encoderMode =
             settings.Acquisition.HeadCamera.Mode ==

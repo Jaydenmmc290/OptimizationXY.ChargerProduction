@@ -278,15 +278,26 @@ Keep the application in **Commissioning** mode until every required scanner, PLC
 
 ### 8.3 Connect and identify both cameras
 
-9. Open **Step 3 - Cameras**.
-10. Enter the final Sapera server name and zero-based device index for the Head/Dog camera.
-11. Enter the final Sapera server name and zero-based device index for the Tail camera.
-12. Use **Encoder** acquisition mode for production.
-13. Leave the expected serial number blank only for the first controlled connection if the application must learn the physical serial number.
-14. Select **Save Camera Settings and Reconnect**.
-15. Open the Head preview and confirm that it physically shows the Head/Dog side of the machine.
-16. Open the Tail preview and confirm that it physically shows the Tail side of the machine.
-17. Save the physical-side confirmation.
+### Connect and assign both cameras
+
+1. Verify both physical cameras are powered and visible to Sapera.
+2. Open **Production Setup**.
+3. Open **Step 3 - Cameras**.
+4. Select **Refresh Connected Cameras**.
+5. Confirm that two acquisition cameras are discovered.
+6. Select the physical camera mounted at Head / Dog.
+7. Select the physical camera mounted at Tail.
+8. Confirm that the two selections have different serial numbers.
+9. Select Encoder mode for both cameras.
+10. Select **Save Camera Assignment and Reconnect**.
+11. Open both previews.
+12. Physically verify the Head / Dog and Tail assignments.
+
+Do not manually depend on Sapera names such as `Nano-M1920_1` or
+`Nano-M1920_2`. Those names are runtime device locations and are discovered
+by the application.
+
+The physical camera serial number is the persistent Head / Tail identity.
 
 Do not continue to dimensional calibration until the two physical camera assignments are correct.
 

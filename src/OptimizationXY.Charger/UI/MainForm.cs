@@ -430,6 +430,8 @@ public partial class MainForm : Form
             AppendDiagnostics($"Head camera: {headSettings.GetInitializationDescription()}");
             AppendDiagnostics($"Tail camera: {tailSettings.GetInitializationDescription()}");
 
+            ResolveAssignedCameras();
+
             _headCameraService = new GenieNanoCameraService();
             _tailCameraService = new GenieNanoCameraService();
 
@@ -1177,6 +1179,74 @@ public partial class MainForm : Form
         return normalized;
     }
 
+
+    private void ResolveAssignedCameras()
+    {
+        IReadOnlyList<DiscoveredCamera> cameras =
+            SaperaCameraDiscoveryService.Discover();
+
+        if (cameras.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No Sapera acquisition cameras were discovered. " +
+                "Verify the cameras are powered, connected, and visible in Sapera.");
+        }
+
+        CameraDeviceSettings head =
+            _cameraSettings.HeadCamera;
+
+        CameraDeviceSettings tail =
+            _cameraSettings.TailCamera;
+
+        DiscoveredCamera? discoveredHead =
+            SaperaCameraDiscoveryService.FindAssignedCamera(
+                cameras,
+                head.AssignedSerialNumber);
+
+        DiscoveredCamera? discoveredTail =
+            SaperaCameraDiscoveryService.FindAssignedCamera(
+                cameras,
+                tail.AssignedSerialNumber);
+
+        if (discoveredHead is null)
+        {
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(head.AssignedSerialNumber)
+                    ? "No Head/Dog camera has been assigned. Open Production Setup and assign one of the discovered cameras."
+                    : $"The assigned Head/Dog camera serial '{head.AssignedSerialNumber}' was not found.");
+        }
+
+        if (discoveredTail is null)
+        {
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(tail.AssignedSerialNumber)
+                    ? "No Tail camera has been assigned. Open Production Setup and assign one of the discovered cameras."
+                    : $"The assigned Tail camera serial '{tail.AssignedSerialNumber}' was not found.");
+        }
+
+        if (string.Equals(
+            discoveredHead.SerialNumber,
+            discoveredTail.SerialNumber,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The same physical camera cannot be assigned to both Head and Tail.");
+        }
+
+        head.ServerName = discoveredHead.ServerName;
+        head.DeviceIndex = discoveredHead.DeviceIndex;
+
+        tail.ServerName = discoveredTail.ServerName;
+        tail.DeviceIndex = discoveredTail.DeviceIndex;
+
+        AppendDiagnostics(
+            $"Resolved Head camera serial {head.AssignedSerialNumber} -> " +
+            $"{head.ServerName} [{head.DeviceIndex}]");
+
+        AppendDiagnostics(
+            $"Resolved Tail camera serial {tail.AssignedSerialNumber} -> " +
+            $"{tail.ServerName} [{tail.DeviceIndex}]");
+    }
     /// <summary>
     /// Handles a camera frame event for the specified camera position. It checks if the application is disposing
     /// or if the frame is null or empty, and disposes of the frame if necessary. If the preview should be updated,
@@ -1461,7 +1531,12 @@ string message)
             var context = new ProductionSetupContext
             {
                 GetCameraStatus = GetCameraHardwareStatus,
+
+                DiscoverCameras =
+        () => SaperaCameraDiscoveryService.Discover(),
+
                 ReconnectCamerasAsync = ReconnectCamerasForSetupAsync,
+               
                 CaptureCalibrationFramesAsync = CaptureCalibrationFramesAsync,
                 ShowHeadPreview = ShowHeadPreviewForSetup,
                 ShowTailPreview = ShowTailPreviewForSetup,
@@ -1491,14 +1566,22 @@ string message)
     /// <exception cref="InvalidOperationException">Thrown if the head camera preview form is unavailable or disposed.</exception>
     private void ShowHeadPreviewForSetup()
     {
-        if (_headCameraForm is null || _headCameraForm.IsDisposed)
+        if (_headCameraForm is null ||
+            _headCameraForm.IsDisposed)
         {
             throw new InvalidOperationException(
-                "The head camera preview form is unavailable.");
+                "The Head camera preview host is unavailable. " +
+                "Reconnect the cameras and try again.");
         }
 
-        _headCameraForm.Show(this);
+        if (!_headCameraForm.Visible)
+            _headCameraForm.Show(this);
+
+        _headCameraForm.WindowState =
+            FormWindowState.Normal;
+
         _headCameraForm.BringToFront();
+        _headCameraForm.Activate();
     }
 
 
@@ -1508,14 +1591,22 @@ string message)
     /// <exception cref="InvalidOperationException">Thrown if the tail camera preview form is unavailable or disposed.</exception>
     private void ShowTailPreviewForSetup()
     {
-        if (_tailCameraForm is null || _tailCameraForm.IsDisposed)
+        if (_tailCameraForm is null ||
+            _tailCameraForm.IsDisposed)
         {
             throw new InvalidOperationException(
-                "The tail camera preview form is unavailable.");
+                "The Tail camera preview host is unavailable. " +
+                "Reconnect the cameras and try again.");
         }
 
-        _tailCameraForm.Show(this);
+        if (!_tailCameraForm.Visible)
+            _tailCameraForm.Show(this);
+
+        _tailCameraForm.WindowState =
+            FormWindowState.Normal;
+
         _tailCameraForm.BringToFront();
+        _tailCameraForm.Activate();
     }
 
 

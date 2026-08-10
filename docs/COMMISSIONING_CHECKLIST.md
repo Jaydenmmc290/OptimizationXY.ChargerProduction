@@ -11,9 +11,14 @@
 
 ## Cameras, seam, and laser
 
-* [ ] Head camera uses the correct Sapera server and resource index.
-* [ ] Tail camera uses the correct Sapera server and resource index.
-* [ ] Head and Tail expected serial numbers are populated, distinct, and match the physical cameras.
+- [ ] Both physical cameras appear in automatic Sapera discovery.
+- [ ] The correct physical camera is assigned to Head / Dog.
+- [ ] The correct physical camera is assigned to Tail.
+- [ ] Head and Tail assigned serial numbers were read directly from the cameras.
+- [ ] Head and Tail serial numbers are populated and distinct.
+- [ ] Camera assignments resolve successfully after a reconnect.
+- [ ] Changing Sapera server enumeration does not change the physical camera assignment.
+- [ ] Both camera previews can be hidden and reopened without a Sapera resource-lock error.
 * [ ] Both cameras use `Programmatic` initialization.
 * [ ] Both cameras use Encoder mode and the verified wired trigger configuration.
 * [ ] Head preview physically shows the Head/Dog end.

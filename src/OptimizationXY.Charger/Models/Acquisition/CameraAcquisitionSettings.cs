@@ -12,13 +12,13 @@ public sealed class CameraAcquisitionSettings
 
     /// <summary>
     /// Saved configuration for one physical camera. ServerName and DeviceIndex
-    /// locate the Sapera resource. ExpectedSerialNumber verifies that the correct
+    /// locate the Sapera resource. AssignedSerialNumber verifies that the correct
     /// physical camera is connected at that machine position.
     /// </summary>
     public CameraDeviceSettings HeadCamera { get; set; } = new()
     {
         Position = CameraPosition.Head,
-        ServerName = "Nano-M1920_1",
+        ServerName = string.Empty,
         DeviceIndex = 0,
         InitializationMode = CameraInitializationMode.Programmatic,
         BufferCount = 8,
@@ -31,13 +31,13 @@ public sealed class CameraAcquisitionSettings
 
     /// <summary>
     /// Saved configuration for one physical camera. ServerName and DeviceIndex
-    /// locate the Sapera resource. ExpectedSerialNumber verifies that the correct
+    /// locate the Sapera resource. AssignedSerialNumber verifies that the correct
     /// physical camera is connected at that machine position.
     /// </summary>
     public CameraDeviceSettings TailCamera { get; set; } = new()
     {
         Position = CameraPosition.Tail,
-        ServerName = "Nano-M1920_2",
+        ServerName = string.Empty,
         DeviceIndex = 0,
         InitializationMode = CameraInitializationMode.Programmatic,
         BufferCount = 8,
@@ -87,11 +87,11 @@ public sealed class CameraAcquisitionSettings
                 "The head and tail cameras cannot use the same Sapera server and device index.");
         }
 
-        if (!string.IsNullOrWhiteSpace(HeadCamera.ExpectedSerialNumber) &&
-            !string.IsNullOrWhiteSpace(TailCamera.ExpectedSerialNumber) &&
+        if (!string.IsNullOrWhiteSpace(HeadCamera.AssignedSerialNumber) &&
+            !string.IsNullOrWhiteSpace(TailCamera.AssignedSerialNumber) &&
             string.Equals(
-                HeadCamera.ExpectedSerialNumber.Trim(),
-                TailCamera.ExpectedSerialNumber.Trim(),
+                HeadCamera.AssignedSerialNumber.Trim(),
+                TailCamera.AssignedSerialNumber.Trim(),
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -161,7 +161,11 @@ public sealed class CameraDeviceSettings
     public CameraPosition Position { get; set; }
     public string ServerName { get; set; } = string.Empty;
     public int DeviceIndex { get; set; }
-    public string ExpectedSerialNumber { get; set; } = string.Empty;
+    /// <summary>
+    /// Serial number learned directly from the physical camera assigned
+    /// to this machine position. This is the persistent camera identity.
+    /// </summary>
+    public string AssignedSerialNumber { get; set; } = string.Empty;
     public CameraInitializationMode InitializationMode { get; set; } =
         CameraInitializationMode.Programmatic;
     public string ConfigurationFileName { get; set; } = string.Empty;
@@ -190,10 +194,8 @@ public sealed class CameraDeviceSettings
     /// </summary>
     public void Validate()
     {
-        if (string.IsNullOrWhiteSpace(ServerName))
-            throw new ArgumentException($"{Position} camera ServerName is required.");
-        if (DeviceIndex < 0)
-            throw new ArgumentOutOfRangeException(nameof(DeviceIndex));
+        
+            
         if (BufferCount < 4)
             throw new ArgumentOutOfRangeException(nameof(BufferCount), "BufferCount must be at least 4.");
         if (!double.IsFinite(AcquisitionFrameRate) || AcquisitionFrameRate <= 0 || AcquisitionFrameRate > 1000)

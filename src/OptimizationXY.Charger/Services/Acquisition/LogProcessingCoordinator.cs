@@ -158,53 +158,28 @@ public sealed class LogProcessingCoordinator
     }
 
 
-    /// <summary>
-    /// Verifies that the completed capture matches the active scanner calibration.
-    /// </summary>
-    /// <param name="calibration">The active scanner calibration to verify against.</param>
-    /// <param name="headConfiguration">The head camera configuration snapshot from the capture.</param>
-    /// <param name="tailConfiguration">The tail camera configuration snapshot from the capture.</param>
-    /// <param name="acquisitionSettings">The camera acquisition settings used for the capture.</param>
-    /// <param name="frames">The collection of ScanFrame objects representing the captured frames.</param>
-    /// <exception cref="InvalidOperationException"></exception>
+   
     private static void VerifyCaptureMatchesCalibration(
-        ScannerLookupTable calibration,
-        byte[]? headConfiguration,
-        byte[]? tailConfiguration,
-        CameraAcquisitionSettings acquisitionSettings,
-        IReadOnlyList<ScanFrame> frames)
+      ScannerLookupTable calibration,
+      byte[]? headConfiguration,
+      byte[]? tailConfiguration,
+      CameraAcquisitionSettings acquisitionSettings,
+      IReadOnlyList<ScanFrame> frames)
     {
         ArgumentNullException.ThrowIfNull(acquisitionSettings);
         ArgumentNullException.ThrowIfNull(frames);
 
-        string headServerName = acquisitionSettings.HeadCamera.ServerName;
-        string tailServerName = acquisitionSettings.TailCamera.ServerName;
+       
+
         if (headConfiguration is not { Length: > 0 } ||
             tailConfiguration is not { Length: > 0 })
         {
             throw new InvalidOperationException(
-                "The capture does not contain both camera-configuration snapshots required to verify scanner calibration compatibility.");
+                "The capture does not contain both camera-configuration snapshots " +
+                "required to verify scanner calibration compatibility.");
         }
 
-        if (!string.IsNullOrWhiteSpace(calibration.HeadCameraServerName) &&
-            !string.Equals(
-                calibration.HeadCameraServerName,
-                headServerName,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"The active calibration was created for head camera server '{calibration.HeadCameraServerName}', but the current setting is '{headServerName}'. Recalibrate or restore the correct camera assignment.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(calibration.TailCameraServerName) &&
-            !string.Equals(
-                calibration.TailCameraServerName,
-                tailServerName,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"The active calibration was created for tail camera server '{calibration.TailCameraServerName}', but the current setting is '{tailServerName}'. Recalibrate or restore the correct camera assignment.");
-        }
+      
 
         string currentGeometryHash =
             ScannerCalibrationCompatibility.ComputeAcquisitionGeometrySha256(
@@ -216,12 +191,17 @@ public sealed class LogProcessingCoordinator
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "The current head/tail crop, orientation, overlap, seam, or frame-pair configuration does not match the active scanner calibration. Restore the calibrated settings or recalibrate.");
+                "The current head/tail crop, orientation, overlap, seam, or " +
+                "frame-pair configuration does not match the active scanner calibration. " +
+                "Restore the calibrated settings or recalibrate.");
         }
 
         var dimensions = frames
-            .Where(frame => frame.GrayImage is not null && !frame.GrayImage.IsEmpty)
-            .Select(frame => (frame.GrayImage!.Width, frame.GrayImage.Height))
+            .Where(frame =>
+                frame.GrayImage is not null &&
+                !frame.GrayImage.IsEmpty)
+            .Select(frame =>
+                (frame.GrayImage!.Width, frame.GrayImage.Height))
             .Distinct()
             .ToList();
 
@@ -235,32 +215,43 @@ public sealed class LogProcessingCoordinator
             dimensions[0].Height != calibration.ImageHeight)
         {
             throw new InvalidOperationException(
-                $"The active calibration expects {calibration.ImageWidth}x{calibration.ImageHeight} concatenated images, but the capture is {dimensions[0].Width}x{dimensions[0].Height}. Recalibrate or restore the calibrated camera/concatenation settings.");
+                $"The active calibration expects " +
+                $"{calibration.ImageWidth}x{calibration.ImageHeight} concatenated images, " +
+                $"but the capture is " +
+                $"{dimensions[0].Width}x{dimensions[0].Height}. " +
+                $"Recalibrate or restore the calibrated camera/concatenation settings.");
         }
 
-        string headHash = Convert.ToHexString(
-            SHA256.HashData(headConfiguration));
-        string tailHash = Convert.ToHexString(
-            SHA256.HashData(tailConfiguration));
+        string headHash =
+            Convert.ToHexString(
+                SHA256.HashData(headConfiguration));
+
+        string tailHash =
+            Convert.ToHexString(
+                SHA256.HashData(tailConfiguration));
 
         if (!string.IsNullOrWhiteSpace(
                 calibration.HeadCameraConfigurationSha256) &&
             !CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(calibration.HeadCameraConfigurationSha256),
+                Convert.FromHexString(
+                    calibration.HeadCameraConfigurationSha256),
                 Convert.FromHexString(headHash)))
         {
             throw new InvalidOperationException(
-                "The currently loaded head-camera configuration does not match the camera configuration used to create the active scanner calibration.");
+                "The currently loaded head-camera configuration does not match " +
+                "the camera configuration used to create the active scanner calibration.");
         }
 
         if (!string.IsNullOrWhiteSpace(
                 calibration.TailCameraConfigurationSha256) &&
             !CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(calibration.TailCameraConfigurationSha256),
+                Convert.FromHexString(
+                    calibration.TailCameraConfigurationSha256),
                 Convert.FromHexString(tailHash)))
         {
             throw new InvalidOperationException(
-                "The currently loaded tail-camera configuration does not match the camera configuration used to create the active scanner calibration.");
+                "The currently loaded tail-camera configuration does not match " +
+                "the camera configuration used to create the active scanner calibration.");
         }
     }
 

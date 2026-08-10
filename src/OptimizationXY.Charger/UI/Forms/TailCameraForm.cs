@@ -64,6 +64,21 @@ public partial class TailCameraForm : Form
         base.OnFormClosed(e);
     }
 
+    protected override void OnFormClosing(
+    FormClosingEventArgs e)
+    {
+        if (e.CloseReason ==
+            CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
+        base.OnFormClosing(e);
+    }
+
+
     /// <summary>
     /// A custom PictureBox control that enables double buffering to reduce flickering during image updates.
     /// </summary>

@@ -2,26 +2,40 @@
 
 The setup wizard now configures both Genie Nano cameras directly through Sapera LT. Normal production operation does **not** load a `.ccf` file. A legacy CCF mode remains in the camera service only for controlled troubleshooting and migration.
 
-## Camera page
+## Camera discovery and assignment
 
-For each camera enter and verify:
+The Production Setup Wizard automatically discovers acquisition cameras currently
+visible to Sapera. Camera server names are not manually entered and are not used
+as permanent physical-camera identities.
 
-- Sapera server name, for example `Nano-M1920_1`.
-- Expected physical serial number. Leave blank only for the first controlled connection; the wizard learns it from the camera and saves it. Future mismatches fail closed.
-- Zero-based Sapera device/resource index, normally `0`.
-- Acquisition mode: `Encoder` for production or `FrameRate` for controlled testing.
+For each discovered camera the wizard displays:
 
+- current Sapera server name;
+- current device/resource index;
+- physical camera serial number.
 
-Press **Save Camera Settings and Reconnect**. The application constructs `SapLocation(serverName, deviceIndex)`, creates `SapAcqDevice` without a configuration file, and applies the required camera feature of writing to TriggerSource before creating buffers and transfer resources.
+Assign one discovered physical camera to **Head / Dog** and one to **Tail**.
 
-Changing a server, resource index, expected serial, pixel format, exposure, gain, trigger source, trigger activation, acquisition mode, crop, flip, overlap, or seam invalidates the active scanner calibration. This is intentional: those settings can change the image coordinate system or laser measurement.
+The application saves the serial number read directly from each camera as the
+persistent physical-camera assignment. The Sapera server name and device index
+are runtime locations and may change when cameras are reconnected, replaced,
+rediscovered, or enumerated in a different order.
 
-Open both previews and physically confirm:
+On application startup or camera reconnect, the software:
 
-- Head preview = head/dog side.
-- Tail preview = tail side.
-- Laser stripe is visible and stable.
+1. discovers the currently available Sapera acquisition devices;
+2. reads their physical serial numbers;
+3. locates the serial assigned to Head / Dog;
+4. locates the serial assigned to Tail;
+5. updates the current Sapera server name and device index;
+6. connects to those resolved devices;
+7. verifies the camera identity again after connection.
 
+A change in Sapera server name alone does not invalidate scanner calibration.
+
+Replacing a physical camera with a different serial number DOES require the new
+camera to be explicitly assigned to that machine position and the affected
+scanner calibration to be repeated.
 
 ## Calibration snapshot
 
@@ -35,28 +49,36 @@ Complete the setup wizard in order. Camera registration must be finalized before
 
 1. Put the machine in a calibration-safe state: machine motion inhibited, knife retracted, reference secured, guarded area clear, and normal PLC production scanning inhibited.
 2. Configure and verify the local SQL database.
-3. Connect both cameras using their final Sapera server name and device index.
-4. Select `Encoder` acquisition mode for production.
-5. Reconnect both cameras and verify their physical serial identities.
-6. Open both camera previews.
-7. Physically confirm that the Head/Dog preview shows the Head/Dog side and the Tail preview shows the Tail side.
-8. Open **Camera Alignment / Seam**.
-9. Configure Head/Tail image order and horizontal reversal.
-10. Configure Head and Tail crop values.
-11. Configure Tail vertical registration.
-12. Configure the Head/Tail overlap.
-13. Capture a combined preview and adjust the settings until a physical feature crosses the seam continuously with no duplicated or missing image region.
-14. Verify and save the camera seam.
-15. Verify the laser using the finalized combined-image geometry.
-16. Measure and save the axial pixels-per-millimeter scale.
-17. Capture at least two known constant-diameter references with different measured diameters.
-18. Complete independent validation measurements when available.
-19. Generate, validate, archive, and activate the scanner calibration package.
-20. Perform controlled dry scans.
-21. Complete PLC direction, travel-limit, knife-clearance, guarding, interlock, emergency-stop, and operator-display validation.
-22. Run final production-host validation.
-23. Record responsible-person commissioning approval.
-24. Enable Production mode only after all required release gates pass.
+3. Open **Step 3 - Cameras**.
+4. Select **Refresh Connected Cameras**.
+5. Confirm that both physical cameras appear in the discovered-camera list.
+6. Assign the physical Head / Dog camera.
+7. Assign the physical Tail camera.
+8. Select Encoder acquisition mode for both cameras.
+9. Select **Save Camera Assignment and Reconnect**.
+10. Select **Show Both Camera Previews**.
+11. Confirm that the Head / Dog preview shows the Head / Dog side.
+12. Confirm that the Tail preview shows the Tail side.
+13. Close either preview when desired. Closing a preview hides the window and
+    does not disconnect or destroy the active Sapera camera resource.
+14. Continue to **Step 4 - Camera Alignment / Seam**.
+15. Open **Camera Alignment / Seam**.
+16. Configure Head/Tail image order and horizontal reversal.
+17. Configure Head and Tail crop values.
+18. Configure Tail vertical registration.
+19. Configure the Head/Tail overlap.
+20. Capture a combined preview and adjust the settings until a physical feature crosses the seam continuously with no duplicated or missing image region.
+21. Verify and save the camera seam.
+22. Verify the laser using the finalized combined-image geometry.
+23. Measure and save the axial pixels-per-millimeter scale.
+24. Capture at least two known constant-diameter references with different measured diameters.
+25. Complete independent validation measurements when available.
+26. Generate, validate, archive, and activate the scanner calibration package.
+27. Perform controlled dry scans.
+28. Complete PLC direction, travel-limit, knife-clearance, guarding, interlock, emergency-stop, and operator-display validation.
+29. Run final production-host validation.
+30. Record responsible-person commissioning approval.
+31. Enable Production mode only after all required release gates pass.
 
 Changing the Sapera camera identity, acquisition configuration, image crop, camera order, horizontal reversal, vertical offset, overlap, seam, or other calibration-critical geometry after scanner calibration invalidates the affected calibration. Restore the calibrated settings or repeat the scanner calibration before returning to production.
 

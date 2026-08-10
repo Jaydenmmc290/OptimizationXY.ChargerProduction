@@ -55,8 +55,8 @@ public static class ProductionSetupStatusWriter
             {
                 HeadServer = settings.Acquisition.HeadCamera.ServerName, 
                 TailServer = settings.Acquisition.TailCamera.ServerName,
-                HeadExpectedSerial = settings.Acquisition.HeadCamera.ExpectedSerialNumber,
-                TailExpectedSerial = settings.Acquisition.TailCamera.ExpectedSerialNumber,
+                HeadExpectedSerial = settings.Acquisition.HeadCamera.AssignedSerialNumber,
+                TailExpectedSerial = settings.Acquisition.TailCamera.AssignedSerialNumber,
                 HeadDeviceIndex = settings.Acquisition.HeadCamera.DeviceIndex,
                 TailDeviceIndex = settings.Acquisition.TailCamera.DeviceIndex,
                 HeadCameraInitialization = settings.Acquisition.HeadCamera.GetInitializationDescription(),
