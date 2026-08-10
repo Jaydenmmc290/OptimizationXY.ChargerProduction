@@ -60,8 +60,13 @@ public static class AppSettingsValidator
         ValidateCameraDeviceShape(head, CameraPosition.Head);
         ValidateCameraDeviceShape(tail, CameraPosition.Tail);
 
-        if (string.Equals(head.ServerName, tail.ServerName, StringComparison.OrdinalIgnoreCase) &&
-            head.DeviceIndex == tail.DeviceIndex)
+        if (!string.IsNullOrWhiteSpace(head.ServerName) &&
+     !string.IsNullOrWhiteSpace(tail.ServerName) &&
+     string.Equals(
+         head.ServerName,
+         tail.ServerName,
+         StringComparison.OrdinalIgnoreCase) &&
+     head.DeviceIndex == tail.DeviceIndex)
         {
             throw new InvalidOperationException(
                 "Head and tail cameras cannot use the same Sapera server and device index.");
