@@ -748,6 +748,17 @@ public sealed class PlcIntegrationSettings
     public bool WriteCarriageRetractFirst { get; set; } = true;
 
     /// <summary>
+    /// Maximum amount of time to wait for the required PLC network
+    /// before creating the application's XY connection.
+    /// </summary>
+    public int StartupNetworkWaitMilliseconds { get; set; } = 10000;
+
+    /// <summary>
+    /// Interval between PLC network availability checks during startup.
+    /// </summary>
+    public int StartupNetworkCheckIntervalMilliseconds { get; set; } = 500;
+
+    /// <summary>
     /// In production, processing waits for the PLC-controlled rotation cycle to
     /// assert ScanComplete after all 36 synchronized frame pairs are present.
     /// </summary>

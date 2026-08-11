@@ -22,3 +22,5 @@ public sealed class DiagnosticsCollector
     private void Increment(string key) =>
         _counters.AddOrUpdate(key, 1, static (_, current) => current + 1);
 }
+
+//Test for Click Once

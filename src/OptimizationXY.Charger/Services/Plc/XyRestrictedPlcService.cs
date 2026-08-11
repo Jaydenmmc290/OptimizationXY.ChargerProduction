@@ -113,7 +113,12 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
     /// <summary>
     /// Initializes the XYRestricted connection and subscribes to tag change events.
     /// </summary>
-    public void Start()
+    /// <summary>
+    /// Initializes the single XYRestricted connection used for the application lifetime.
+    /// Before creating XY, the service briefly waits for the required PLC network.
+    /// No PLC writes are allowed unless XY reports that it is connected.
+    /// </summary>
+    public async Task StartAsync(CancellationToken token = default)
     {
         ThrowIfDisposed();
 
@@ -123,34 +128,88 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
             return;
         }
 
+        // Only one XY instance is allowed to own the connection.
         if (_xy is not null)
             return;
 
         try
         {
+            Log("Waiting for XY PLC network...");
+
+            DateTime timeout =
+                DateTime.UtcNow.AddMilliseconds(
+                    _settings.StartupNetworkWaitMilliseconds);
+
+            while (!PlcNetwork.IsRequiredNetworkAvailable())
+            {
+                token.ThrowIfCancellationRequested();
+
+                if (DateTime.UtcNow >= timeout)
+                {
+                    Log(
+                        "XY PLC network was not available before the startup timeout. " +
+                        "PLC integration will remain disconnected.");
+
+                    ConnectionStateChanged?.Invoke(this, false);
+                    return;
+                }
+
+                await Task.Delay(
+                    _settings.StartupNetworkCheckIntervalMilliseconds,
+                    token);
+            }
+
+            Log("XY PLC network detected. Initializing connection.");
+
+            // IMPORTANT:
+            // Create exactly one XY instance and retain it for the
+            // application lifetime, per the XYRestricted consumer guide.
             _xy = new XY();
             _xy.TagDataChanged += OnTagDataChanged;
 
             bool connected = _xy.IsConnected;
+
             ConnectionStateChanged?.Invoke(this, connected);
 
             if (!connected)
             {
-                Log("XYRestricted initialized in disconnected mode. PLC writes remain blocked.");
+                Log(
+                    "XYRestricted initialized but reports disconnected. " +
+                    "PLC writes remain blocked.");
+
                 return;
             }
 
             Log("XYRestricted PLC connection initialized.");
 
-            // Establish current input state. Results arrive through the event.
+            // Establish current input state.
+            // These results return through TagDataChanged.
             _xy.ReadTag(XyTag.ScanStart);
             _xy.ReadTag(XyTag.ScanComplete);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
+            Log("PLC initialization was cancelled.");
+            ConnectionStateChanged?.Invoke(this, false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The guide specifically identifies InvalidOperationException
+            // as an initialization failure such as a licensing problem.
             Logger.Error(ex, "PLC initialization failed.");
             Log($"PLC initialization failed: {ex.Message}");
+
             DisposeConnection();
+
+            ConnectionStateChanged?.Invoke(this, false);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Unexpected PLC initialization failure.");
+            Log($"Unexpected PLC initialization failure: {ex.Message}");
+
+            DisposeConnection();
+
             ConnectionStateChanged?.Invoke(this, false);
         }
     }

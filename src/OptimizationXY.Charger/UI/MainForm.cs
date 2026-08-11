@@ -291,7 +291,7 @@ public partial class MainForm : Form
     /// </summary>
     /// <param name="sender">The source of the event.</param>
     /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-    private void MainForm_Load(object sender, EventArgs e)
+    private async void MainForm_Load(object sender, EventArgs e)
     {
         try
         {
@@ -304,7 +304,7 @@ public partial class MainForm : Form
             //InitializeCameraPreviewForms();
             InitializeOperatorView();
             InitializeCameraServices();
-            InitializePlcIntegration();
+            await InitializePlcIntegrationAsync();
             StartDiagnosticsTimer();
         }
         catch (Exception ex)
@@ -514,11 +514,12 @@ public partial class MainForm : Form
     /// to its events, and starting the service.
     /// If PLC integration is disabled in the settings, it logs a message and does not initialize the service.
     /// </summary>
-    private void InitializePlcIntegration()
+    private async Task InitializePlcIntegrationAsync()
     {
         DisposePlcIntegration();
 
         var plcSettings = PipelineState.Instance.Settings.Plc;
+
         if (!plcSettings.Enabled)
         {
             AppendDiagnostics("[PLC] Integration disabled in settings.");
@@ -531,7 +532,7 @@ public partial class MainForm : Form
         _plcService.ScanStartChanged += PlcService_ScanStartChanged;
         _plcService.ConnectionStateChanged += PlcService_ConnectionStateChanged;
         _plcService.ScanCompleteChanged += PlcService_ScanCompleteChanged;
-        _plcService.Start();
+        await _plcService.StartAsync();
     }
 
     /// <summary>
