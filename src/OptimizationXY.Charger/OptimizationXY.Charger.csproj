@@ -22,9 +22,6 @@
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>false</SelfContained>
 
-
-    
-   
     <UseSapera Condition="'$(UseSapera)' == ''">true</UseSapera>
     <RequireSapera Condition="'$(RequireSapera)' == ''">false</RequireSapera>
     <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(SAPERA_SDK_DIR)</SaperaSdkDir>
@@ -36,11 +33,8 @@
     <HasSaperaSdk Condition="'$(UseSapera)' == 'true' and Exists('$(SaperaAssemblyPath)')">true</HasSaperaSdk>
     <HasSaperaSdk Condition="'$(HasSaperaSdk)' == ''">false</HasSaperaSdk>
     <DefineConstants Condition="'$(HasSaperaSdk)' == 'true'">$(DefineConstants);SAPERA</DefineConstants>
-   
   </PropertyGroup>
 
-
-  
   <ItemGroup>
     <PackageReference Include="Emgu.CV" Version="4.13.0.5924" />
     <PackageReference Include="Emgu.CV.Bitmap" Version="4.13.0.5924" />
@@ -70,8 +64,6 @@
     </Reference>
   </ItemGroup>
 
-  
-
   <ItemGroup>
     <None Remove="NLog.config" />
 
@@ -85,7 +77,6 @@
     <Error Condition="!Exists('$(XyRestrictedAssemblyPath)')" Text="XYRestricted.dll was not found at $(XyRestrictedAssemblyPath)." />
     <Error Condition="!Exists('$(AsCommAssemblyPath)')" Text="AutomatedSolutions.ASCommStd.dll was not found at $(AsCommAssemblyPath)." />
   </Target>
-
 
   <Target Name="ReportSaperaBuildMode" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(RequireSapera)' == 'true' and '$(HasSaperaSdk)' != 'true'" Text="A hardware build was requested, but the Sapera SDK assembly was not found. Set SAPERA_SDK_DIR or SaperaSdkDir, or explicitly build with UseSapera=false." />

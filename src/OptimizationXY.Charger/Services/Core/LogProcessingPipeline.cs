@@ -318,7 +318,7 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // PROCESS ROTATING SCAN FRAMES
     // Processes each frame in the rotating scan folder, building a profile for each.
     // ------------------------------------------------------------
-   
+
     internal void ProcessRotatingScanFrames(ScannerLookupTable lookupTable, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -1266,7 +1266,7 @@ BuildFinalSpindleRecommendation(
 
     // ------------------------------------------------------------
     // GEOMETRY-ONLY SPINDLE OPTIMIZATION
-    
+
     // Runs after the complete measurement/defect-analysis pipeline. Defect,
     // adaptive-risk, movement-penalty, and uniform-risk scores are reported
     // after selection only; they never influence the chosen geometry position.

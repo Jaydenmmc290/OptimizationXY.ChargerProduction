@@ -35,7 +35,7 @@ public sealed class ProductionSetupWizardForm : Form
 
     private readonly ComboBox _headCameraSelection = new();
     private readonly ComboBox _tailCameraSelection = new();
-    
+
     private readonly Label _headCameraIdentity = new();
     private readonly Label _tailCameraIdentity = new();
     private readonly List<DiscoveredCamera> _discoveredCameras = [];
@@ -359,7 +359,7 @@ public sealed class ProductionSetupWizardForm : Form
                 _tailAcquisitionMode,
                 240));
 
-       
+
 
         _physicalPositionConfirmed.Text =
             "I verified that the head preview shows the head/dog side and the tail preview shows the tail side.";
