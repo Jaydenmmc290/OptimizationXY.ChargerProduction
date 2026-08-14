@@ -17,18 +17,39 @@ public sealed class GenieNanoCameraService : IDisposable
     public event EventHandler<string>? DiagnosticsMessage;
 
     public void Connect(CameraDeviceSettings settings) => ThrowUnavailable();
-    public void Connect(CameraDeviceSettings settings, Control panelCameraView) => ThrowUnavailable();
+
+    public void Connect(
+        CameraDeviceSettings settings,
+        Control panelCameraView) =>
+        ThrowUnavailable();
+
     public void StartLive() => ThrowUnavailable();
-    public void StartManagedFrameCapture() => ThrowUnavailable();
-    public void StopLive() { }
-    public void StopManagedFrameCapture() { }
-    public void Disconnect() { }
+
+    public void StartManagedFrameCapture() =>
+        ThrowUnavailable();
+
+    public void StopLive()
+    {
+    }
+
+    public void StopManagedFrameCapture()
+    {
+    }
+
+    public void Disconnect()
+    {
+    }
+
     public void Dispose() => Disconnect();
 
     private void ThrowUnavailable()
     {
-        DiagnosticsMessage?.Invoke(this, MissingSdkMessage);
-        throw new PlatformNotSupportedException(MissingSdkMessage);
+        DiagnosticsMessage?.Invoke(
+            this,
+            MissingSdkMessage);
+
+        throw new PlatformNotSupportedException(
+            MissingSdkMessage);
     }
-} 
+}
 #endif

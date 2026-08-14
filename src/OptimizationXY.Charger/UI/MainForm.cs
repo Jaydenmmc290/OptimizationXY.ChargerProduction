@@ -2358,9 +2358,26 @@ string message)
             return;
         }
 
+        string line =
+     $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} - {message}";
+
         Logger.Info(message);
+
         txtDiagnostics.AppendText(
-            $"{DateTime.Now:HH:mm:ss.fff} - {message}\r\n");
+            line + Environment.NewLine);
+
+        try
+        {
+            File.AppendAllText(
+                ApplicationPaths.OperatorDiagnosticsLogPath,
+                line + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(
+                ex,
+                "Failed to write operator diagnostics log.");
+        }
     }
 
     // ================================================================

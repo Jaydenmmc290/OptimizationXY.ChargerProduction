@@ -68,17 +68,31 @@ internal static class Program
             AppContext.BaseDirectory,
             "NLog.config");
 
-        LogManager.Setup().LoadConfigurationFromFile(configPath);
-
-        if (LogManager.Configuration is { } configuration)
+        if (!File.Exists(configPath))
         {
-            configuration.Variables["logDirectory"] =
-                ApplicationPaths.LogDirectory;
-
-            LogManager.ReconfigExistingLoggers();
+            throw new FileNotFoundException(
+                $"NLog configuration file was not found: {configPath}",
+                configPath);
         }
-    }
 
+        LogManager.Setup()
+            .LoadConfigurationFromFile(configPath);
+
+        if (LogManager.Configuration is null)
+        {
+            throw new InvalidOperationException(
+                $"NLog failed to load its configuration from: {configPath}");
+        }
+
+        LogManager.Configuration.Variables["logDirectory"] =
+            ApplicationPaths.LogDirectory;
+
+        LogManager.ReconfigExistingLoggers();
+
+        Logger.Info(
+            "NLog initialized. Log directory: {0}",
+            ApplicationPaths.LogDirectory);
+    }
     /// <summary>
     /// Configures global exception handling for the application.
     /// </summary>

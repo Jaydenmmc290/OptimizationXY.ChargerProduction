@@ -15,6 +15,8 @@ public static class ApplicationPaths
     // Directory for log files.
     public static string LogDirectory => Path.Combine(RootDirectory, "Logs");
 
+    public static string OperatorDiagnosticsLogPath =>Path.Combine(LogDirectory,"OperatorDiagnostics.log");
+
     // Directory for calibration data, including archive and staging.
     public static string CalibrationDirectory => Path.Combine(ConfigDirectory, "Calibration");
 

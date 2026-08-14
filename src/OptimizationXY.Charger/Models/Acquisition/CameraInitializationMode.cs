@@ -7,7 +7,7 @@ namespace OptimizationXY.Charger.Models.Acquisition;
 /// as a controlled legacy fallback.
 /// </summary>
 public enum CameraInitializationMode
-{ 
+{
     Programmatic,
     ConfigurationFile
 }

@@ -193,7 +193,7 @@ metrics.ColumnStyles.Add(
 
         ControlBox = true;
         FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
+        MaximizeBox = true;
         MinimizeBox = true;
 
         MinimumSize = new Size(1024, 700);

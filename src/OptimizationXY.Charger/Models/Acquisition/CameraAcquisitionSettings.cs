@@ -194,8 +194,8 @@ public sealed class CameraDeviceSettings
     /// </summary>
     public void Validate()
     {
-        
-            
+
+
         if (BufferCount < 4)
             throw new ArgumentOutOfRangeException(nameof(BufferCount), "BufferCount must be at least 4.");
         if (!double.IsFinite(AcquisitionFrameRate) || AcquisitionFrameRate <= 0 || AcquisitionFrameRate > 1000)
@@ -207,7 +207,7 @@ public sealed class CameraDeviceSettings
         if (!double.IsFinite(Gain) || Gain < 0)
             throw new ArgumentOutOfRangeException(nameof(Gain));
 
-       
+
 
         if (InitializationMode == CameraInitializationMode.ConfigurationFile)
         {
