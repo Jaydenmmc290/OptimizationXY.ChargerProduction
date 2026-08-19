@@ -1214,10 +1214,22 @@ public sealed class ProductionSetupWizardForm : Form
                         "Select the physical Tail camera.");
                 }
 
-                if (string.Equals(
-                    selectedHead.SerialNumber,
-                    selectedTail.SerialNumber,
-                    StringComparison.OrdinalIgnoreCase))
+                // Check if cameras are assigned to the same Sapera location (ServerName + DeviceIndex).
+                // This is the primary indicator of physical camera identity.
+                if (string.Equals(selectedHead.ServerName, selectedTail.ServerName, StringComparison.OrdinalIgnoreCase) &&
+                    selectedHead.DeviceIndex == selectedTail.DeviceIndex)
+                {
+                    throw new InvalidOperationException(
+                        "The same physical camera cannot be assigned to both Head / Dog and Tail.");
+                }
+
+                // Also check if they have the same non-empty serial number, which would indicate duplicate physical cameras.
+                if (!string.IsNullOrWhiteSpace(selectedHead.SerialNumber) &&
+                    !string.IsNullOrWhiteSpace(selectedTail.SerialNumber) &&
+                    string.Equals(
+                        selectedHead.SerialNumber,
+                        selectedTail.SerialNumber,
+                        StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
                         "The same physical camera cannot be assigned to both Head / Dog and Tail.");

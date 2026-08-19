@@ -45,14 +45,14 @@ public sealed class CameraAcquisitionSettings
         ExposureTimeMicroseconds = 15017.0,
         Gain = 1.0,
         PixelFormat = "Mono8",
-        Mode = AcquisitionMode.Encoder
+        Mode = AcquisitionMode.Encoder 
     };
 
     /// <summary>
     /// Target number of frame pairs to acquire for each log. The actual number of
     /// frame pairs may be slightly higher or lower depending on the angular step size
     /// and the encoder position at the start of the log.
-    /// </summary>
+    /// </summary> 
     public int TargetFramePairsPerLog { get; set; } = 36;
     public DualCameraConcatenationSettings Concatenation { get; set; } = new();
     public int QueueCapacityPerCamera { get; set; } = 16;

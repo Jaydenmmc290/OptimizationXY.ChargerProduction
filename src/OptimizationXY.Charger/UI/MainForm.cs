@@ -1225,10 +1225,25 @@ public partial class MainForm : Form
                     : $"The assigned Tail camera serial '{tail.AssignedSerialNumber}' was not found.");
         }
 
+        // Check if cameras are assigned to the same Sapera location (ServerName + DeviceIndex).
+        // This is the primary indicator of physical camera identity.
         if (string.Equals(
-            discoveredHead.SerialNumber,
-            discoveredTail.SerialNumber,
-            StringComparison.OrdinalIgnoreCase))
+                discoveredHead.ServerName,
+                discoveredTail.ServerName,
+                StringComparison.OrdinalIgnoreCase) &&
+            discoveredHead.DeviceIndex == discoveredTail.DeviceIndex)
+        {
+            throw new InvalidOperationException(
+                "The same physical camera cannot be assigned to both Head and Tail.");
+        }
+
+        // Also check if they have the same non-empty serial number, which would indicate duplicate physical cameras.
+        if (!string.IsNullOrWhiteSpace(discoveredHead.SerialNumber) &&
+            !string.IsNullOrWhiteSpace(discoveredTail.SerialNumber) &&
+            string.Equals(
+                discoveredHead.SerialNumber,
+                discoveredTail.SerialNumber,
+                StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 "The same physical camera cannot be assigned to both Head and Tail.");

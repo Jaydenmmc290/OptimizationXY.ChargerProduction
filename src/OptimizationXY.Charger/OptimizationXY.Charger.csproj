@@ -24,6 +24,11 @@
 
     <UseSapera Condition="'$(UseSapera)' == ''">true</UseSapera>
     <RequireSapera Condition="'$(RequireSapera)' == ''">false</RequireSapera>
+    
+    <UseSapera8 Condition="'$(UseSapera8)' == ''">false</UseSapera8>
+
+    <Sapera8AssemblyPath Condition="'$(UseSapera8)' == 'true'">$(MSBuildThisFileDirectory)..\..\dependencies\Sapera8\DALSA.SaperaLT.SapClassBasic.dll</Sapera8AssemblyPath>
+    
     <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(SAPERA_SDK_DIR)</SaperaSdkDir>
     <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(ProgramFiles)\Teledyne DALSA\Sapera\Components\NET\Bin</SaperaSdkDir>
     <SaperaAssemblyPath Condition="'$(UseSapera)' == 'true'">$(SaperaSdkDir)\DALSA.SaperaLT.SapClassBasic.Core.dll</SaperaAssemblyPath>
@@ -34,6 +39,12 @@
     <HasSaperaSdk Condition="'$(HasSaperaSdk)' == ''">false</HasSaperaSdk>
     <DefineConstants Condition="'$(HasSaperaSdk)' == 'true'">$(DefineConstants);SAPERA</DefineConstants>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(UseSapera8)' == 'true'">
+    <DefineConstants>$(DefineConstants);SAPERA</DefineConstants>
+  </PropertyGroup>
+
+ 
 
   <ItemGroup>
     <PackageReference Include="Emgu.CV" Version="4.13.0.5924" />
@@ -57,13 +68,26 @@
     </Reference>
   </ItemGroup>
 
-  <ItemGroup Condition="'$(HasSaperaSdk)' == 'true'">
+
+
+  <!-- Sapera 9 -->
+  <ItemGroup Condition="'$(UseSapera8)' != 'true' and '$(HasSaperaSdk)' == 'true'">
     <Reference Include="DALSA.SaperaLT.SapClassBasic.Core">
       <HintPath>$(SaperaAssemblyPath)</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>
 
+  <!-- Sapera 8 -->
+  <ItemGroup Condition="'$(UseSapera8)' == 'true'">
+    <Reference Include="$(Sapera8AssemblyPath)">
+      <HintPath>$(Sapera8AssemblyPath)</HintPath>
+      <Private>true</Private>
+      <SpecificVersion>false</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  
   <ItemGroup>
     <None Remove="NLog.config" />
 
@@ -73,12 +97,21 @@
     </Content>
   </ItemGroup>
 
+  
+
   <Target Name="ValidateProductionDependencies" BeforeTargets="PrepareForBuild">
+    <Error
+  Condition="'$(UseSapera8)' == 'true' and !Exists('$(Sapera8AssemblyPath)')"
+  Text="Sapera 8 assembly was not found at $(Sapera8AssemblyPath)." />
     <Error Condition="!Exists('$(XyRestrictedAssemblyPath)')" Text="XYRestricted.dll was not found at $(XyRestrictedAssemblyPath)." />
     <Error Condition="!Exists('$(AsCommAssemblyPath)')" Text="AutomatedSolutions.ASCommStd.dll was not found at $(AsCommAssemblyPath)." />
   </Target>
 
   <Target Name="ReportSaperaBuildMode" BeforeTargets="PrepareForBuild">
+    <Message
+  Condition="'$(UseSapera8)' == 'true'"
+  Importance="high"
+  Text="Sapera 8 test assembly path: $(Sapera8AssemblyPath)" />
     <Error Condition="'$(RequireSapera)' == 'true' and '$(HasSaperaSdk)' != 'true'" Text="A hardware build was requested, but the Sapera SDK assembly was not found. Set SAPERA_SDK_DIR or SaperaSdkDir, or explicitly build with UseSapera=false." />
     <Message Condition="'$(HasSaperaSdk)' == 'true'" Importance="high" Text="Building with Sapera camera support from $(SaperaAssemblyPath)." />
     <Message Condition="'$(UseSapera)' != 'true'" Importance="high" Text="Sapera support was explicitly disabled. Building with the non-hardware camera stub." />
