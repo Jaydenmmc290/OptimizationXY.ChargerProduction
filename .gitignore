@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/src/OptimizationXY.Charger/Models/Calibration/CalibrationSessionState.cs
+/src/OptimizationXY.Charger/Services/Calibration/CalibrationSessionStore.cs
