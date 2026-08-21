@@ -43,9 +43,11 @@ public static class ScannerCalibrationCompatibility
             settings.TargetFramePairsPerLog,
             HeadPosition = settings.HeadCamera.Position.ToString(),
             TailPosition = settings.TailCamera.Position.ToString(),
-            
-            HeadExpectedSerial = settings.HeadCamera.AssignedSerialNumber,
-            TailExpectedSerial = settings.TailCamera.AssignedSerialNumber,
+
+            HeadServerName = settings.HeadCamera.ServerName,
+            TailServerName = settings.TailCamera.ServerName,
+            HeadDeviceIndex = settings.HeadCamera.DeviceIndex,
+            TailDeviceIndex = settings.TailCamera.DeviceIndex,
             HeadInitialization = settings.HeadCamera.InitializationMode.ToString(),
             TailInitialization = settings.TailCamera.InitializationMode.ToString(),
             HeadPixelFormat = settings.HeadCamera.PixelFormat,

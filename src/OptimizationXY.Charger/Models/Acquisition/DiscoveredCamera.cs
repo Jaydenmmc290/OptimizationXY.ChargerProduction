@@ -2,8 +2,7 @@ namespace OptimizationXY.Charger.Models.Acquisition;
 
 /// <summary>
 /// A Sapera acquisition device detected on the current computer.
-/// ServerName and DeviceIndex are runtime locations.
-/// SerialNumber identifies the physical camera.
+/// ServerName and DeviceIndex uniquely identify the camera location.
 /// </summary>
 public sealed record DiscoveredCamera
 {
@@ -11,12 +10,8 @@ public sealed record DiscoveredCamera
 
     public required int DeviceIndex { get; init; }
 
-    public required string SerialNumber { get; init; }
-
     public string DisplayName =>
-        string.IsNullOrWhiteSpace(SerialNumber)
-            ? $"{ServerName} [{DeviceIndex}]"
-            : $"{ServerName} [{DeviceIndex}] - Serial {SerialNumber}";
+        $"{ServerName} [{DeviceIndex}]";
 
     public override string ToString() => DisplayName;
 }

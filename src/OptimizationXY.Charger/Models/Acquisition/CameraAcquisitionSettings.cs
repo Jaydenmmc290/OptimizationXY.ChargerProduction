@@ -12,8 +12,7 @@ public sealed class CameraAcquisitionSettings
 
     /// <summary>
     /// Saved configuration for one physical camera. ServerName and DeviceIndex
-    /// locate the Sapera resource. AssignedSerialNumber verifies that the correct
-    /// physical camera is connected at that machine position.
+    /// uniquely identify the Sapera camera location.
     /// </summary>
     public CameraDeviceSettings HeadCamera { get; set; } = new()
     {
@@ -31,8 +30,7 @@ public sealed class CameraAcquisitionSettings
 
     /// <summary>
     /// Saved configuration for one physical camera. ServerName and DeviceIndex
-    /// locate the Sapera resource. AssignedSerialNumber verifies that the correct
-    /// physical camera is connected at that machine position.
+    /// uniquely identify the Sapera camera location.
     /// </summary>
     public CameraDeviceSettings TailCamera { get; set; } = new()
     {
@@ -85,17 +83,6 @@ public sealed class CameraAcquisitionSettings
         {
             throw new InvalidOperationException(
                 "The head and tail cameras cannot use the same Sapera server and device index.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(HeadCamera.AssignedSerialNumber) &&
-            !string.IsNullOrWhiteSpace(TailCamera.AssignedSerialNumber) &&
-            string.Equals(
-                HeadCamera.AssignedSerialNumber.Trim(),
-                TailCamera.AssignedSerialNumber.Trim(),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "The head and tail cameras cannot be assigned the same physical serial number.");
         }
 
         if (TargetFramePairsPerLog <= 0)
@@ -162,10 +149,9 @@ public sealed class CameraDeviceSettings
     public string ServerName { get; set; } = string.Empty;
     public int DeviceIndex { get; set; }
     /// <summary>
-    /// Serial number learned directly from the physical camera assigned
-    /// to this machine position. This is the persistent camera identity.
+    /// <summary>
+    /// The physical camera is identified by ServerName and DeviceIndex (Sapera location).
     /// </summary>
-    public string AssignedSerialNumber { get; set; } = string.Empty;
     public CameraInitializationMode InitializationMode { get; set; } =
         CameraInitializationMode.Programmatic;
     public string ConfigurationFileName { get; set; } = string.Empty;

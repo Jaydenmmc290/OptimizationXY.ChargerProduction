@@ -3,7 +3,7 @@ namespace OptimizationXY.Charger.Models.Calibration;
 
 /// <summary>
 /// Represents the status of camera hardware, including connection status, server names,
-/// serial numbers, and configuration paths for both head and tail cameras.
+/// device indices, and configuration paths for both head and tail cameras.
 /// </summary>
 public sealed class CameraHardwareStatus
 {
@@ -20,11 +20,11 @@ public sealed class CameraHardwareStatus
     //TailServerName is the name of the server associated with the tail camera.
     public string TailServerName { get; set; } = string.Empty;
 
-    // HeadSerialNumber is the serial number of the head camera.
-    public string HeadSerialNumber { get; set; } = string.Empty;
+    // HeadDeviceIndex is the device index of the head camera in Sapera.
+    public int HeadDeviceIndex { get; set; }
 
-    // TailSerialNumber is the serial number of the tail camera.
-    public string TailSerialNumber { get; set; } = string.Empty;
+    // TailDeviceIndex is the device index of the tail camera in Sapera.
+    public int TailDeviceIndex { get; set; }
 
     // HeadConfigurationPath is the file path to the configuration for the head camera.
     public string HeadConfigurationPath { get; set; } = string.Empty;

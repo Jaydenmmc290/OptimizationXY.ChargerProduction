@@ -67,27 +67,16 @@ public static class AppSettingsValidator
          tail.ServerName,
          StringComparison.OrdinalIgnoreCase) &&
      head.DeviceIndex == tail.DeviceIndex)
-        {
-            throw new InvalidOperationException(
-                "Head and tail cameras cannot use the same Sapera server and device index.");
-        }
+     {
+         throw new InvalidOperationException(
+             "Head and tail cameras cannot use the same Sapera server and device index.");
+     }
 
-        if (!string.IsNullOrWhiteSpace(head.AssignedSerialNumber) &&
-            !string.IsNullOrWhiteSpace(tail.AssignedSerialNumber) &&
-            string.Equals(
-                head.AssignedSerialNumber.Trim(),
-                tail.AssignedSerialNumber.Trim(),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                "Head and tail cameras cannot use the same expected physical serial number.");
-        }
-
-        if (settings.Acquisition.TargetFramePairsPerLog <= 0)
-        {
-            throw new InvalidOperationException(
-                "Acquisition.TargetFramePairsPerLog must be greater than zero.");
-        }
+     if (settings.Acquisition.TargetFramePairsPerLog <= 0)
+     {
+         throw new InvalidOperationException(
+             "Acquisition.TargetFramePairsPerLog must be greater than zero.");
+     }
 
         if (settings.Acquisition.Concatenation == null)
         {

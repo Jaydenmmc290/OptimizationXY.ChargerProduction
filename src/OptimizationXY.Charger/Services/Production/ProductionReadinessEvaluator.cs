@@ -100,22 +100,19 @@ public static class ProductionReadinessEvaluator
                 ? "Both cameras are opened directly by Sapera server/device index and reject missing production-critical features."
                 : "Production requires Programmatic camera initialization with RequireConfiguredFeatures enabled for both cameras.");
 
-        string headAssignedSerial =
-     settings.Acquisition.HeadCamera
-         .AssignedSerialNumber?.Trim() ??
-     string.Empty;
+        string headCameraLocation =
+            $"{settings.Acquisition.HeadCamera.ServerName}[{settings.Acquisition.HeadCamera.DeviceIndex}]".Trim();
 
-        string tailAssignedSerial =
-            settings.Acquisition.TailCamera
-                .AssignedSerialNumber?.Trim() ??
-            string.Empty;
+        string tailCameraLocation =
+            $"{settings.Acquisition.TailCamera.ServerName}[{settings.Acquisition.TailCamera.DeviceIndex}]".Trim();
+
         bool configuredCameraIdentity =
-            !string.IsNullOrWhiteSpace(headAssignedSerial) &&
-            !string.IsNullOrWhiteSpace(tailAssignedSerial) &&
-            !string.Equals(headAssignedSerial, tailAssignedSerial, StringComparison.OrdinalIgnoreCase);
+            !string.IsNullOrWhiteSpace(settings.Acquisition.HeadCamera.ServerName) &&
+            !string.IsNullOrWhiteSpace(settings.Acquisition.TailCamera.ServerName) &&
+            !string.Equals(headCameraLocation, tailCameraLocation, StringComparison.OrdinalIgnoreCase);
         bool capturedCameraIdentity =
-            SnapshotSerialMatches(state.HeadCameraConfigurationSnapshot, headAssignedSerial) &&
-            SnapshotSerialMatches(state.TailCameraConfigurationSnapshot, tailAssignedSerial);
+            SnapshotLocationMatches(state.HeadCameraConfigurationSnapshot, headCameraLocation) &&
+            SnapshotLocationMatches(state.TailCameraConfigurationSnapshot, tailCameraLocation);
         bool cameraIdentityBound = configuredCameraIdentity && capturedCameraIdentity;
 
         Add(
@@ -124,9 +121,8 @@ public static class ProductionReadinessEvaluator
             cameraIdentityBound
                 ? ProductionCheckStatus.Pass
                 : ProductionCheckStatus.Block,
-            cameraIdentityBound
-    ? $"Head camera serial {headAssignedSerial} and Tail camera serial " +
-      $"{tailAssignedSerial} match the capture-time camera snapshots."
+            !cameraIdentityBound
+    ? "One or both cameras are not properly assigned or the capture-time camera identities do not match those assignments."
     : "Production requires two distinct physical cameras to be assigned as " +
       "Head and Tail, and the capture-time camera identities must match those assignments.");
 
@@ -521,26 +517,31 @@ public static class ProductionReadinessEvaluator
     }
 
     /// <summary>
-    /// Checks whether the provided camera configuration snapshot matches the expected serial number.
+    /// Checks whether the provided camera configuration snapshot matches the expected camera location.
     /// </summary>
     /// <param name="snapshot">The camera configuration snapshot to check.</param>
-    /// <param name="expectedSerial">The expected serial number to match.</param>
-    /// <returns>True if the snapshot's serial number matches the expected serial number; otherwise, false.</returns>
-    private static bool SnapshotSerialMatches(byte[]? snapshot, string expectedSerial)
+    /// <param name="expectedLocation">The expected camera location (ServerName[DeviceIndex]) to match.</param>
+    /// <returns>True if the snapshot's location matches the expected location; otherwise, false.</returns>
+    private static bool SnapshotLocationMatches(byte[]? snapshot, string expectedLocation)
     {
-        if (snapshot is not { Length: > 0 } || string.IsNullOrWhiteSpace(expectedSerial))
+        if (snapshot is not { Length: > 0 } || string.IsNullOrWhiteSpace(expectedLocation))
             return false;
 
         try
         {
             using JsonDocument document = JsonDocument.Parse(snapshot);
-            if (!document.RootElement.TryGetProperty("ConnectedSerialNumber", out JsonElement serialElement))
+
+            if (!document.RootElement.TryGetProperty("ConnectedServerName", out JsonElement serverElement) ||
+                !document.RootElement.TryGetProperty("ConnectedDeviceIndex", out JsonElement deviceElement))
                 return false;
 
-            string actualSerial = serialElement.GetString()?.Trim() ?? string.Empty;
+            string actualServerName = serverElement.GetString()?.Trim() ?? string.Empty;
+            int actualDeviceIndex = deviceElement.GetInt32();
+            string actualLocation = $"{actualServerName}[{actualDeviceIndex}]";
+
             return string.Equals(
-                actualSerial,
-                expectedSerial.Trim(),
+                actualLocation,
+                expectedLocation.Trim(),
                 StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException)

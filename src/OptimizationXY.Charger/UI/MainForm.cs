@@ -1199,51 +1199,37 @@ public partial class MainForm : Form
         CameraDeviceSettings tail =
             _cameraSettings.TailCamera;
 
+        // Find cameras by Sapera location (ServerName + DeviceIndex)
         DiscoveredCamera? discoveredHead =
-            SaperaCameraDiscoveryService.FindAssignedCamera(
-                cameras,
-                head.AssignedSerialNumber);
+            cameras.FirstOrDefault(c =>
+                string.Equals(c.ServerName, head.ServerName, StringComparison.OrdinalIgnoreCase) &&
+                c.DeviceIndex == head.DeviceIndex);
 
         DiscoveredCamera? discoveredTail =
-            SaperaCameraDiscoveryService.FindAssignedCamera(
-                cameras,
-                tail.AssignedSerialNumber);
+            cameras.FirstOrDefault(c =>
+                string.Equals(c.ServerName, tail.ServerName, StringComparison.OrdinalIgnoreCase) &&
+                c.DeviceIndex == tail.DeviceIndex);
 
         if (discoveredHead is null)
         {
             throw new InvalidOperationException(
-                string.IsNullOrWhiteSpace(head.AssignedSerialNumber)
-                    ? "No Head/Dog camera has been assigned. Open Production Setup and assign one of the discovered cameras."
-                    : $"The assigned Head/Dog camera serial '{head.AssignedSerialNumber}' was not found.");
+                $"Head camera not found at Sapera location {head.ServerName} [{head.DeviceIndex}]. Open Production Setup and assign cameras.");
         }
 
         if (discoveredTail is null)
         {
             throw new InvalidOperationException(
-                string.IsNullOrWhiteSpace(tail.AssignedSerialNumber)
-                    ? "No Tail camera has been assigned. Open Production Setup and assign one of the discovered cameras."
-                    : $"The assigned Tail camera serial '{tail.AssignedSerialNumber}' was not found.");
+                $"Tail camera not found at Sapera location {tail.ServerName} [{tail.DeviceIndex}]. Open Production Setup and assign cameras.");
         }
 
         // Check if cameras are assigned to the same Sapera location (ServerName + DeviceIndex).
-        // This is the primary indicator of physical camera identity.
+        // This is the definitive indicator of physical camera identity. If they're at different
+        // locations they are different cameras, regardless of serial number.
         if (string.Equals(
                 discoveredHead.ServerName,
                 discoveredTail.ServerName,
                 StringComparison.OrdinalIgnoreCase) &&
             discoveredHead.DeviceIndex == discoveredTail.DeviceIndex)
-        {
-            throw new InvalidOperationException(
-                "The same physical camera cannot be assigned to both Head and Tail.");
-        }
-
-        // Also check if they have the same non-empty serial number, which would indicate duplicate physical cameras.
-        if (!string.IsNullOrWhiteSpace(discoveredHead.SerialNumber) &&
-            !string.IsNullOrWhiteSpace(discoveredTail.SerialNumber) &&
-            string.Equals(
-                discoveredHead.SerialNumber,
-                discoveredTail.SerialNumber,
-                StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 "The same physical camera cannot be assigned to both Head and Tail.");
@@ -1255,13 +1241,7 @@ public partial class MainForm : Form
         tail.ServerName = discoveredTail.ServerName;
         tail.DeviceIndex = discoveredTail.DeviceIndex;
 
-        AppendDiagnostics(
-            $"Resolved Head camera serial {head.AssignedSerialNumber} -> " +
-            $"{head.ServerName} [{head.DeviceIndex}]");
-
-        AppendDiagnostics(
-            $"Resolved Tail camera serial {tail.AssignedSerialNumber} -> " +
-            $"{tail.ServerName} [{tail.DeviceIndex}]");
+       
     }
     /// <summary>
     /// Handles a camera frame event for the specified camera position. It checks if the application is disposing
@@ -1644,8 +1624,8 @@ string message)
             TailConnected = _tailCameraService?.IsConnected == true,
             HeadServerName = head.ServerName,
             TailServerName = tail.ServerName,
-            HeadSerialNumber = _headCameraService?.ConnectedSerialNumber ?? string.Empty,
-            TailSerialNumber = _tailCameraService?.ConnectedSerialNumber ?? string.Empty,
+            HeadDeviceIndex = head.DeviceIndex,
+            TailDeviceIndex = tail.DeviceIndex,
             HeadConfigurationPath = head.GetInitializationDescription(),
             TailConfigurationPath = tail.GetInitializationDescription(),
             HeadConfigurationLoaded =

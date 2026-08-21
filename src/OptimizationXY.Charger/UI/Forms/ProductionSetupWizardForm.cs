@@ -1003,21 +1003,21 @@ public sealed class ProductionSetupWizardForm : Form
             tailCamera.Mode;
 
 
-        // Show the currently assigned physical identity.
+        // Show the currently assigned physical location.
         // The actual ComboBox selection is populated after camera discovery.
         _headCameraIdentity.Text =
-            string.IsNullOrWhiteSpace(headCamera.AssignedSerialNumber)
+            string.IsNullOrWhiteSpace(headCamera.ServerName)
                 ? "No Head / Dog camera has been assigned."
-                : $"Assigned Head / Dog serial: {headCamera.AssignedSerialNumber}";
+                : $"Assigned Head / Dog camera: {headCamera.ServerName} [{headCamera.DeviceIndex}]";
 
         _tailCameraIdentity.Text =
-            string.IsNullOrWhiteSpace(tailCamera.AssignedSerialNumber)
+            string.IsNullOrWhiteSpace(tailCamera.ServerName)
                 ? "No Tail camera has been assigned."
-                : $"Assigned Tail serial: {tailCamera.AssignedSerialNumber}";
+                : $"Assigned Tail camera: {tailCamera.ServerName} [{tailCamera.DeviceIndex}]";
 
 
         // Discover the cameras currently connected to this computer and,
-        // when possible, select the saved Head and Tail serial numbers.
+        // when possible, select the saved Head and Tail camera locations.
         RefreshDiscoveredCameraList();
 
 
@@ -1215,21 +1215,10 @@ public sealed class ProductionSetupWizardForm : Form
                 }
 
                 // Check if cameras are assigned to the same Sapera location (ServerName + DeviceIndex).
-                // This is the primary indicator of physical camera identity.
+                // This is the definitive indicator of physical camera identity. If they're at different
+                // locations they are different cameras, regardless of serial number.
                 if (string.Equals(selectedHead.ServerName, selectedTail.ServerName, StringComparison.OrdinalIgnoreCase) &&
                     selectedHead.DeviceIndex == selectedTail.DeviceIndex)
-                {
-                    throw new InvalidOperationException(
-                        "The same physical camera cannot be assigned to both Head / Dog and Tail.");
-                }
-
-                // Also check if they have the same non-empty serial number, which would indicate duplicate physical cameras.
-                if (!string.IsNullOrWhiteSpace(selectedHead.SerialNumber) &&
-                    !string.IsNullOrWhiteSpace(selectedTail.SerialNumber) &&
-                    string.Equals(
-                        selectedHead.SerialNumber,
-                        selectedTail.SerialNumber,
-                        StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
                         "The same physical camera cannot be assigned to both Head / Dog and Tail.");
@@ -1243,22 +1232,21 @@ public sealed class ProductionSetupWizardForm : Form
 
 
                 // ---------------------------------------------------------
-                // Remember the physical camera assignments BEFORE changing
-                // anything. Calibration should only be invalidated when the
+                // Remember the camera assignments BEFORE changing anything.
+                // Calibration should only be invalidated when the
                 // actual physical camera assignment changes.
                 // ---------------------------------------------------------
-                string previousHeadSerial =
-                    head.AssignedSerialNumber;
+                string previousHeadLocation =
+                    $"{head.ServerName}[{head.DeviceIndex}]";
 
-                string previousTailSerial =
-                    tail.AssignedSerialNumber;
+                string previousTailLocation =
+                    $"{tail.ServerName}[{tail.DeviceIndex}]";
 
 
                 // ---------------------------------------------------------
                 // Assign the currently discovered Sapera runtime locations.
                 //
-                // ServerName and DeviceIndex are NOT permanent identities.
-                // They are simply where Sapera currently sees each camera.
+                // ServerName and DeviceIndex are the definitive camera identity.
                 // ---------------------------------------------------------
                 head.ServerName =
                     selectedHead.ServerName;
@@ -1274,15 +1262,16 @@ public sealed class ProductionSetupWizardForm : Form
 
 
                 // ---------------------------------------------------------
-                // Save the physical serial numbers as the permanent
-                // Head / Tail camera identities.
+                // Check if camera assignment changed - invalidate calibration if needed
                 // ---------------------------------------------------------
-                head.AssignedSerialNumber =
-                    selectedHead.SerialNumber;
+                string newHeadLocation =
+                    $"{head.ServerName}[{head.DeviceIndex}]";
 
-                tail.AssignedSerialNumber =
-                    selectedTail.SerialNumber;
+                string newTailLocation =
+                    $"{tail.ServerName}[{tail.DeviceIndex}]";
 
+                bool headCameraChanged = !string.Equals(previousHeadLocation, newHeadLocation, StringComparison.Ordinal);
+                bool tailCameraChanged = !string.Equals(previousTailLocation, newTailLocation, StringComparison.Ordinal);
 
                 // ---------------------------------------------------------
                 // Programmatic configuration
@@ -1325,33 +1314,7 @@ public sealed class ProductionSetupWizardForm : Form
                         : "FixedRate";
 
 
-                // ---------------------------------------------------------
-                // Calibration should ONLY be invalidated if the physical
-                // Head/Tail assignment changed.
-                //
-                // Sapera changing Nano-M1920_1 to Nano-M1920_2 should NOT
-                // invalidate calibration.
-                // ---------------------------------------------------------
-                bool physicalCameraAssignmentChanged =
-                    !string.Equals(
-                        previousHeadSerial,
-                        head.AssignedSerialNumber,
-                        StringComparison.OrdinalIgnoreCase)
-                    ||
-                    !string.Equals(
-                        previousTailSerial,
-                        tail.AssignedSerialNumber,
-                        StringComparison.OrdinalIgnoreCase);
-
-                if (physicalCameraAssignmentChanged)
-                {
-                    InvalidateCalibrationDependentSetup();
-
-                    Append(
-                        "Physical camera assignment changed. " +
-                        "Scanner calibration-dependent setup has been invalidated.");
-                }
-
+            
 
                 // Save the discovered assignments before reconnecting.
                 SaveSettings();
@@ -1365,44 +1328,20 @@ public sealed class ProductionSetupWizardForm : Form
 
 
                 // ---------------------------------------------------------
-                // Verify the serial numbers reported by the cameras after
-                // the real connection.
+                // Verify the cameras connected at the expected locations.
                 // ---------------------------------------------------------
-                if (status.HeadConnected &&
-                    !string.IsNullOrWhiteSpace(status.HeadSerialNumber))
+                if (!status.HeadConnected)
                 {
-                    if (!string.Equals(
-                        head.AssignedSerialNumber,
-                        status.HeadSerialNumber,
-                        StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new InvalidOperationException(
-                            $"Head / Dog camera identity changed during connection. " +
-                            $"Selected serial '{head.AssignedSerialNumber}', " +
-                            $"but connected camera reported '{status.HeadSerialNumber}'.");
-                    }
-
-                    head.AssignedSerialNumber =
-                        status.HeadSerialNumber;
+                    throw new InvalidOperationException(
+                        $"Head camera not connected at {head.ServerName} [{head.DeviceIndex}]. " +
+                        "Verify physical connections and Sapera configuration.");
                 }
 
-
-                if (status.TailConnected &&
-                    !string.IsNullOrWhiteSpace(status.TailSerialNumber))
+                if (!status.TailConnected)
                 {
-                    if (!string.Equals(
-                        tail.AssignedSerialNumber,
-                        status.TailSerialNumber,
-                        StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new InvalidOperationException(
-                            $"Tail camera identity changed during connection. " +
-                            $"Selected serial '{tail.AssignedSerialNumber}', " +
-                            $"but connected camera reported '{status.TailSerialNumber}'.");
-                    }
-
-                    tail.AssignedSerialNumber =
-                        status.TailSerialNumber;
+                    throw new InvalidOperationException(
+                        $"Tail camera not connected at {tail.ServerName} [{tail.DeviceIndex}]. " +
+                        "Verify physical connections and Sapera configuration.");
                 }
 
 
@@ -1425,10 +1364,8 @@ public sealed class ProductionSetupWizardForm : Form
 
                 Append(
                     $"Camera reconnect complete. " +
-                    $"Head={head.ServerName} [{head.DeviceIndex}], " +
-                    $"Serial={head.AssignedSerialNumber}, Mode={head.Mode}. " +
-                    $"Tail={tail.ServerName} [{tail.DeviceIndex}], " +
-                    $"Serial={tail.AssignedSerialNumber}, Mode={tail.Mode}. " +
+                    $"Head={head.ServerName} [{head.DeviceIndex}], Mode={head.Mode}. " +
+                    $"Tail={tail.ServerName} [{tail.DeviceIndex}], Mode={tail.Mode}. " +
                     $"FrameRate uses TriggerMode=Off. " +
                     $"Encoder uses TriggerMode=On and TriggerSource=Line1.");
             });
@@ -1474,21 +1411,23 @@ public sealed class ProductionSetupWizardForm : Form
 
         SelectAssignedCamera(
             _headCameraSelection,
-            head.AssignedSerialNumber);
+            head.ServerName,
+            head.DeviceIndex);
 
         SelectAssignedCamera(
             _tailCameraSelection,
-            tail.AssignedSerialNumber);
+            tail.ServerName,
+            tail.DeviceIndex);
 
         _headCameraIdentity.Text =
-            string.IsNullOrWhiteSpace(head.AssignedSerialNumber)
+            string.IsNullOrWhiteSpace(head.ServerName)
                 ? "No Head / Dog camera assigned."
-                : $"Assigned Head / Dog serial: {head.AssignedSerialNumber}";
+                : $"Assigned Head / Dog camera: {head.ServerName} [{head.DeviceIndex}]";
 
         _tailCameraIdentity.Text =
-            string.IsNullOrWhiteSpace(tail.AssignedSerialNumber)
+            string.IsNullOrWhiteSpace(tail.ServerName)
                 ? "No Tail camera assigned."
-                : $"Assigned Tail serial: {tail.AssignedSerialNumber}";
+                : $"Assigned Tail camera: {tail.ServerName} [{tail.DeviceIndex}]";
 
         _cameraStatus.Text =
             discovered.Count switch
@@ -1508,9 +1447,10 @@ public sealed class ProductionSetupWizardForm : Form
 
     private static void SelectAssignedCamera(
     ComboBox comboBox,
-    string serialNumber)
+    string serverName,
+    int deviceIndex)
     {
-        if (string.IsNullOrWhiteSpace(serialNumber))
+        if (string.IsNullOrWhiteSpace(serverName))
             return;
 
         for (int i = 0; i < comboBox.Items.Count; i++)
@@ -1519,9 +1459,10 @@ public sealed class ProductionSetupWizardForm : Form
                 continue;
 
             if (string.Equals(
-                camera.SerialNumber,
-                serialNumber,
-                StringComparison.OrdinalIgnoreCase))
+                camera.ServerName,
+                serverName,
+                StringComparison.OrdinalIgnoreCase) &&
+                camera.DeviceIndex == deviceIndex)
             {
                 comboBox.SelectedIndex = i;
                 return;
@@ -2511,10 +2452,8 @@ public sealed class ProductionSetupWizardForm : Form
 
         _cameraStatus.Text =
             $"HEAD / DOG CAMERA: {(status.HeadConnected ? "CONNECTED" : "NOT CONNECTED")}\r\n" +
-            $"Server: {status.HeadServerName} | Serial: {DisplaySerial(status.HeadSerialNumber)}\r\n" +
             $"Mode: {head.Mode} | TriggerSource: {head.TriggerSource}\r\n\r\n" +
             $"TAIL CAMERA: {(status.TailConnected ? "CONNECTED" : "NOT CONNECTED")}\r\n" +
-            $"Server: {status.TailServerName} | Serial: {DisplaySerial(status.TailSerialNumber)}\r\n" +
             $"Mode: {tail.Mode} | TriggerSource: {tail.TriggerSource}";
     }
 

@@ -177,8 +177,10 @@ public static class AppSettingsStore
                 CameraInitializationMode.Programmatic;
             settings.Acquisition.TailCamera.InitializationMode =
                 CameraInitializationMode.Programmatic;
-            settings.Acquisition.HeadCamera.AssignedSerialNumber = string.Empty;
-            settings.Acquisition.TailCamera.AssignedSerialNumber = string.Empty;
+            settings.Acquisition.HeadCamera.ServerName = string.Empty;
+            settings.Acquisition.HeadCamera.DeviceIndex = 0;
+            settings.Acquisition.TailCamera.ServerName = string.Empty;
+            settings.Acquisition.TailCamera.DeviceIndex = 0;
 
             settings.Setup.CameraConfigurationVerified = false;
             settings.Setup.CameraPhysicalPositionsConfirmed = false;
