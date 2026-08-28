@@ -2,10 +2,21 @@ namespace OptimizationXY.Charger.Models.Operator;
 
 
 /// <summary>
-/// Represents the runtime status of an operator, including PLC connection status, scan progress, and captured pairs information.
+/// Represents the runtime status of an operator, including PLC connection status, calibration status, scan progress, and captured pairs information.
 /// </summary>
 public sealed class OperatorRuntimeStatus
 {
+
+    /// <summary>
+    /// Gets or sets a value indicating whether an active scanner calibration is loaded.
+    /// </summary>
+    public bool CalibrationActive { get; init; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the system is ready for production scanning
+    /// (calibration active AND PLC connected).
+    /// </summary>
+    public bool SystemReady => CalibrationActive && PlcConnected;
 
     /// <summary>
     /// Gets or sets a value indicating whether the PLC (Programmable Logic Controller) is enabled.

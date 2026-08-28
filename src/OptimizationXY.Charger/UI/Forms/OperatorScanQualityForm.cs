@@ -124,6 +124,22 @@ public partial class OperatorScanQualityForm : Form
                 : runtime.PlcEnabled ? Color.Firebrick : Color.DimGray;
             lblScanStart.Text = $"ScanStart: {(runtime.ScanStart ? "ON" : "OFF")}";
             lblScanComplete.Text = $"ScanComplete: {(runtime.ScanComplete ? "ON" : "OFF")}";
+
+            // Update calibration status
+            lblCalibrationStatus.Text = runtime.CalibrationActive
+                ? "CALIBRATION: ACTIVE"
+                : "CALIBRATION: NOT ACTIVE";
+            lblCalibrationStatus.BackColor = runtime.CalibrationActive
+                ? Color.DarkGreen
+                : Color.Firebrick;
+
+            // Update system ready status
+            lblSystemReadyStatus.Text = runtime.SystemReady
+                ? "SYSTEM: READY"
+                : "SYSTEM: NOT READY";
+            lblSystemReadyStatus.BackColor = runtime.SystemReady
+                ? Color.DarkGreen
+                : Color.Firebrick;
         });
     }
 

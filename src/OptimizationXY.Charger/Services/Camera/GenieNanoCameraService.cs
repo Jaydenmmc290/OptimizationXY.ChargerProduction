@@ -24,6 +24,10 @@ public sealed class GenieNanoCameraService : IDisposable
     private readonly Lock _frameCounterLock = new();
     private bool _isCapturingManagedFrames;
 
+    // Original camera settings to restore on disconnect
+    private string? _originalTriggerMode;
+    private string? _originalTriggerSource;
+
     public bool IsConnected { get; private set; }
     public string ConnectedSerialNumber { get; private set; } = string.Empty;
     public string ConnectedModelName { get; private set; } = string.Empty;
@@ -219,6 +223,12 @@ public sealed class GenieNanoCameraService : IDisposable
                 $"{settings.Position} camera does not expose TriggerMode.");
         }
 
+        // Capture the original TriggerMode before modifying it
+        if (_originalTriggerMode is null)
+        {
+            _originalTriggerMode = ReadStringFeature(device, "TriggerMode").Trim();
+        }
+
         // FrameRate/free-running mode only requires TriggerMode=Off.
         // TriggerSource becomes unavailable while TriggerMode is Off,
         // so do not attempt to write TriggerSource here.
@@ -269,6 +279,16 @@ public sealed class GenieNanoCameraService : IDisposable
         {
             throw new InvalidOperationException(
                 $"{settings.Position} camera does not expose TriggerMode.");
+        }
+
+        // Capture the original TriggerMode and TriggerSource before modifying them
+        if (_originalTriggerMode is null)
+        {
+            _originalTriggerMode = ReadStringFeature(device, "TriggerMode").Trim();
+            if (device.IsFeatureAvailable("TriggerSource"))
+            {
+                _originalTriggerSource = ReadStringFeature(device, "TriggerSource").Trim();
+            }
         }
 
         /*
@@ -724,6 +744,79 @@ options);
     public void StopManagedFrameCapture() => _isCapturingManagedFrames = false;
 
     /// <summary>
+    /// Attempts to restore the camera's original settings (TriggerMode, TriggerSource) that were present
+    /// before this service modified them. This is called during disconnect to leave the camera in its
+    /// original state for other applications to use.
+    /// </summary>
+    private void TryRestoreOriginalCameraSettings()
+    {
+        if (_acqDevice is null)
+            return;
+
+        // Restore TriggerMode first (must come before TriggerSource due to dependencies)
+        if (_originalTriggerMode is not null)
+        {
+            try
+            {
+                if (_acqDevice.IsFeatureAvailable("TriggerMode"))
+                {
+                    string currentMode = ReadStringFeature(_acqDevice, "TriggerMode").Trim();
+                    if (!string.Equals(currentMode, _originalTriggerMode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_acqDevice.SetFeatureValue("TriggerMode", _originalTriggerMode))
+                        {
+                            LogDiagnostics(
+                                $"Restored camera TriggerMode to original setting: {_originalTriggerMode}");
+                        }
+                        else
+                        {
+                            LogDiagnostics(
+                                $"Warning: Failed to restore camera TriggerMode to {_originalTriggerMode}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDiagnostics($"Warning: Error restoring camera TriggerMode: {ex.Message}");
+            }
+        }
+
+        // Restore TriggerSource (only if TriggerMode allows it to be available)
+        if (_originalTriggerSource is not null)
+        {
+            try
+            {
+                if (_acqDevice.IsFeatureAvailable("TriggerSource"))
+                {
+                    string currentSource = ReadStringFeature(_acqDevice, "TriggerSource").Trim();
+                    if (!string.Equals(currentSource, _originalTriggerSource, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_acqDevice.SetFeatureValue("TriggerSource", _originalTriggerSource))
+                        {
+                            LogDiagnostics(
+                                $"Restored camera TriggerSource to original setting: {_originalTriggerSource}");
+                        }
+                        else
+                        {
+                            LogDiagnostics(
+                                $"Warning: Failed to restore camera TriggerSource to {_originalTriggerSource}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDiagnostics($"Warning: Error restoring camera TriggerSource: {ex.Message}");
+            }
+        }
+
+        // Clear the stored settings after attempting restoration
+        _originalTriggerMode = null;
+        _originalTriggerSource = null;
+    }
+
+    /// <summary>
     /// Disconnects from the camera, releasing all resources and resetting the connection state.
     /// If the camera is not connected, this method does nothing.
     /// </summary>
@@ -746,6 +839,10 @@ options);
         }
 
         _cameraViewHost?.SizeChanged -= CameraViewHost_SizeChanged;
+
+        // Restore the camera's original settings before destroying the device
+        TryRestoreOriginalCameraSettings();
+
         TryRelease("transfer", () => _transfer?.Destroy());
         TryRelease("view", () => _view?.Destroy());
         TryRelease("buffer", () => _buffer?.Destroy());

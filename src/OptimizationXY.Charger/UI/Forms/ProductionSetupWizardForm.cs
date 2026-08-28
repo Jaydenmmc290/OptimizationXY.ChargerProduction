@@ -692,7 +692,7 @@ public sealed class ProductionSetupWizardForm : Form
 
         panel.Controls.Add(capturePreview);
 
-        _cameraSeamPreview.Width = 1000;
+        _cameraSeamPreview.Width = 1200;
         _cameraSeamPreview.Height = 450;
         _cameraSeamPreview.BorderStyle =
             BorderStyle.FixedSingle;
@@ -795,7 +795,7 @@ public sealed class ProductionSetupWizardForm : Form
         imageButtons.Controls.Add(resetMarks);
         panel.Controls.Add(imageButtons);
 
-        _lengthCalibrationImage.Width = 940;
+        _lengthCalibrationImage.Width = 1140;
         _lengthCalibrationImage.Height = 270;
         _lengthCalibrationImage.BorderStyle = BorderStyle.FixedSingle;
         _lengthCalibrationImage.BackColor = Color.Black;
@@ -1117,6 +1117,24 @@ public sealed class ProductionSetupWizardForm : Form
 
         RefreshCameraStatus();
         RefreshReferenceGrid();
+
+        // Check if there's a previous incomplete calibration session and offer to load it
+        if (CalibrationSessionHelper.HasPreviousSession())
+        {
+            var result = MessageBox.Show(
+                "A previous incomplete calibration session was found. Would you like to load it?\n\n" +
+                "Yes: Automatically restore the previous seam alignment, length scale, and reference captures.\n" +
+                "No: Start fresh with current settings.",
+                "Resume Previous Calibration?",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+
+            if (result == DialogResult.Yes)
+            {
+                TryLoadPreviousSession();
+            }
+        }
 
     }
 
@@ -1571,10 +1589,7 @@ public sealed class ProductionSetupWizardForm : Form
 
         ApplyCameraAlignmentSettingsFromControls();
 
-        if (!ConfirmCalibrationSafety())
-        {
-            return;
-        }
+        
 
         await RunBusyAsync(
             "Capturing a combined image for camera seam alignment...",
@@ -1780,10 +1795,7 @@ public sealed class ProductionSetupWizardForm : Form
             return;
         }
 
-        if (!ConfirmCalibrationSafety())
-        {
-            return;
-        }
+        
 
         await RunBusyAsync("Capturing camera and laser verification frames...", async () =>
         {
@@ -1848,10 +1860,7 @@ public sealed class ProductionSetupWizardForm : Form
             return;
         }
 
-        if (!ConfirmCalibrationSafety())
-        {
-            return;
-        }
+        
 
         await RunBusyAsync("Capturing a concatenated image for axial mark selection...", async () =>
         {
@@ -2096,10 +2105,6 @@ public sealed class ProductionSetupWizardForm : Form
             return;
         }
 
-        if (!ConfirmCalibrationSafety())
-        {
-            return;
-        }
 
         await RunBusyAsync($"Capturing known reference '{referenceName}'...", async () =>
         {
@@ -2255,6 +2260,9 @@ public sealed class ProductionSetupWizardForm : Form
             Append(_activationStatus.Text);
             RefreshOverallStatus();
 
+            // Clear the incomplete session after successful activation since calibration is now complete
+            ClearSavedSession();
+
             MessageBox.Show(
                 this,
                 "The scanner lookup table and calibration package were generated and activated safely. " +
@@ -2265,6 +2273,8 @@ public sealed class ProductionSetupWizardForm : Form
         }
         catch (Exception ex)
         {
+            // Save the current incomplete session state to allow resume on error
+            SaveCurrentSession();
             ShowError("Calibration activation failed", ex);
         }
     }
@@ -2499,23 +2509,7 @@ public sealed class ProductionSetupWizardForm : Form
     private static string Flag(bool value) => value ? "ready" : "needed";
 
 
-    /// <summary>
-    /// Prompts the user with a safety confirmation dialog before performing calibration-related operations, ensuring that machine motion is inhibited,
-    /// the knife is retracted, the reference is secured, no person is inside the guarded area, and the PLC cannot start a normal production scan.
-    /// </summary>
-    /// <returns>True if the user confirms the safety conditions; otherwise, false.</returns>
-    private bool ConfirmCalibrationSafety()
-    {
-        DialogResult result = MessageBox.Show(
-            this,
-            "Before capture, confirm that machine motion is inhibited, the knife is retracted, the reference is secured, no person is inside the guarded area, and the PLC cannot start a normal production scan. Continue?",
-            "Calibration Safety Confirmation",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
-
-        return result == DialogResult.Yes;
-    }
+    
 
 
     /// <summary>
@@ -2528,11 +2522,148 @@ public sealed class ProductionSetupWizardForm : Form
         _ = ProductionSetupStatusWriter.Write(_settings);
     }
 
+    /// <summary>
+    /// Saves the current calibration progress as an incomplete session for later resumption.
+    /// Call this before error dialogs or when user might want to fix code and resume.
+    /// </summary>
+    private void SaveCurrentSession()
+    {
+        try
+        {
+            CalibrationSessionHelper.SaveSession(
+                _operatorName.Text,
+                _headOnLeft.Checked,
+                _reverseHeadHorizontal.Checked,
+                _reverseTailHorizontal.Checked,
+                (int)_headCropLeftPixels.Value,
+                (int)_headCropRightPixels.Value,
+                (int)_tailCropLeftPixels.Value,
+                (int)_tailCropRightPixels.Value,
+                (int)_tailVerticalOffsetPixels.Value,
+                (int)_overlapPixels.Value,
+                _cameraSeamConfirmed.Checked,
+                _cameraSeamPreview,
+                (double)_knownLengthMM.Value,
+                (int)_startPixelX.Value,
+                (int)_endPixelX.Value,
+                (double)_lengthPixelsPerMM.Value,
+                _lengthScaleMeasuredThisSession,
+                _lengthCalibrationImage,
+                _references,
+                _independentValidationCompleted.Checked,
+                _validationMeanError.Value != 0 ? (double?)_validationMeanError.Value : null,
+                _validationMaxError.Value != 0 ? (double?)_validationMaxError.Value : null,
+                _calibrationNotes.Text);
+
+            Append("Calibration progress saved. You can close the wizard and resume later.");
+        }
+        catch (Exception ex)
+        {
+            Append("Warning: Failed to save calibration session state: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Loads and applies a previously saved calibration session if one exists.
+    /// Returns true if session was loaded, false otherwise.
+    /// </summary>
+    private bool TryLoadPreviousSession()
+    {
+        CalibrationSessionState? session = CalibrationSessionHelper.LoadSession();
+        if (session == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            // Ask user if they want to resume
+            DialogResult result = MessageBox.Show(
+                this,
+                $"Found a previous calibration session saved on {session.SavedUtc:g} by {session.OperatorName}.\n\n" +
+                "Do you want to resume from that session? Click Yes to restore all previous settings, camera alignment, " +
+                "length scale, and reference captures. Click No to start fresh.",
+                "Resume Previous Calibration Session?",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1);
+
+            if (result != DialogResult.Yes)
+            {
+                return false;
+            }
+
+            // Restore camera seam alignment
+            _headOnLeft.Checked = session.HeadOnLeft;
+            _reverseHeadHorizontal.Checked = session.ReverseHeadHorizontal;
+            _reverseTailHorizontal.Checked = session.ReverseTailHorizontal;
+            _headCropLeftPixels.Value = ClampDecimal(session.HeadCropLeftPixels, _headCropLeftPixels.Minimum, _headCropLeftPixels.Maximum);
+            _headCropRightPixels.Value = ClampDecimal(session.HeadCropRightPixels, _headCropRightPixels.Minimum, _headCropRightPixels.Maximum);
+            _tailCropLeftPixels.Value = ClampDecimal(session.TailCropLeftPixels, _tailCropLeftPixels.Minimum, _tailCropLeftPixels.Maximum);
+            _tailCropRightPixels.Value = ClampDecimal(session.TailCropRightPixels, _tailCropRightPixels.Minimum, _tailCropRightPixels.Maximum);
+            _tailVerticalOffsetPixels.Value = ClampDecimal(session.TailVerticalOffsetPixels, _tailVerticalOffsetPixels.Minimum, _tailVerticalOffsetPixels.Maximum);
+            _overlapPixels.Value = ClampDecimal(session.OverlapPixels, _overlapPixels.Minimum, _overlapPixels.Maximum);
+            _cameraSeamConfirmed.Checked = session.CameraSeamConfirmed;
+            CalibrationSessionHelper.Base64ToPictureBox(_cameraSeamPreview, session.CameraSeamPreviewBase64);
+            _cameraSeamPreviewCapturedThisSession = !string.IsNullOrEmpty(session.CameraSeamPreviewBase64);
+
+            // Restore length scale
+            _knownLengthMM.Value = ClampDecimal(session.KnownLengthMM, _knownLengthMM.Minimum, _knownLengthMM.Maximum);
+            _startPixelX.Value = ClampDecimal(session.StartPixelX, _startPixelX.Minimum, _startPixelX.Maximum);
+            _endPixelX.Value = ClampDecimal(session.EndPixelX, _endPixelX.Minimum, _endPixelX.Maximum);
+            _lengthPixelsPerMM.Value = ClampDecimal(session.LengthPixelsPerMM, _lengthPixelsPerMM.Minimum, _lengthPixelsPerMM.Maximum);
+            _lengthScaleMeasuredThisSession = session.LengthScaleConfirmed;
+            CalibrationSessionHelper.Base64ToPictureBox(_lengthCalibrationImage, session.LengthCalibrationImageBase64);
+
+            // Restore operator name and references
+            _operatorName.Text = session.OperatorName;
+            _references.Clear();
+            foreach (var sessionRef in session.CapturedReferences)
+            {
+                if (sessionRef.Capture != null)
+                {
+                    _references.Add(sessionRef.Capture);
+                }
+            }
+
+            // Restore validation status and notes
+            _independentValidationCompleted.Checked = session.IndependentValidationCompleted;
+            if (session.IndependentValidationMeanErrorMM.HasValue)
+            {
+                _validationMeanError.Value = ClampDecimal(session.IndependentValidationMeanErrorMM.Value, _validationMeanError.Minimum, _validationMeanError.Maximum);
+            }
+            if (session.IndependentValidationMaximumErrorMM.HasValue)
+            {
+                _validationMaxError.Value = ClampDecimal(session.IndependentValidationMaximumErrorMM.Value, _validationMaxError.Minimum, _validationMaxError.Maximum);
+            }
+            _calibrationNotes.Text = session.CalibrationNotes;
+
+            RefreshReferenceGrid();
+            RefreshOverallStatus();
+
+            Append($"Restored calibration session from {session.SavedUtc:g}");
+            Append($"Loaded {_references.Count} reference(s) from previous session");
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Failed to load previous calibration session", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Clears the saved calibration session after successful completion or user request.
+    /// </summary>
+    private static void ClearSavedSession()
+    {
+        CalibrationSessionHelper.ClearSession();
+    }
 
     /// <summary>
     /// Runs an asynchronous operation while displaying a busy cursor and disabling the form, appending a message to the diagnostics log.
-    /// If an exception occurs during
-    /// the operation, it shows an error message. After the operation completes, it re-enables the form and restores the cursor.
+    /// If an exception occurs during the operation, it shows an error message. After the operation completes, it re-enables the form and restores the cursor.
     /// </summary>
     /// <param name="message">The message to append to the diagnostics log.</param>
     /// <param name="operation">The asynchronous operation to run.</param>

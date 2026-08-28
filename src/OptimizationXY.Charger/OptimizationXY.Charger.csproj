@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -8,10 +8,10 @@
     <Platforms>x64</Platforms>
     <RootNamespace>OptimizationXY.Charger</RootNamespace>
     <AssemblyName>OptimizationXY.Charger</AssemblyName>
-    <VersionPrefix>5.0.0</VersionPrefix>
-    <AssemblyVersion>5.0.0.0</AssemblyVersion>
-    <FileVersion>5.0.0.0</FileVersion>
-    <InformationalVersion>5.0.0-production-hardened</InformationalVersion>
+    <VersionPrefix>5.0.1</VersionPrefix>
+    <AssemblyVersion>5.0.1.0</AssemblyVersion>
+    <FileVersion>5.0.1.0</FileVersion>
+    <InformationalVersion>5.0.1-production-hardened</InformationalVersion>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -89,6 +89,7 @@
 
   
   <ItemGroup>
+    <None Remove="licenses.licx" />
     <None Remove="NLog.config" />
 
     <Content Include="NLog.config">
@@ -98,20 +99,22 @@
   </ItemGroup>
 
   
+  <ItemGroup>
+    <EmbeddedResource Include="licenses.licx">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  
 
   <Target Name="ValidateProductionDependencies" BeforeTargets="PrepareForBuild">
-    <Error
-  Condition="'$(UseSapera8)' == 'true' and !Exists('$(Sapera8AssemblyPath)')"
-  Text="Sapera 8 assembly was not found at $(Sapera8AssemblyPath)." />
+    <Error Condition="'$(UseSapera8)' == 'true' and !Exists('$(Sapera8AssemblyPath)')" Text="Sapera 8 assembly was not found at $(Sapera8AssemblyPath)." />
     <Error Condition="!Exists('$(XyRestrictedAssemblyPath)')" Text="XYRestricted.dll was not found at $(XyRestrictedAssemblyPath)." />
     <Error Condition="!Exists('$(AsCommAssemblyPath)')" Text="AutomatedSolutions.ASCommStd.dll was not found at $(AsCommAssemblyPath)." />
   </Target>
 
   <Target Name="ReportSaperaBuildMode" BeforeTargets="PrepareForBuild">
-    <Message
-  Condition="'$(UseSapera8)' == 'true'"
-  Importance="high"
-  Text="Sapera 8 test assembly path: $(Sapera8AssemblyPath)" />
+    <Message Condition="'$(UseSapera8)' == 'true'" Importance="high" Text="Sapera 8 test assembly path: $(Sapera8AssemblyPath)" />
     <Error Condition="'$(RequireSapera)' == 'true' and '$(HasSaperaSdk)' != 'true'" Text="A hardware build was requested, but the Sapera SDK assembly was not found. Set SAPERA_SDK_DIR or SaperaSdkDir, or explicitly build with UseSapera=false." />
     <Message Condition="'$(HasSaperaSdk)' == 'true'" Importance="high" Text="Building with Sapera camera support from $(SaperaAssemblyPath)." />
     <Message Condition="'$(UseSapera)' != 'true'" Importance="high" Text="Sapera support was explicitly disabled. Building with the non-hardware camera stub." />

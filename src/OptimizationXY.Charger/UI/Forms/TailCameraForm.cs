@@ -2,11 +2,16 @@
 
 namespace OptimizationXY.Charger.UI.Forms;
 /// <summary>
-/// Represents a form that displays the tail camera view.
+/// Represents a form that displays the tail camera view with exposure adjustment controls.
 /// </summary>
 
 public partial class TailCameraForm : Form
 {
+    private MainForm? _parentMainForm;
+    private TrackBar? _exposureTrackBar;
+    private Label? _exposureLabel;
+    private Panel? _exposurePanel;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="TailCameraForm"/> class.
     /// </summary>
@@ -14,6 +19,14 @@ public partial class TailCameraForm : Form
     {
         pictureBoxTail = new DoubleBufferedPictureBox(); // Initialize the field
         InitializeComponent();
+    }
+
+    /// <summary>
+    /// Sets the parent MainForm reference to enable exposure adjustment callbacks.
+    /// </summary>
+    public void SetParentMainForm(MainForm mainForm)
+    {
+        _parentMainForm = mainForm;
     }
 
     public Control CameraViewHost => pictureBoxTail;
@@ -101,32 +114,79 @@ public partial class TailCameraForm : Form
 
 
     /// <summary>
-    /// Initializes the components of the TailCameraForm, including the picture box for displaying the tail camera view.
+    /// Initializes the components of the TailCameraForm, including exposure adjustment controls.
     /// </summary>
     private void InitializeComponent()
     {
         pictureBoxTail = new DoubleBufferedPictureBox();
+        _exposureTrackBar = new TrackBar();
+        _exposureLabel = new Label();
+        _exposurePanel = new Panel();
+
         ((System.ComponentModel.ISupportInitialize)pictureBoxTail).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)_exposureTrackBar).BeginInit();
         SuspendLayout();
-        //
-        // pictureBoxTail
-        //
+
+        // pictureBoxTail - fills remaining space after panel
         pictureBoxTail.BackColor = Color.Black;
         pictureBoxTail.Dock = DockStyle.Fill;
         pictureBoxTail.Location = new Point(0, 0);
         pictureBoxTail.Name = "pictureBoxTail";
-        pictureBoxTail.Size = new Size(648, 427);
+        pictureBoxTail.Size = new Size(648, 387);
         pictureBoxTail.SizeMode = PictureBoxSizeMode.Zoom;
         pictureBoxTail.TabIndex = 0;
         pictureBoxTail.TabStop = false;
-        //
+
+        // _exposureLabel
+        _exposureLabel.AutoSize = false;
+        _exposureLabel.BackColor = Color.Black;
+        _exposureLabel.ForeColor = Color.White;
+        _exposureLabel.Location = new Point(8, 8);
+        _exposureLabel.Name = "_exposureLabel";
+        _exposureLabel.Size = new Size(120, 20);
+        _exposureLabel.TabIndex = 1;
+        _exposureLabel.Text = "Exposure: 0";
+        _exposureLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        // _exposureTrackBar
+        _exposureTrackBar.AutoSize = false;
+        _exposureTrackBar.BackColor = Color.Black;
+        _exposureTrackBar.Location = new Point(140, 5);
+        _exposureTrackBar.Maximum = 100;
+        _exposureTrackBar.Minimum = -100;
+        _exposureTrackBar.Name = "_exposureTrackBar";
+        _exposureTrackBar.Size = new Size(500, 25);
+        _exposureTrackBar.TabIndex = 0;
+        _exposureTrackBar.TickStyle = TickStyle.None;
+        _exposureTrackBar.Value = 0;
+        _exposureTrackBar.Scroll += ExposureTrackBar_Scroll;
+
+        // _exposurePanel - docked at bottom
+        _exposurePanel.BackColor = Color.Black;
+        _exposurePanel.Controls.Add(_exposureLabel);
+        _exposurePanel.Controls.Add(_exposureTrackBar);
+        _exposurePanel.Dock = DockStyle.Bottom;
+        _exposurePanel.Height = 40;
+        _exposurePanel.Name = "_exposurePanel";
+
         // TailCameraForm
-        //
         ClientSize = new Size(648, 427);
         Controls.Add(pictureBoxTail);
+        Controls.Add(_exposurePanel);
         Name = "TailCameraForm";
         ((System.ComponentModel.ISupportInitialize)pictureBoxTail).EndInit();
+        ((System.ComponentModel.ISupportInitialize)_exposureTrackBar).EndInit();
         ResumeLayout(false);
+        PerformLayout();
+    }
 
+    private void ExposureTrackBar_Scroll(object? sender, EventArgs e)
+    {
+        if (_exposureTrackBar == null || _exposureLabel == null || _parentMainForm == null)
+            return;
+
+        int exposureValue = _exposureTrackBar.Value;
+        _exposureLabel.Text = $"Exposure: {exposureValue}";
+        _parentMainForm.TailPreviewExposure = exposureValue;
     }
 }

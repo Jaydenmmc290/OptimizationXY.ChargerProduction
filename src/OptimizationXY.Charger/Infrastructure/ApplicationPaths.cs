@@ -26,6 +26,9 @@ public static class ApplicationPaths
     // Directory for staging calibration data before finalization.
     public static string CalibrationStagingDirectory => Path.Combine(CalibrationDirectory, "Staging");
 
+    // Directory for in-progress calibration sessions (incomplete calibrations that can be resumed).
+    public static string CalibrationInProgressDirectory => Path.Combine(CalibrationDirectory, "InProgress");
+
     // Paths for specific calibration files.
     public static string CalibrationLookupTablePath => Path.Combine(CalibrationDirectory, "scanner-lookup-table.json");
 
@@ -50,6 +53,7 @@ public static class ApplicationPaths
         Directory.CreateDirectory(CalibrationDirectory);
         Directory.CreateDirectory(CalibrationArchiveDirectory);
         Directory.CreateDirectory(CalibrationStagingDirectory);
+        Directory.CreateDirectory(CalibrationInProgressDirectory);
         Directory.CreateDirectory(SetupDirectory);
         Directory.CreateDirectory(SavedScansDirectory);
 

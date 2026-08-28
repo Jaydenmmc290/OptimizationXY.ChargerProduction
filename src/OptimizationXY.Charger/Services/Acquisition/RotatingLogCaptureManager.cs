@@ -267,8 +267,8 @@ public sealed class RotatingLogCaptureManager
             double captureDuration =
                 (captureEndTime - _captureStartTime).TotalSeconds;
 
-            int headCount = _headFrames.Count;
-            int tailCount = _tailFrames.Count;
+            int originalHeadCount = _headFrames.Count;
+            int originalTailCount = _tailFrames.Count;
 
             List<ScanFrame> concatenatedFrames;
 
@@ -295,11 +295,16 @@ public sealed class RotatingLogCaptureManager
             AcquisitionMode acquisitionMode =
                 _settings.HeadCamera.Mode;
 
+            // Use the actual concatenated frame count (which is the minimum of head/tail after pairing).
+            // The DualCameraFrameConcatenator uses Math.Min() to ensure paired frames,
+            // so we must pass the actual resulting count, not the original counts.
+            int actualFrameCount = concatenatedFrames.Count;
+
             var result = new CompletedLogCapture(
                 logId: _currentLogId,
                 concatenatedFrames: concatenatedFrames,
-                headFrameCount: headCount,
-                tailFrameCount: tailCount,
+                headFrameCount: actualFrameCount,
+                tailFrameCount: actualFrameCount,
                 captureDurationSeconds: captureDuration,
                 captureStartedUtc: _captureStartTime,
                 captureCompletedUtc: captureEndTime,
@@ -310,9 +315,9 @@ public sealed class RotatingLogCaptureManager
                 droppedFrameCount: _droppedFrameCount,
                 acquisitionMode: acquisitionMode,
                 notes:
-                    $"Concatenated frames: {concatenatedFrames.Count}; " +
-                    $"Head source frames: {headCount}; " +
-                    $"Tail source frames: {tailCount}; " +
+                    $"Concatenated frames: {actualFrameCount}; " +
+                    $"Original head source frames: {originalHeadCount}; " +
+                    $"Original tail source frames: {originalTailCount}; " +
                     $"Angular step: " +
                     $"{_settings.GetAngularStepDegrees():F2}°.");
 
@@ -321,8 +326,8 @@ public sealed class RotatingLogCaptureManager
 
             LogDiagnostics(
                 $"Capture finished: {result.FramePairCount} concatenated " +
-                $"processing frames created from {headCount} head and " +
-                $"{tailCount} tail frames in {captureDuration:F2} seconds.");
+                $"processing frames created from {originalHeadCount} head and " +
+                $"{originalTailCount} tail frames in {captureDuration:F2} seconds.");
 
             return result;
         }

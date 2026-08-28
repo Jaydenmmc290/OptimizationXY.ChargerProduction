@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using Emgu.CV;
@@ -106,6 +107,16 @@ public partial class MainForm : Form
     private long _lastHeadPreviewTimestamp;
     private long _lastTailPreviewTimestamp;
 
+    // ================================================================
+    // EXPOSURE ADJUSTMENT FOR PREVIEW DISPLAY
+    // ================================================================
+    // Exposure adjustment is for preview display only and does not affect
+    // captured frames used in the processing pipeline.
+    // Range: -100 to +100 (0 = no adjustment)
+    private double _headPreviewExposure;
+    private double _tailPreviewExposure;
+    private double _combinedPreviewExposure;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MainForm"/> class.
     /// </summary>
@@ -115,6 +126,57 @@ public partial class MainForm : Form
         _cameraSettings = PipelineState.Instance.Settings.Acquisition;
         InitializeOptimizationModeSelector();
 
+    }
+
+    /// <summary>
+    /// Gets or sets the exposure adjustment for the head camera preview.
+    /// Range: -100 (darker) to +100 (brighter), 0 = no adjustment.
+    /// This affects preview display only, not captured frames.
+    /// </summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    [DefaultValue(0.0)]
+    public double HeadPreviewExposure
+    {
+        get => _headPreviewExposure;
+        set
+        {
+            _headPreviewExposure = Math.Clamp(value, -100.0, 100.0);
+            QueueCombinedPreviewUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the exposure adjustment for the tail camera preview.
+    /// Range: -100 (darker) to +100 (brighter), 0 = no adjustment.
+    /// This affects preview display only, not captured frames.
+    /// </summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    [DefaultValue(0.0)]
+    public double TailPreviewExposure
+    {
+        get => _tailPreviewExposure;
+        set
+        {
+            _tailPreviewExposure = Math.Clamp(value, -100.0, 100.0);
+            QueueCombinedPreviewUpdate();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the exposure adjustment for the combined camera preview.
+    /// Range: -100 (darker) to +100 (brighter), 0 = no adjustment.
+    /// This affects preview display only, not captured frames.
+    /// </summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    [DefaultValue(0.0)]
+    public double CombinedPreviewExposure
+    {
+        get => _combinedPreviewExposure;
+        set
+        {
+            _combinedPreviewExposure = Math.Clamp(value, -100.0, 100.0);
+            QueueCombinedPreviewUpdate();
+        }
     }
 
 
@@ -261,19 +323,23 @@ public partial class MainForm : Form
     }
 
     /// <summary>
-    /// Gets the current operator runtime status, including PLC connection status, scan start and complete flags, captured frame pairs, and expected frame pairs.
+    /// Gets the current operator runtime status, including calibration status, PLC connection status, scan start and complete flags, captured frame pairs, and expected frame pairs.
     /// </summary>
     /// <returns>The current operator runtime status.</returns>
     private OperatorRuntimeStatus GetOperatorRuntimeStatus()
     {
+        var settings = PipelineState.Instance.Settings;
+        bool calibrationActive = !string.IsNullOrWhiteSpace(settings.Setup.ActiveCalibrationId);
+
         return new OperatorRuntimeStatus
         {
-            PlcEnabled = PipelineState.Instance.Settings.Plc.Enabled,
+            CalibrationActive = calibrationActive,
+            PlcEnabled = settings.Plc.Enabled,
             PlcConnected = _plcConnected || _plcService?.IsConnected == true,
             ScanStart = _plcScanStart,
             ScanComplete = _plcScanComplete,
             CapturedPairs = _captureManager?.CapturedFrameCount ?? 0,
-            ExpectedPairs = PipelineState.Instance.Settings.Acquisition.TargetFramePairsPerLog
+            ExpectedPairs = settings.Acquisition.TargetFramePairsPerLog
         };
     }
 
@@ -443,12 +509,14 @@ public partial class MainForm : Form
             if (_headCameraForm == null || _headCameraForm.IsDisposed)
             {
                 _headCameraForm = new HeadCameraForm();
+                _headCameraForm.SetParentMainForm(this);
                 _headCameraForm.EnsureCameraViewReady();
             }
 
             if (_tailCameraForm == null || _tailCameraForm.IsDisposed)
             {
                 _tailCameraForm = new TailCameraForm();
+                _tailCameraForm.SetParentMainForm(this);
                 _tailCameraForm.EnsureCameraViewReady();
             }
             _headCameraForm.EnsureCameraViewReady();
@@ -817,10 +885,22 @@ public partial class MainForm : Form
                 using Mat normalizedChildPreview =
                     CreateNormalizedDisplayFrame(e.Frame);
 
-                using Mat bitmapData =
-                    normalizedChildPreview.Clone();
+                // Apply exposure adjustment based on camera position
+                Mat exposureAdjusted = position == CameraPosition.Head
+                    ? ApplyExposureAdjustmentForDisplay(normalizedChildPreview, _headPreviewExposure)
+                    : ApplyExposureAdjustmentForDisplay(normalizedChildPreview, _tailPreviewExposure);
 
-                childBitmap = bitmapData.ToBitmap();
+                try
+                {
+                    using Mat bitmapData =
+                        exposureAdjusted.Clone();
+
+                    childBitmap = bitmapData.ToBitmap();
+                }
+                finally
+                {
+                    exposureAdjusted.Dispose();
+                }
             }
            
            
@@ -1106,13 +1186,20 @@ public partial class MainForm : Form
             using Mat normalizedTail =
                 CreateNormalizedDisplayFrame(tail);
 
+            // Apply exposure adjustment for preview display only
+            using Mat exposureAdjustedHead =
+                ApplyExposureAdjustmentForDisplay(normalizedHead, _headPreviewExposure);
+
+            using Mat exposureAdjustedTail =
+                ApplyExposureAdjustmentForDisplay(normalizedTail, _tailPreviewExposure);
+
             // Use the exact same crop, orientation, overlap, and seam settings
             // as the measurement pipeline so the operator preview matches the
             // 36 concatenated images that will actually be processed.
             using Mat combined =
                 DualCameraFrameConcatenator.Concatenate(
-                    normalizedHead,
-                    normalizedTail,
+                    exposureAdjustedHead,
+                    exposureAdjustedTail,
                     _cameraSettings.Concatenation);
 
             if (combined.IsEmpty)
@@ -1122,7 +1209,10 @@ public partial class MainForm : Form
                 return;
             }
 
-            using Mat bitmapData = combined.Clone();
+            using Mat exposureAdjustedCombined =
+                ApplyExposureAdjustmentForDisplay(combined, _combinedPreviewExposure);
+
+            using Mat bitmapData = exposureAdjustedCombined.Clone();
             Bitmap newBitmap = bitmapData.ToBitmap();
 
             pictureBoxConcatenated.SuspendLayout();
@@ -1160,7 +1250,7 @@ public partial class MainForm : Form
     /// Creates a display-only normalized image.
     /// Never pass this Mat into the processing pipeline.
     /// </summary>
-    private static Mat CreateNormalizedDisplayFrame(Mat source)
+     private static Mat CreateNormalizedDisplayFrame(Mat source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -1179,6 +1269,40 @@ public partial class MainForm : Form
 
         return normalized;
     }
+
+    /// <summary>
+    /// Applies exposure adjustment to a Mat for display purposes only.
+    /// This creates a modified copy for preview and does NOT affect the original frame.
+    /// Exposure value range: -100 (darker) to +100 (brighter), 0 = no adjustment.
+    /// </summary>
+    private static Mat ApplyExposureAdjustmentForDisplay(Mat source, double exposureAdjustment)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (source.IsEmpty)
+            return source.Clone();
+
+        // If no adjustment needed, return a clone
+        if (Math.Abs(exposureAdjustment) < 0.01)
+            return source.Clone();
+
+        // Clamp exposure to reasonable range
+        double clampedExposure = Math.Clamp(exposureAdjustment / 100.0, -1.0, 1.0);
+
+        Mat adjusted = new();
+
+        // Map exposure (-1 to +1) to brightness adjustment (-76 to +76)
+        // This is aggressive enough to see a clear difference (30% of 255)
+        double brightnessOffset = clampedExposure * 76.0;
+
+        // Use ConvertTo with scale=1.0 and offset for brightness adjustment
+        // This is simpler and more predictable than other methods
+        source.ConvertTo(adjusted, source.Depth, 1.0, brightnessOffset);
+
+        return adjusted;
+    }
+
+
 
 
     private void ResolveAssignedCameras()
@@ -1814,10 +1938,37 @@ string message)
         }
         catch (Exception ex)
         {
-            AppendDiagnostics($"Error starting capture: {ex.Message}");
-            _operatorScanQualityForm?.ShowFailure(
-                "The scan did not start correctly. Check camera and PLC status before retrying.",
-                GetOperatorRuntimeStatus());
+            // Provide detailed, actionable diagnostic information
+            string detailedError = ex switch
+            {
+                InvalidOperationException ioe when ioe.Message.Contains("Capture services") =>
+                    "CAPTURE START FAILED: Camera services not ready. Ensure both cameras are discovered and connected.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("configuration") =>
+                    $"CAPTURE START FAILED: Camera configuration invalid. {ioe.Message}. Reconfigure cameras in Production Setup.",
+
+                _ => $"CAPTURE START FAILED: {ex.Message}"
+            };
+
+            AppendDiagnostics(detailedError);
+
+            // Also verify and report actual camera state
+            bool headConnected = _headCameraService?.IsConnected == true;
+            bool tailConnected = _tailCameraService?.IsConnected == true;
+
+            if (!headConnected || !tailConnected)
+            {
+                AppendDiagnostics($"DIAGNOSTIC: Head camera {(headConnected ? "✓ connected" : "✗ NOT CONNECTED")} | " +
+                    $"Tail camera {(tailConnected ? "✓ connected" : "✗ NOT CONNECTED")}");
+            }
+
+            string userFriendlyMessage = ex switch
+            {
+                InvalidOperationException => "Camera configuration failed. Reconnect cameras and retry.",
+                _ => "The scan did not start. Check camera connections and PLC status before retrying."
+            };
+
+            _operatorScanQualityForm?.ShowFailure(userFriendlyMessage, GetOperatorRuntimeStatus());
             SetUIState(ApplicationState.Faulted);
         }
     }
@@ -1989,6 +2140,20 @@ string message)
                         PipelineState.Instance.PlcPayload is not null &&
                         _plcService is not null)
                     {
+                        // Report any warnings even if we're proceeding
+                        var warningChecks = readiness.Checks
+                            .Where(c => c.Status == ProductionCheckStatus.Warning)
+                            .ToList();
+
+                        if (warningChecks.Count > 0)
+                        {
+                            AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
+                            foreach (var check in warningChecks)
+                            {
+                                AppendDiagnostics($"  ⚠ WARNING: {check.Name}: {check.Message}");
+                            }
+                        }
+
                         AppendDiagnostics(
                             "[PLC] Production checks passed. Sending restricted XY payloads...");
 
@@ -2001,15 +2166,30 @@ string message)
                         AppendDiagnostics(
                             transmission.Success
                                 ? "[PLC] Result accepted by verified tag readback."
-                                : $"[PLC] Result was not accepted: {transmission.Message}");
+                                : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
+                                  $"Verify machine state, sensors, and PLC configuration before retrying.");
 
                         if (!transmission.Success && productionMode)
+                        {
+                            AppendDiagnostics(
+                                "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
                             SetUIState(ApplicationState.Faulted);
+                        }
                     }
                     else
                     {
                         AppendDiagnostics(
                             $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
+
+                        // Provide detailed blocking reasons
+                        var blockingChecks = readiness.Checks
+                            .Where(c => c.Status == ProductionCheckStatus.Block)
+                            .ToList();
+
+                        foreach (var check in blockingChecks)
+                        {
+                            AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
+                        }
 
                         if (productionMode)
                             SetUIState(ApplicationState.Faulted);
@@ -2033,10 +2213,51 @@ string message)
             if (_captureManager?.IsCapturingActive == true)
                 _captureManager.CancelCapture();
 
-            AppendDiagnostics($"Processing error: {ex.Message}");
-            _operatorScanQualityForm?.ShowFailure(
-                "The block scan could not be processed. Rescan the block.",
-                GetOperatorRuntimeStatus());
+            // Provide detailed, categorized error messages
+            string detailedError = ex switch
+            {
+                InvalidOperationException ioe when ioe.Message.Contains("frame count") =>
+                    $"FRAME VALIDATION FAILED: {ioe.Message}. The head and tail cameras did not capture synchronized pairs. " +
+                    $"Check camera trigger settings and synchronization configuration.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("concatenat") =>
+                    $"IMAGE CONCATENATION FAILED: {ioe.Message}. Images could not be combined. " +
+                    $"Verify camera alignment and image geometry settings.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("calibration") =>
+                    $"CALIBRATION LOOKUP FAILED: {ioe.Message}. The scanner calibration cannot process captured data. " +
+                    $"Verify calibration is loaded and covers the measurement range.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("profile") =>
+                    $"PROFILE PROCESSING FAILED: {ioe.Message}. The laser profile could not be extracted from the image. " +
+                    $"Check laser alignment and camera focus.",
+
+                _ => $"PROCESSING FAILED: {ex.Message}"
+            };
+
+            AppendDiagnostics(detailedError);
+
+            // Log the full exception details for technical support
+            AppendDiagnostics($"[TECHNICAL] {ex.GetType().Name}: {ex.StackTrace}");
+
+            string userMessage = ex switch
+            {
+                InvalidOperationException ioe when ioe.Message.Contains("frame count") =>
+                    "Frame synchronization error. Verify camera triggers are properly configured. Rescan the block.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("concatenat") =>
+                    "Image alignment error. Check camera mounting and crop settings. Rescan the block.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("calibration") =>
+                    "Calibration error. Reload calibration and rescan the block.",
+
+                InvalidOperationException ioe when ioe.Message.Contains("profile") =>
+                    "Laser profile detection failed. Check laser alignment and try rescan.",
+
+                _ => "The block scan could not be processed. Check diagnostics and rescan the block."
+            };
+
+            _operatorScanQualityForm?.ShowFailure(userMessage, GetOperatorRuntimeStatus());
             SetUIState(ApplicationState.Faulted);
         }
         finally

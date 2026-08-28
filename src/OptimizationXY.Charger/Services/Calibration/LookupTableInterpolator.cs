@@ -56,10 +56,36 @@ public static class LookupTableInterpolator
 
         if (nearbyByX.Count < 2)
         {
-            List<LookupPoint> value = [.. table.Points
-                .OrderBy(point => Math.Abs(point.X - x))
-                .Take(MaximumNearbyPoints)];
-            nearbyByX = value;
+            // Fallback: Get points from different bands, prioritizing band diversity over proximity
+            var pointsByBand = table.Points
+                .GroupBy(point => point.RadiusBandId > 0
+                    ? point.RadiusBandId
+                    : StableLegacyBandId(point.RadiusMM))
+                .ToList();
+
+            if (pointsByBand.Count < 2)
+            {
+                // Not enough bands in the entire table; use all closest points
+                List<LookupPoint> value = [.. table.Points
+                    .OrderBy(point => Math.Abs(point.X - x))
+                    .Take(MaximumNearbyPoints)];
+                nearbyByX = value;
+            }
+            else
+            {
+                // Get closest points from each band to ensure we have multiple bands
+                var pointsFromEachBand = pointsByBand
+                    .SelectMany(band => band
+                        .OrderBy(point => Math.Abs(point.X - x))
+                        .Take(MaximumNearbyPoints / pointsByBand.Count))
+                    .ToList();
+
+                nearbyByX = pointsFromEachBand.Count >= 2 
+                    ? pointsFromEachBand 
+                    : [.. table.Points
+                        .OrderBy(point => Math.Abs(point.X - x))
+                        .Take(MaximumNearbyPoints)];
+            }
         }
 
         List<CalibrationBand> bands = [.. nearbyByX
