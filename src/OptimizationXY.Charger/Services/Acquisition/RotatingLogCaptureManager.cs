@@ -6,7 +6,8 @@ namespace OptimizationXY.Charger.Services.Acquisition;
 
 /// <summary>
 /// Collects one complete rotating-log scan from both the head and tail cameras.
-/// A capture is complete only when both cameras reach TargetFramePairsPerLog.
+/// Capture continues dynamically until explicitly stopped (via ScanComplete or manual cancellation).
+/// Both cameras capture independently and are paired during concatenation.
 /// </summary>
 public sealed class RotatingLogCaptureManager
 {
@@ -126,9 +127,8 @@ public sealed class RotatingLogCaptureManager
                 $"Capture started for Log ID: {_currentLogId}");
 
             LogDiagnostics(
-                $"Target: {_settings.TargetFramePairsPerLog} frame pairs " +
-                $"({_settings.TargetFramePairsPerLog} head + " +
-                $"{_settings.TargetFramePairsPerLog} tail).");
+                $"Capture will continue until ScanComplete or manual stop. " +
+                $"(Reference target: {_settings.TargetFramePairsPerLog} frame pairs)");
         }
     }
 
@@ -174,17 +174,6 @@ public sealed class RotatingLogCaptureManager
                     "Unsupported camera position.")
             };
 
-            if (targetFrames.Count >=
-                _settings.TargetFramePairsPerLog)
-            {
-                // The other camera may still be receiving its final frame.
-                // Extra free-running/triggered frames after this camera has
-                // completed its quota are intentionally ignored and are not
-                // counted as dropped capture data.
-                frameArgs.Frame.Dispose();
-                return false;
-            }
-
             int frameIndex = targetFrames.Count;
 
             try
@@ -206,8 +195,7 @@ public sealed class RotatingLogCaptureManager
 
                 LogDiagnostics(
                     $"{position} capture progress: " +
-                    $"{targetFrames.Count} / " +
-                    $"{_settings.TargetFramePairsPerLog}");
+                    $"{targetFrames.Count} frames");
 
                 return true;
             }
@@ -229,12 +217,9 @@ public sealed class RotatingLogCaptureManager
     {
         lock (_captureLock)
         {
-            return
-                _isCapturingActive &&
-                _headFrames.Count >=
-                    _settings.TargetFramePairsPerLog &&
-                _tailFrames.Count >=
-                    _settings.TargetFramePairsPerLog;
+            return _isCapturingActive &&
+                   _headFrames.Count > 0 &&
+                   _tailFrames.Count > 0;
         }
     }
     
@@ -295,16 +280,16 @@ public sealed class RotatingLogCaptureManager
             AcquisitionMode acquisitionMode =
                 _settings.HeadCamera.Mode;
 
-            // Use the actual concatenated frame count (which is the minimum of head/tail after pairing).
-            // The DualCameraFrameConcatenator uses Math.Min() to ensure paired frames,
-            // so we must pass the actual resulting count, not the original counts.
+            // Use the original frame counts to track what was actually captured.
+            // Each concatenated frame is created from one synchronized head/tail pair,
+            // so the number of concatenated frames equals Math.Min(originalHeadCount, originalTailCount).
             int actualFrameCount = concatenatedFrames.Count;
 
             var result = new CompletedLogCapture(
                 logId: _currentLogId,
                 concatenatedFrames: concatenatedFrames,
-                headFrameCount: actualFrameCount,
-                tailFrameCount: actualFrameCount,
+                headFrameCount: originalHeadCount,
+                tailFrameCount: originalTailCount,
                 captureDurationSeconds: captureDuration,
                 captureStartedUtc: _captureStartTime,
                 captureCompletedUtc: captureEndTime,

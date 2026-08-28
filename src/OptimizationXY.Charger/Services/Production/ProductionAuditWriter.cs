@@ -53,6 +53,7 @@ public static class ProductionAuditWriter
             CreateRedactedSettingsSnapshot(state.Settings));
         WriteJson(Path.Combine(folder, "direct-recovery-search.json"), state.DirectRecoverySearch);
         WriteJson(Path.Combine(folder, "final-spindle-recommendation.json"), state.FinalSpindleRecommendation);
+        WriteJson(Path.Combine(folder, "kinematic-visualization-state.json"), state.KinematicVisualizationState);
         WriteJson(Path.Combine(folder, "software-build.json"), CreateSoftwareBuildIdentity());
 
         string summary =

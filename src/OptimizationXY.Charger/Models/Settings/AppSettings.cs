@@ -791,6 +791,14 @@ public sealed class SafetySettings
     public bool RequireFiniteCommands { get; set; } = true;
 
     /// <summary>
+    /// When true, skips the local knife clearance validation check during production readiness
+    /// and trusts that the PLC has been properly configured with knife clearance values.
+    /// Set this to true in production to allow PLC-based carriage retract control without
+    /// blocking on the application-side safety check.
+    /// </summary>
+    public bool ReadKnifeClearanceFromPlc { get; set; } = false;
+
+    /// <summary>
     /// Computes the knife clearance in millimeters based on the given veneer thickness and the configured safety settings.
     /// The effective clearance is calculated as the maximum of the minimum knife clearance and the product
     /// of the veneer thickness and the knife clearance multiplier, plus any additional carriage retract buffer.

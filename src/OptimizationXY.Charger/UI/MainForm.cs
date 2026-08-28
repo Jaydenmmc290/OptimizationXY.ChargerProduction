@@ -642,7 +642,8 @@ public partial class MainForm : Form
     }
 
     /// <summary>
-    /// Handles the ScanCompleteChanged event from the PLC service. Updates the internal scan complete state,
+    /// Handles the ScanCompleteChanged event from the PLC service. Updates the internal scan complete state
+    /// and automatically finishes any active capture if ScanComplete transitions to true.
     /// </summary>
     /// <param name="sender">The source of the event.</param>
     /// <param name="complete">The new scan complete state.</param>
@@ -651,6 +652,19 @@ public partial class MainForm : Form
         _plcScanComplete = complete;
         AppendDiagnosticsThreadSafe($"[PLC] ScanComplete = {complete}.");
         UpdateOperatorRuntime();
+
+        // When ScanComplete rises (true), finish the active capture with whatever frames were captured
+        if (complete && _captureManager?.IsCapturingActive == true)
+        {
+            AppendDiagnosticsThreadSafe(
+                $"[PLC] ScanComplete detected. Finishing capture with {_captureManager.HeadFrameCount} head and " +
+                $"{_captureManager.TailFrameCount} tail frames.");
+
+            if (Interlocked.Exchange(ref _captureFinishRequested, 1) == 0)
+            {
+                _ = FinishCaptureAndProcessAsync();
+            }
+        }
     }
 
 
@@ -688,7 +702,7 @@ public partial class MainForm : Form
                 return;
             }
 
-            AppendDiagnostics("[PLC] Starting 36-pair capture from ScanStart rising edge.");
+            AppendDiagnostics("[PLC] Starting dynamic frame capture from ScanStart rising edge.");
             _plcStartInProgress = true;
             try
             {
@@ -1432,19 +1446,8 @@ public partial class MainForm : Form
             _operatorScanQualityForm?.ShowCapturing(GetOperatorRuntimeStatus());
         }
 
-        if (!accepted ||
-            !_captureManager.IsCaptureComplete())
-        {
-            return;
-        }
-
-        if (Interlocked.Exchange(
-                ref _captureFinishRequested,
-                1) != 0)
-        {
-            return;
-        }
-        _ = FinishCaptureAndProcessAsync();
+        // Note: Capture completion is now driven by PLC ScanComplete signal, not frame count.
+        // Removed automatic frame-count-based completion check to allow flexible frame counts.
     }
 
 
@@ -2044,10 +2047,14 @@ string message)
                         "Production processing requires the PLC ScanComplete handshake, but the PLC service is unavailable.");
                 }
 
-                lblBlock.Text = "Block: 36 pairs captured | Waiting for PLC ScanComplete";
+                int headCount = _captureManager.HeadFrameCount;
+                int tailCount = _captureManager.TailFrameCount;
+                int pairCount = Math.Min(headCount, tailCount);
+
+                lblBlock.Text = $"Block: {pairCount} pairs captured | Waiting for PLC ScanComplete";
                 _operatorScanQualityForm?.ShowWaitingForScanComplete(GetOperatorRuntimeStatus());
                 AppendDiagnostics(
-                    "[PLC] All 36 frame pairs are present. Waiting for the PLC-controlled rotation cycle to assert ScanComplete...");
+                    $"[PLC] {pairCount} frame pairs captured. Waiting for the PLC-controlled rotation cycle to assert ScanComplete...");
 
                 await _plcService.WaitForScanCompleteAsync();
                 plcScanCompleteVerified = true;
@@ -2060,8 +2067,8 @@ string message)
             var completedCapture = _captureManager.FinishCapture();
 
             // Keep managed frames enabled for the idle live preview.
-            // FinishCapture removes the retained 36-pair capture from the
-            // active capture manager; future idle frames are not stored there.
+            // FinishCapture removes the current capture from the active capture manager;
+            // future idle frames are not stored there.
 
             lblBlock.Text =
             $"Block: Complete | " +

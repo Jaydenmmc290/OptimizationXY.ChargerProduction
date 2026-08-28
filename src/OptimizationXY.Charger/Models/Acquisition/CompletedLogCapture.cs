@@ -81,12 +81,14 @@ public sealed class CompletedLogCapture
                 nameof(tailCameraConfigurationSnapshot));
         }
 
-
-        // Validate that the head and tail frame counts match the concatenated frames count.
-        if (headFrameCount + tailFrameCount != concatenatedFrames.Count)
+        // Validate that the minimum of head and tail frame counts equals the concatenated frames count.
+        // Since each concatenated frame is a synchronized pair, the number of paired frames
+        // (which is the minimum of head/tail counts) should equal the concatenated output count.
+        if (Math.Min(headFrameCount, tailFrameCount) != concatenatedFrames.Count)
         {
             throw new ArgumentException(
-                "The sum of headFrameCount and tailFrameCount must equal the number of concatenated frames.",
+                "The minimum of headFrameCount and tailFrameCount must equal the number of concatenated frames. " +
+                "Each concatenated frame is created from one synchronized head/tail pair.",
                 nameof(concatenatedFrames));
         }
 

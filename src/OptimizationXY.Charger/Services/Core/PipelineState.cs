@@ -50,6 +50,13 @@ namespace OptimizationXY.Charger.Services.Core
         public MachineFeedbackSnapshot? MachineFeedback { get; set; }
         public OperatorScanQualityResult? OperatorScanQuality { get; set; }
 
+        /// <summary>
+        /// Kinematic visualization state captured during operator position selection.
+        /// Contains complete diagnostic information about the rotation logic calculation.
+        /// Serialized to saved logs for verification and testing.
+        /// </summary>
+        public Kinematic.KinematicVisualizationState? KinematicVisualizationState { get; set; }
+
         // Rotating scan input
         public List<ScanFrame> ScanFrames { get; set; } = new();
 
@@ -138,6 +145,7 @@ namespace OptimizationXY.Charger.Services.Core
             PlcTransmission = null;
             MachineFeedback = null;
             OperatorScanQuality = null;
+            KinematicVisualizationState = null;
 
             PointCloudOverlay?.Dispose();
             RadiusDefectHeatmap?.Dispose();

@@ -257,12 +257,40 @@ public sealed class LogProcessingCoordinator
 
     /// <summary>
     /// Prepares the production command by building the PLC payload and evaluating production readiness.
+    /// 
+    /// Process:
+    /// 1. If FinalSpindleRecommendation exists, present operator with kinematic selection choice
+    /// 2. Operator selects either "Use Kinematic Rotation" or "Continue With Current XY"
+    /// 3. Selected recommendation (original or kinematic-adjusted) is used for PLC payload
+    /// 4. Build PLC payload and evaluate production readiness
     /// </summary>
     /// <param name="plcConnected">Indicates whether the PLC is connected.</param>
     /// <returns>A report detailing the production readiness status.</returns>
     public ProductionReadinessReport PrepareProductionCommand(bool plcConnected)
     {
         var state = PipelineState.Instance;
+
+        // ============================================================
+        // KINEMATIC POSITION SELECTION STEP
+        // Present operator with choice between kinematic rotation and current positions
+        // ============================================================
+        if (state.FinalSpindleRecommendation != null)
+        {
+            try
+            {
+                LogDiagnostics("[KINEMATIC] Presenting operator with position selection choice...");
+
+                state.FinalSpindleRecommendation = Kinematic.KinematicPositionSelector.GetOperatorPositionSelection(
+                    state.FinalSpindleRecommendation);
+
+                LogDiagnostics("[KINEMATIC] Operator selection complete.");
+            }
+            catch (Exception ex)
+            {
+                LogDiagnostics($"[KINEMATIC] Error during operator selection: {ex.Message}");
+                // Continue with existing recommendation if selection fails
+            }
+        }
 
         try
         {

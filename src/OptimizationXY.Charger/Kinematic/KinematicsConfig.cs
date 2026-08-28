@@ -1,12 +1,9 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace OptimizationXY.Charger.Kinematic;
 
-{
-    /// <summary>
-    /// Configuration settings for the kinematics calculator.
+/// <summary>
+/// Configuration settings for the kinematics calculator.
     /// 
     /// This class encapsulates all runtime configuration options for the KinematicsCalculator,
     /// allowing different systems or scenarios to have different rotation zone limits and
@@ -106,4 +103,3 @@ namespace OptimizationXY.Charger.Kinematic;
             }
         }
     }
-}

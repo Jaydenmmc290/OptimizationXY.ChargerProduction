@@ -1,13 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
+                                 using System;
 
 namespace OptimizationXY.Charger.Kinematic;
-{
-    /// <summary>
-    /// Thread-safe kinematics calculator that performs all mathematical calculations
-    /// without accessing UI controls. This class is safe to use from any thread,
-    /// including parallel worker threads.
+
+/// <summary>
+/// Thread-safe kinematics calculator that performs all mathematical calculations
+/// without accessing UI controls. This class is safe to use from any thread,
+/// including parallel worker threads.
     /// 
     /// This calculator implements forward kinematics logic that:
     /// 1. Takes input positions for the dog (head) and tail components
@@ -207,7 +205,7 @@ namespace OptimizationXY.Charger.Kinematic;
             double newDogAngle = dogLCAngle;    // New angle after rotation
             double newTailAngle = tailLCAngle;  // New angle after rotation
 
-            if (dogLCInZone == 1 && tailLCInZone == 1)
+            if (dogLCInZone == 0 && tailLCInZone == 0)
             {
                 // CASE A: BOTH COMPONENTS NEED ROTATION
                 // Find the minimum rotation that clears both components from the danger zone.
@@ -245,7 +243,7 @@ namespace OptimizationXY.Charger.Kinematic;
                 newDogAngle = dogLCAngle + spindleRotateCalc;
                 newTailAngle = tailLCAngle + spindleRotateCalc;
             }
-            else if (dogLCInZone == 1 && tailLCInZone == 0)
+            else if (dogLCInZone == 0 && tailLCInZone == 1)
             {
                 // CASE B: ONLY DOG NEEDS ROTATION
                 if (dogFromRight > dogFromLeft)
@@ -260,7 +258,7 @@ namespace OptimizationXY.Charger.Kinematic;
                 newDogAngle = dogLCAngle + spindleRotateCalc;
                 newTailAngle = tailLCAngle + spindleRotateCalc;
             }
-            else if (dogLCInZone == 0 && tailLCInZone == 1)
+            else if (dogLCInZone == 1 && tailLCInZone == 0)
             {
                 // CASE C: ONLY TAIL NEEDS ROTATION
                 if (tailFromRight > tailFromLeft)
@@ -275,7 +273,7 @@ namespace OptimizationXY.Charger.Kinematic;
                 newDogAngle = dogLCAngle + spindleRotateCalc;
                 newTailAngle = tailLCAngle + spindleRotateCalc;
             }
-            // CASE D: Neither needs rotation - angles remain unchanged (already set above)
+            // CASE D: Neither needs rotation - angles remain unchanged
 
             // ========================================================
             // STEP 7: CALCULATE FINAL DOG AND TAIL POSITIONS
@@ -422,7 +420,7 @@ namespace OptimizationXY.Charger.Kinematic;
                 newDogAngle = dogLCAngle + spindleRotateCalc;
                 newTailAngle = tailLCAngle + spindleRotateCalc;
             }
-            else if (dogLCInZone == 1 && tailLCInZone == 0)
+            else if (dogLCInZone == 0 && tailLCInZone == 1)
             {
                 // CASE B: ONLY DOG NEEDS ROTATION
                 if (dogFromRight > dogFromLeft)
@@ -437,7 +435,7 @@ namespace OptimizationXY.Charger.Kinematic;
                 newDogAngle = dogLCAngle + spindleRotateCalc;
                 newTailAngle = tailLCAngle + spindleRotateCalc;
             }
-            else if (dogLCInZone == 0 && tailLCInZone == 1)
+            else if (dogLCInZone == 1 && tailLCInZone == 0)
             {
                 // CASE C: ONLY TAIL NEEDS ROTATION
                 if (tailFromRight > tailFromLeft)
@@ -552,4 +550,4 @@ namespace OptimizationXY.Charger.Kinematic;
             return 0;
         }
     }
-}
+
