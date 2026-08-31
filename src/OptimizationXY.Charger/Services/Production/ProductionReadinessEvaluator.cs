@@ -67,12 +67,7 @@ public static class ProductionReadinessEvaluator
 
         bool productionOptimizationPolicy =
             settings.OptimizationMode ==
-                OptimizationXY.Charger.Models.Optimization.SpindleOptimizationMode.RecoveryOptimized &&
-            settings.RecoveryOptimization.IncludeBaselineCandidate &&
-            settings.RecoveryOptimization.IncludePenaltyCandidate &&
-            settings.RecoveryOptimization.IncludeCylinderCandidate &&
-            settings.RecoveryOptimization.IncludeOvalCandidate &&
-            settings.RecoveryOptimization.EnableDirectRecoveryRefinement;
+                OptimizationXY.Charger.Models.Optimization.SpindleOptimizationMode.CompareInscribedGeometry;
 
         Add(
             report,
@@ -81,8 +76,8 @@ public static class ProductionReadinessEvaluator
                 ? ProductionCheckStatus.Pass
                 : ProductionCheckStatus.Block,
             productionOptimizationPolicy
-                ? "RecoveryOptimized mode includes baseline, penalty, cylinder, oval, and direct virtual-peel refinement candidates."
-                : "Production requires RecoveryOptimized mode with all four seed strategies and direct virtual-peel refinement enabled.");
+                ? "CompareInscribedGeometry mode selected for production optimization."
+                : "Production requires CompareInscribedGeometry mode for spindle position optimization.");
 
         bool directCameraInitialization =
             settings.Acquisition.HeadCamera.InitializationMode == CameraInitializationMode.Programmatic &&
@@ -526,29 +521,83 @@ public static class ProductionReadinessEvaluator
     /// <param name="snapshot">The camera configuration snapshot to check.</param>
     /// <param name="expectedLocation">The expected camera location (ServerName[DeviceIndex]) to match.</param>
     /// <returns>True if the snapshot's location matches the expected location; otherwise, false.</returns>
-    private static bool SnapshotLocationMatches(byte[]? snapshot, string expectedLocation)
+    private static bool SnapshotLocationMatches(
+    byte[]? snapshot,
+    string expectedLocation)
     {
-        if (snapshot is not { Length: > 0 } || string.IsNullOrWhiteSpace(expectedLocation))
+        if (snapshot is not { Length: > 0 } ||
+            string.IsNullOrWhiteSpace(expectedLocation))
+        {
             return false;
+        }
 
         try
         {
             using JsonDocument document = JsonDocument.Parse(snapshot);
+            JsonElement root = document.RootElement;
 
-            if (!document.RootElement.TryGetProperty("ConnectedServerName", out JsonElement serverElement) ||
-                !document.RootElement.TryGetProperty("ConnectedDeviceIndex", out JsonElement deviceElement))
+            string actualServerName;
+            int actualDeviceIndex;
+
+            // Support newer snapshot format first.
+            if (root.TryGetProperty(
+                    "ConnectedServerName",
+                    out JsonElement connectedServerElement))
+            {
+                actualServerName =
+                    connectedServerElement.GetString()?.Trim() ?? string.Empty;
+            }
+            // Backward-compatible Friday/calibration format.
+            else if (root.TryGetProperty(
+                         "ServerName",
+                         out JsonElement serverElement))
+            {
+                actualServerName =
+                    serverElement.GetString()?.Trim() ?? string.Empty;
+            }
+            else
+            {
                 return false;
+            }
 
-            string actualServerName = serverElement.GetString()?.Trim() ?? string.Empty;
-            int actualDeviceIndex = deviceElement.GetInt32();
-            string actualLocation = $"{actualServerName}[{actualDeviceIndex}]";
+            // Support newer snapshot format first.
+            if (root.TryGetProperty(
+                    "ConnectedDeviceIndex",
+                    out JsonElement connectedDeviceElement) &&
+                connectedDeviceElement.TryGetInt32(out int connectedDeviceIndex))
+            {
+                actualDeviceIndex = connectedDeviceIndex;
+            }
+            // Backward-compatible Friday/calibration format.
+            else if (root.TryGetProperty(
+                         "DeviceIndex",
+                         out JsonElement deviceElement) &&
+                     deviceElement.TryGetInt32(out int deviceIndex))
+            {
+                actualDeviceIndex = deviceIndex;
+            }
+            else
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(actualServerName))
+            {
+                return false;
+            }
+
+            string actualLocation =
+                $"{actualServerName}[{actualDeviceIndex}]";
 
             return string.Equals(
                 actualLocation,
                 expectedLocation.Trim(),
                 StringComparison.OrdinalIgnoreCase);
         }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        catch (Exception ex) when (
+            ex is JsonException or
+            InvalidOperationException or
+            FormatException)
         {
             return false;
         }

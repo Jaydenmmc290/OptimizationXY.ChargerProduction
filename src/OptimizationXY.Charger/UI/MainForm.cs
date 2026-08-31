@@ -2299,6 +2299,36 @@ string message)
         {
             var rec = state.FinalSpindleRecommendation;
 
+            // Update the Spindle Output textboxes with the command positions (in MM)
+            try
+            {
+                if (InvokeRequired)
+                {
+                    Invoke(new Action(() =>
+                    {
+                        txtHeadX.Text = rec.CommandHeadXMM.ToString("F2");
+                        txtHeadY.Text = rec.CommandHeadYMM.ToString("F2");
+                        txtTailX.Text = rec.CommandTailXMM.ToString("F2");
+                        txtTailY.Text = rec.CommandTailYMM.ToString("F2");
+                        txtUsableSheets.Text = rec.UsableFullSheets.ToString();
+                        txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2");
+                    }));
+                }
+                else
+                {
+                    txtHeadX.Text = rec.CommandHeadXMM.ToString("F2");
+                    txtHeadY.Text = rec.CommandHeadYMM.ToString("F2");
+                    txtTailX.Text = rec.CommandTailXMM.ToString("F2");
+                    txtTailY.Text = rec.CommandTailYMM.ToString("F2");
+                    txtUsableSheets.Text = rec.UsableFullSheets.ToString();
+                    txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to update Spindle Output fields.");
+            }
+
             // Convert MM to inches (1 inch = 25.4 mm)
             double tailXInches = rec.CommandTailXMM / 25.4;
             double tailYInches = rec.CommandTailYMM / 25.4;
@@ -2350,6 +2380,35 @@ string message)
                 }
             }
             AppendDiagnostics("============================================");
+
+            // Display the log overlay (head-middle-tail visualization)
+            if (state.PointCloudOverlay != null)
+            {
+                try
+                {
+                    Bitmap? overlayBitmap = state.PointCloudOverlay.ToBitmap();
+                    if (overlayBitmap != null)
+                    {
+                        if (InvokeRequired)
+                        {
+                            Invoke(new Action(() =>
+                            {
+                                pictureBoxLogOverlay.Image?.Dispose();
+                                pictureBoxLogOverlay.Image = overlayBitmap;
+                            }));
+                        }
+                        else
+                        {
+                            pictureBoxLogOverlay.Image?.Dispose();
+                            pictureBoxLogOverlay.Image = overlayBitmap;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "Failed to display log overlay image.");
+                }
+            }
         }
     }
 

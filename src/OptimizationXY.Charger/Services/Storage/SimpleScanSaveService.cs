@@ -509,9 +509,6 @@ public sealed class SimpleScanSaveService
             state.RadiusDefectHeatmap,
             Path.Combine(overlaysFolder, "radius_defect_heatmap.png"));
         SaveMatIfValid(
-            state.RotatingScanTopDownOverlay,
-            Path.Combine(overlaysFolder, "rotating_scan_top_down_overlay.png"));
-        SaveMatIfValid(
             state.UnwrappedPeelView,
             Path.Combine(overlaysFolder, "unwrapped_peel_view.png"));
         SaveMatIfValid(

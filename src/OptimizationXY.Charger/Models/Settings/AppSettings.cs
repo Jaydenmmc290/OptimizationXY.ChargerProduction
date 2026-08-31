@@ -70,7 +70,7 @@ public sealed class AppSettings
     /// <summary>
     /// The mode for spindle optimization.
     /// </summary>
-    public SpindleOptimizationMode OptimizationMode { get; set; } = SpindleOptimizationMode.RecoveryOptimized;
+    public SpindleOptimizationMode OptimizationMode { get; set; } = SpindleOptimizationMode.CompareInscribedGeometry;
     /// <summary>
     /// Settings for inscribed geometry analysis.
     /// </summary>
@@ -129,6 +129,11 @@ public sealed class AppSettings
     /// Settings for scan storage, including parameters for scan data storage and management.
     /// </summary>
     public ScanStorageSettings Storage { get; set; } = new();
+
+    /// <summary>
+    /// Settings for kinematic rotation, including whether to enable the kinematic position selection UI.
+    /// </summary>
+    public KinematicSettings Kinematic { get; set; } = new();
 }
 
 /// <summary>
@@ -965,4 +970,17 @@ public sealed class ProductionSetupSettings
         ScannerCalibrationCreated &&
         ScannerCalibrationRepeatabilityVerified &&
         !string.IsNullOrWhiteSpace(ActiveCalibrationId);
+}
+
+/// <summary>
+/// Represents the settings for kinematic rotation, including whether to enable the kinematic position selection UI.
+/// </summary>
+public sealed class KinematicSettings
+{
+    /// <summary>
+    /// Enables or disables the kinematic position selection message box that appears during production processing.
+    /// When false (default), the message box will not appear and production will proceed without kinematic selection.
+    /// When true, operators will be prompted to choose between kinematic rotation or current XY positions.
+    /// </summary>
+    public bool EnableKinematicPositionSelection { get; set; } = false;
 }

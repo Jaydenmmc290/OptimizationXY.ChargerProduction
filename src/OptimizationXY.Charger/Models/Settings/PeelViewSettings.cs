@@ -65,8 +65,16 @@ public sealed class PeelViewSettings
     /// </summary>
     public double OuterRadiusPercentile { get; set; } = 0.98;
 
-    /// <summary>
-    /// Smoothing for noisy scan cells.
-    /// </summary>
-    public int SurfaceSmoothPasses { get; set; } = 1;
-}
+         /// <summary>
+         /// Smoothing for noisy scan cells.
+         /// </summary>
+         public int SurfaceSmoothPasses { get; set; } = 1;
+
+         /// <summary>
+         /// When enabled, truncates the peel visualization to show only from the cut beginning
+         /// through the first completely usable sheet (100% coverage, no wane). This reduces file size
+         /// while the mathematical calculations (total sheets, final diameter, etc.) are computed based
+         /// on the complete peel simulation.
+         /// </summary>
+         public bool EnableTruncatedVisualization { get; set; } = false;
+    }

@@ -124,7 +124,8 @@ public static class UnwrappedPeelViewBuilder
             peelRadii,
             ref totalSamples,
             ref waneSamples,
-            ref severeWaneSamples);
+            ref severeWaneSamples,
+            settings.EnableTruncatedVisualization);
 
         PeelSheetSummary sheetSummary =
             DrawSheetBoundariesAndLabels(
@@ -265,6 +266,43 @@ public static class UnwrappedPeelViewBuilder
     }
 
     /// <summary>
+    /// Finds the first completely usable sheet (100% coverage, no wane) in the sheet stats.
+    /// Returns the sheet index if found, null otherwise.
+    /// </summary>
+    private static int? FindFirstUsableSheet(
+        Dictionary<int, SheetQualityStats> sheetStats,
+        PeelViewSettings settings,
+        int expectedSheetCount)
+    {
+        for (int sheet = 0; sheet < expectedSheetCount; sheet++)
+        {
+            if (!sheetStats.TryGetValue(sheet, out var stats))
+                continue;
+
+            // A full sheet is completely usable when:
+            // - Coverage meets or exceeds the minimum threshold
+            // - Severe wane is within acceptable limits
+            if (stats.TotalCells > 0)
+            {
+                double wanePercent = 100.0 * stats.WaneCells / stats.TotalCells;
+                double coveragePercent = 100.0 - wanePercent;
+                double severePercent = 100.0 * stats.SevereWaneCells / stats.TotalCells;
+
+                bool isUsable = 
+                    coveragePercent >= settings.MinimumUsableSheetCoveragePercent &&
+                    severePercent <= settings.MaximumUsableSheetSevereWanePercent;
+
+                if (isUsable)
+                {
+                    return sheet;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Draws the peel simulation as continuous sheets on the provided canvas, calculating wane and severe wane statistics.
     /// </summary>
     /// <param name="canvas">The canvas on which to draw the peel simulation.</param>
@@ -288,7 +326,8 @@ public static class UnwrappedPeelViewBuilder
             List<double> peelRadii,
             ref long totalSamples,
             ref long waneSamples,
-            ref long severeWaneSamples)
+            ref long severeWaneSamples,
+            bool enableTruncation = false)
     {
         var sheetStats = new Dictionary<int, SheetQualityStats>();
 
@@ -361,6 +400,10 @@ public static class UnwrappedPeelViewBuilder
             angleRatioByX[px] = angleRatio;
         }
 
+        // Track the first usable sheet for truncation
+        int? firstUsableSheet = null;
+        int expectedSheetCount = (int)Math.Ceiling(totalVeneerLengthMM / sheetLengthMM);
+
         for (int y = rect.Top; y < rect.Bottom; y++)
         {
             double zRatio =
@@ -390,23 +433,31 @@ public static class UnwrappedPeelViewBuilder
                 double lowSpotMM =
                     surface.OuterRadiusMM - scannedOuterRadiusMM;
 
-                Bgr color = GetPeelColor(
-                    peelRadiusMM,
-                    scannedOuterRadiusMM,
-                    missingWoodMM,
-                    lowSpotMM,
-                    settings,
-                    usableSettings,
-                    waneSettings,
-                    zRatio,
-                    angleRatioByX[px],
-                    rev,
-                    (x - rect.Left) / Math.Max(1.0, rect.Width - 1.0));
+                // Determine if we should render this pixel based on truncation
+                bool shouldRenderPixel = !enableTruncation || !firstUsableSheet.HasValue || sheetIndex <= firstUsableSheet.Value;
 
-                canvas.Data[y, x, 0] = (byte)Math.Clamp((int)color.Blue, 0, 255);
-                canvas.Data[y, x, 1] = (byte)Math.Clamp((int)color.Green, 0, 255);
-                canvas.Data[y, x, 2] = (byte)Math.Clamp((int)color.Red, 0, 255);
+                // Only render the pixel if it's before the truncation point
+                if (shouldRenderPixel)
+                {
+                    Bgr color = GetPeelColor(
+                        peelRadiusMM,
+                        scannedOuterRadiusMM,
+                        missingWoodMM,
+                        lowSpotMM,
+                        settings,
+                        usableSettings,
+                        waneSettings,
+                        zRatio,
+                        angleRatioByX[px],
+                        rev,
+                        (x - rect.Left) / Math.Max(1.0, rect.Width - 1.0));
 
+                    canvas.Data[y, x, 0] = (byte)Math.Clamp((int)color.Blue, 0, 255);
+                    canvas.Data[y, x, 1] = (byte)Math.Clamp((int)color.Green, 0, 255);
+                    canvas.Data[y, x, 2] = (byte)Math.Clamp((int)color.Red, 0, 255);
+                }
+
+                // Always track statistics, regardless of truncation (for accurate calculations)
                 totalSamples++;
 
                 if (!sheetStats.TryGetValue(sheetIndex, out var stats))
@@ -438,6 +489,15 @@ public static class UnwrappedPeelViewBuilder
                     severeWaneSamples++;
                     stats.SevereWaneCells++;
                 }
+            }
+
+            // After processing each row, check if we should update firstUsableSheet
+            if (enableTruncation && !firstUsableSheet.HasValue)
+            {
+                firstUsableSheet = FindFirstUsableSheet(
+                    sheetStats,
+                    settings,
+                    expectedSheetCount);
             }
         }
 

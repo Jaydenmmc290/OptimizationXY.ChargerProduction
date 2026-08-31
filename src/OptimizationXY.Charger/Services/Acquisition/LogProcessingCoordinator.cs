@@ -274,7 +274,8 @@ public sealed class LogProcessingCoordinator
         // KINEMATIC POSITION SELECTION STEP
         // Present operator with choice between kinematic rotation and current positions
         // ============================================================
-        if (state.FinalSpindleRecommendation != null)
+        var settings = PipelineState.Instance.Settings;
+        if (state.FinalSpindleRecommendation != null && settings.Kinematic.EnableKinematicPositionSelection)
         {
             try
             {
@@ -290,6 +291,10 @@ public sealed class LogProcessingCoordinator
                 LogDiagnostics($"[KINEMATIC] Error during operator selection: {ex.Message}");
                 // Continue with existing recommendation if selection fails
             }
+        }
+        else if (state.FinalSpindleRecommendation != null && !settings.Kinematic.EnableKinematicPositionSelection)
+        {
+            LogDiagnostics("[KINEMATIC] Kinematic position selection is disabled; proceeding with current XY positions.");
         }
 
         try

@@ -35,27 +35,27 @@ namespace OptimizationXY.Charger.UI
             cmbOptimizationMode = new ComboBox();
             BtnStartCapture = new Button();
             BtnStopCapture = new Button();
-            BtnProductionSetup = new Button();
             lblDiagnostics = new Label();
             lblMode = new Label();
             lblBlock = new Label();
+            BtnProductionSetup = new Button();
             groupConcatenated = new GroupBox();
             pictureBoxConcatenated = new PictureBox();
             groupBoxDiagnostics = new GroupBox();
             txtDiagnostics = new TextBox();
             groupBoxProfileMeasurements = new GroupBox();
-            lblPointCount = new Label();
-            lblMeasuredLengthInches = new Label();
-            txtMeasuredLengthInches = new TextBox();
-            lblMaxDiameterIn = new Label();
-            lblMinDiameterIn = new Label();
-            txtPointCount = new TextBox();
-            lblAvgDiameterIn = new Label();
-            lblAvgDiameterMm = new Label();
-            txtAvgDiameterMM = new TextBox();
-            txtAvgDiameterInches = new TextBox();
-            txtMinDiameterInches = new TextBox();
-            txtMaxDiameterInches = new TextBox();
+            lblHeadX = new Label();
+            txtHeadX = new TextBox();
+            lblHeadY = new Label();
+            txtHeadY = new TextBox();
+            lblTailX = new Label();
+            txtTailX = new TextBox();
+            lblTailY = new Label();
+            txtTailY = new TextBox();
+            lblUsableSheets = new Label();
+            txtUsableSheets = new TextBox();
+            lblUsableVeneerLength = new Label();
+            txtUsableVeneerLength = new TextBox();
             groupBoxOverlay.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBoxLogOverlay).BeginInit();
             panelControls.SuspendLayout();
@@ -142,16 +142,6 @@ namespace OptimizationXY.Charger.UI
             BtnStopCapture.UseVisualStyleBackColor = true;
             BtnStopCapture.Click += BtnStopCapture_Click;
             // 
-            // BtnProductionSetup
-            // 
-            BtnProductionSetup.Location = new Point(916, 362);
-            BtnProductionSetup.Name = "BtnProductionSetup";
-            BtnProductionSetup.Size = new Size(123, 44);
-            BtnProductionSetup.TabIndex = 13;
-            BtnProductionSetup.Text = "Setup / Calibration";
-            BtnProductionSetup.UseVisualStyleBackColor = true;
-            BtnProductionSetup.Click += BtnProductionSetup_Click;
-            // 
             // lblDiagnostics
             // 
             lblDiagnostics.AutoSize = true;
@@ -178,6 +168,16 @@ namespace OptimizationXY.Charger.UI
             lblBlock.Size = new Size(71, 15);
             lblBlock.TabIndex = 6;
             lblBlock.Text = "Block: None";
+            // 
+            // BtnProductionSetup
+            // 
+            BtnProductionSetup.Location = new Point(916, 362);
+            BtnProductionSetup.Name = "BtnProductionSetup";
+            BtnProductionSetup.Size = new Size(123, 44);
+            BtnProductionSetup.TabIndex = 13;
+            BtnProductionSetup.Text = "Setup / Calibration";
+            BtnProductionSetup.UseVisualStyleBackColor = true;
+            BtnProductionSetup.Click += BtnProductionSetup_Click;
             // 
             // groupConcatenated
             // 
@@ -223,120 +223,126 @@ namespace OptimizationXY.Charger.UI
             // 
             // groupBoxProfileMeasurements
             // 
-            groupBoxProfileMeasurements.Controls.Add(lblPointCount);
-            groupBoxProfileMeasurements.Controls.Add(lblMeasuredLengthInches);
-            groupBoxProfileMeasurements.Controls.Add(txtMeasuredLengthInches);
-            groupBoxProfileMeasurements.Controls.Add(lblMaxDiameterIn);
-            groupBoxProfileMeasurements.Controls.Add(lblMinDiameterIn);
-            groupBoxProfileMeasurements.Controls.Add(txtPointCount);
-            groupBoxProfileMeasurements.Controls.Add(lblAvgDiameterIn);
-            groupBoxProfileMeasurements.Controls.Add(lblAvgDiameterMm);
-            groupBoxProfileMeasurements.Controls.Add(txtAvgDiameterMM);
-            groupBoxProfileMeasurements.Controls.Add(txtAvgDiameterInches);
-            groupBoxProfileMeasurements.Controls.Add(txtMinDiameterInches);
-            groupBoxProfileMeasurements.Controls.Add(txtMaxDiameterInches);
+            groupBoxProfileMeasurements.Controls.Add(lblHeadX);
+            groupBoxProfileMeasurements.Controls.Add(txtHeadX);
+            groupBoxProfileMeasurements.Controls.Add(lblHeadY);
+            groupBoxProfileMeasurements.Controls.Add(txtHeadY);
+            groupBoxProfileMeasurements.Controls.Add(lblTailX);
+            groupBoxProfileMeasurements.Controls.Add(txtTailX);
+            groupBoxProfileMeasurements.Controls.Add(lblTailY);
+            groupBoxProfileMeasurements.Controls.Add(txtTailY);
+            groupBoxProfileMeasurements.Controls.Add(lblUsableSheets);
+            groupBoxProfileMeasurements.Controls.Add(txtUsableSheets);
+            groupBoxProfileMeasurements.Controls.Add(lblUsableVeneerLength);
+            groupBoxProfileMeasurements.Controls.Add(txtUsableVeneerLength);
             groupBoxProfileMeasurements.Location = new Point(608, 412);
             groupBoxProfileMeasurements.Name = "groupBoxProfileMeasurements";
             groupBoxProfileMeasurements.Size = new Size(423, 147);
             groupBoxProfileMeasurements.TabIndex = 40;
             groupBoxProfileMeasurements.TabStop = false;
-            groupBoxProfileMeasurements.Text = "Profile Measurements";
+            groupBoxProfileMeasurements.Text = "Spindle Output";
             // 
-            // lblPointCount
+            // lblHeadX
             // 
-            lblPointCount.AutoSize = true;
-            lblPointCount.Location = new Point(108, 25);
-            lblPointCount.Name = "lblPointCount";
-            lblPointCount.Size = new Size(81, 15);
-            lblPointCount.TabIndex = 27;
-            lblPointCount.Text = "Point Count #";
+            lblHeadX.AutoSize = true;
+            lblHeadX.Location = new Point(6, 55);
+            lblHeadX.Name = "lblHeadX";
+            lblHeadX.Size = new Size(45, 15);
+            lblHeadX.TabIndex = 27;
+            lblHeadX.Text = "Head X";
             // 
-            // lblMeasuredLengthInches
+            // txtHeadX
             // 
-            lblMeasuredLengthInches.AutoSize = true;
-            lblMeasuredLengthInches.Location = new Point(95, 61);
-            lblMeasuredLengthInches.Name = "lblMeasuredLengthInches";
-            lblMeasuredLengthInches.Size = new Size(120, 15);
-            lblMeasuredLengthInches.TabIndex = 26;
-            lblMeasuredLengthInches.Text = "Measured Length (in)";
+            txtHeadX.Location = new Point(65, 52);
+            txtHeadX.Name = "txtHeadX";
+            txtHeadX.ReadOnly = true;
+            txtHeadX.Size = new Size(80, 23);
+            txtHeadX.TabIndex = 20;
             // 
-            // txtMeasuredLengthInches
+            // lblHeadY
             // 
-            txtMeasuredLengthInches.Location = new Point(9, 58);
-            txtMeasuredLengthInches.Name = "txtMeasuredLengthInches";
-            txtMeasuredLengthInches.Size = new Size(80, 23);
-            txtMeasuredLengthInches.TabIndex = 25;
+            lblHeadY.AutoSize = true;
+            lblHeadY.Location = new Point(6, 22);
+            lblHeadY.Name = "lblHeadY";
+            lblHeadY.Size = new Size(45, 15);
+            lblHeadY.TabIndex = 26;
+            lblHeadY.Text = "Head Y";
             // 
-            // lblMaxDiameterIn
+            // txtHeadY
             // 
-            lblMaxDiameterIn.AutoSize = true;
-            lblMaxDiameterIn.Location = new Point(306, 22);
-            lblMaxDiameterIn.Name = "lblMaxDiameterIn";
-            lblMaxDiameterIn.Size = new Size(101, 15);
-            lblMaxDiameterIn.TabIndex = 24;
-            lblMaxDiameterIn.Text = "Max Diameter (in)";
+            txtHeadY.Location = new Point(65, 19);
+            txtHeadY.Name = "txtHeadY";
+            txtHeadY.ReadOnly = true;
+            txtHeadY.Size = new Size(80, 23);
+            txtHeadY.TabIndex = 25;
             // 
-            // lblMinDiameterIn
+            // lblTailX
             // 
-            lblMinDiameterIn.AutoSize = true;
-            lblMinDiameterIn.Location = new Point(95, 102);
-            lblMinDiameterIn.Name = "lblMinDiameterIn";
-            lblMinDiameterIn.Size = new Size(100, 15);
-            lblMinDiameterIn.TabIndex = 23;
-            lblMinDiameterIn.Text = "Min Diameter (in)";
+            lblTailX.AutoSize = true;
+            lblTailX.Location = new Point(6, 84);
+            lblTailX.Name = "lblTailX";
+            lblTailX.Size = new Size(35, 15);
+            lblTailX.TabIndex = 24;
+            lblTailX.Text = "Tail X";
             // 
-            // txtPointCount
+            // txtTailX
             // 
-            txtPointCount.Location = new Point(9, 22);
-            txtPointCount.Name = "txtPointCount";
-            txtPointCount.Size = new Size(93, 23);
-            txtPointCount.TabIndex = 20;
+            txtTailX.Location = new Point(65, 81);
+            txtTailX.Name = "txtTailX";
+            txtTailX.ReadOnly = true;
+            txtTailX.Size = new Size(80, 23);
+            txtTailX.TabIndex = 23;
             // 
-            // lblAvgDiameterIn
+            // lblTailY
             // 
-            lblAvgDiameterIn.AutoSize = true;
-            lblAvgDiameterIn.Location = new Point(306, 61);
-            lblAvgDiameterIn.Name = "lblAvgDiameterIn";
-            lblAvgDiameterIn.Size = new Size(100, 15);
-            lblAvgDiameterIn.TabIndex = 22;
-            lblAvgDiameterIn.Text = "Avg Diameter (in)";
+            lblTailY.AutoSize = true;
+            lblTailY.Location = new Point(6, 113);
+            lblTailY.Name = "lblTailY";
+            lblTailY.Size = new Size(35, 15);
+            lblTailY.TabIndex = 22;
+            lblTailY.Text = "Tail Y";
             // 
-            // lblAvgDiameterMm
+            // txtTailY
             // 
-            lblAvgDiameterMm.AutoSize = true;
-            lblAvgDiameterMm.Location = new Point(306, 101);
-            lblAvgDiameterMm.Name = "lblAvgDiameterMm";
-            lblAvgDiameterMm.Size = new Size(112, 15);
-            lblAvgDiameterMm.TabIndex = 21;
-            lblAvgDiameterMm.Text = "Avg Diameter (mm)";
+            txtTailY.Location = new Point(65, 110);
+            txtTailY.Name = "txtTailY";
+            txtTailY.ReadOnly = true;
+            txtTailY.Size = new Size(80, 23);
+            txtTailY.TabIndex = 21;
             // 
-            // txtAvgDiameterMM
+            // lblUsableSheets
             // 
-            txtAvgDiameterMM.Location = new Point(220, 99);
-            txtAvgDiameterMM.Name = "txtAvgDiameterMM";
-            txtAvgDiameterMM.Size = new Size(80, 23);
-            txtAvgDiameterMM.TabIndex = 16;
+            lblUsableSheets.AutoSize = true;
+            lblUsableSheets.Location = new Point(235, 81);
+            lblUsableSheets.Name = "lblUsableSheets";
+            lblUsableSheets.Size = new Size(79, 15);
+            lblUsableSheets.TabIndex = 19;
+            lblUsableSheets.Text = "Usable Sheets";
             // 
-            // txtAvgDiameterInches
+            // txtUsableSheets
             // 
-            txtAvgDiameterInches.Location = new Point(220, 58);
-            txtAvgDiameterInches.Name = "txtAvgDiameterInches";
-            txtAvgDiameterInches.Size = new Size(80, 23);
-            txtAvgDiameterInches.TabIndex = 17;
+            txtUsableSheets.Location = new Point(323, 76);
+            txtUsableSheets.Name = "txtUsableSheets";
+            txtUsableSheets.ReadOnly = true;
+            txtUsableSheets.Size = new Size(80, 23);
+            txtUsableSheets.TabIndex = 18;
             // 
-            // txtMinDiameterInches
+            // lblUsableVeneerLength
             // 
-            txtMinDiameterInches.Location = new Point(9, 99);
-            txtMinDiameterInches.Name = "txtMinDiameterInches";
-            txtMinDiameterInches.Size = new Size(80, 23);
-            txtMinDiameterInches.TabIndex = 18;
+            lblUsableVeneerLength.AutoSize = true;
+            lblUsableVeneerLength.Location = new Point(161, 113);
+            lblUsableVeneerLength.Name = "lblUsableVeneerLength";
+            lblUsableVeneerLength.Size = new Size(153, 15);
+            lblUsableVeneerLength.TabIndex = 17;
+            lblUsableVeneerLength.Text = "Usable Veneer Length (mm)";
             // 
-            // txtMaxDiameterInches
+            // txtUsableVeneerLength
             // 
-            txtMaxDiameterInches.Location = new Point(220, 19);
-            txtMaxDiameterInches.Name = "txtMaxDiameterInches";
-            txtMaxDiameterInches.Size = new Size(80, 23);
-            txtMaxDiameterInches.TabIndex = 19;
+            txtUsableVeneerLength.Location = new Point(323, 105);
+            txtUsableVeneerLength.Name = "txtUsableVeneerLength";
+            txtUsableVeneerLength.ReadOnly = true;
+            txtUsableVeneerLength.Size = new Size(92, 23);
+            txtUsableVeneerLength.TabIndex = 16;
             // 
             // MainForm
             // 
@@ -384,17 +390,17 @@ namespace OptimizationXY.Charger.UI
         private Button BtnStopCapture;
         private Button BtnProductionSetup;
         private GroupBox groupBoxProfileMeasurements;
-        private Label lblPointCount;
-        private Label lblMeasuredLengthInches;
-        private TextBox txtMeasuredLengthInches;
-        private Label lblMaxDiameterIn;
-        private Label lblMinDiameterIn;
-        private TextBox txtPointCount;
-        private Label lblAvgDiameterIn;
-        private Label lblAvgDiameterMm;
-        private TextBox txtAvgDiameterMM;
-        private TextBox txtAvgDiameterInches;
-        private TextBox txtMinDiameterInches;
-        private TextBox txtMaxDiameterInches;
+        private Label lblHeadX;
+        private Label lblHeadY;
+        private Label lblTailX;
+        private Label lblTailY;
+        private Label lblUsableSheets;
+        private Label lblUsableVeneerLength;
+        private TextBox txtHeadX;
+        private TextBox txtHeadY;
+        private TextBox txtTailX;
+        private TextBox txtTailY;
+        private TextBox txtUsableSheets;
+        private TextBox txtUsableVeneerLength;
     }
 }

@@ -126,7 +126,6 @@ namespace OptimizationXY.Charger.Services.Core
         public Mat? DirectRecoveryPeelView { get; set; }
         public Mat? PointCloudOverlay { get; set; }
         public Mat? RadiusDefectHeatmap { get; set; }
-        public Mat? RotatingScanTopDownOverlay { get; set; }
         public Mat? CenterlineOffsetOverlay { get; set; }
         public Mat? SpindleAxisOverlay { get; set; }
 
@@ -149,7 +148,6 @@ namespace OptimizationXY.Charger.Services.Core
 
             PointCloudOverlay?.Dispose();
             RadiusDefectHeatmap?.Dispose();
-            RotatingScanTopDownOverlay?.Dispose();
             CenterlineOffsetOverlay?.Dispose();
             SpindleAxisOverlay?.Dispose();
             UnwrappedPeelView?.Dispose();
@@ -161,7 +159,6 @@ namespace OptimizationXY.Charger.Services.Core
 
             PointCloudOverlay = null;
             RadiusDefectHeatmap = null;
-            RotatingScanTopDownOverlay = null;
             CenterlineOffsetOverlay = null;
             SpindleAxisOverlay = null;
             UnwrappedPeelView = null;
