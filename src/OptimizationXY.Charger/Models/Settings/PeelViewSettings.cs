@@ -76,5 +76,5 @@ public sealed class PeelViewSettings
          /// while the mathematical calculations (total sheets, final diameter, etc.) are computed based
          /// on the complete peel simulation.
          /// </summary>
-         public bool EnableTruncatedVisualization { get; set; } = false;
+         public bool EnableTruncatedVisualization { get; set; } = true;
     }

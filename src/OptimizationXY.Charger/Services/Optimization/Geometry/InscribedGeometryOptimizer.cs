@@ -186,9 +186,17 @@ public static class InscribedGeometryOptimizer
         }
 
         Candidate? best = null;
-        int tested = 0;
+        object lockObj = new();
+        long tested = 0;
 
-        foreach (double offsetX in Range(centerOffsetXMM, radiusMM, stepMM))
+        List<double> offsetXValues = new(Range(centerOffsetXMM, radiusMM, stepMM));
+
+        Parallel.ForEach(offsetXValues, new ParallelOptions 
+        { 
+            CancellationToken = token,
+            MaxDegreeOfParallelism = Environment.ProcessorCount
+        },
+        delegate (double offsetX)
         {
             foreach (double offsetY in Range(centerOffsetYMM, radiusMM, stepMM))
             {
@@ -196,8 +204,7 @@ public static class InscribedGeometryOptimizer
                 {
                     foreach (double sweepY in Range(centerSweepYMM, radiusMM, stepMM))
                     {
-                        if ((tested & 255) == 0)
-                            token.ThrowIfCancellationRequested();
+                        token.ThrowIfCancellationRequested();
 
                         Candidate? candidate = EvaluateCandidate(
                             samples,
@@ -209,17 +216,20 @@ public static class InscribedGeometryOptimizer
                             sweepX,
                             sweepY);
 
-                        tested++;
+                        System.Threading.Interlocked.Increment(ref tested);
 
                         if (candidate is null)
                             continue;
 
-                        if (best is null || IsBetter(candidate, best, settings))
-                            best = candidate;
+                        lock (lockObj)
+                        {
+                            if (best is null || IsBetter(candidate, best, settings))
+                                best = candidate;
+                        }
                     }
                 }
             }
-        }
+        });
 
         if (best is null)
         {
@@ -234,7 +244,7 @@ public static class InscribedGeometryOptimizer
             SweepXMM = best.SweepXMM,
             SweepYMM = best.SweepYMM,
             Geometry = best.Geometry,
-            TestedCandidates = tested
+            TestedCandidates = (int)tested
         };
     }
 

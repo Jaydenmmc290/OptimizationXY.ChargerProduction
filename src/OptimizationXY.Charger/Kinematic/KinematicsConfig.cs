@@ -59,7 +59,7 @@ namespace OptimizationXY.Charger.Kinematic;
         /// 
         /// Default: false (offsets disabled, raw calculations used)
         /// </summary>
-        public bool EnableXYCorrectionOffset { get; set; } = false;
+        public bool EnableXYCorrectionOffset { get; set; }
 
         /// <summary>
         /// Validates the configuration settings.

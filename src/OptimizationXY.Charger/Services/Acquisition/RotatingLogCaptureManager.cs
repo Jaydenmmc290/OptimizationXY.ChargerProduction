@@ -16,6 +16,7 @@ public sealed class RotatingLogCaptureManager
     private readonly List<ScanFrame> _headFrames = [];
     private readonly List<ScanFrame> _tailFrames = [];
     private readonly Lock _captureLock = new();
+    private System.Threading.Timer? _captureTimeoutTimer;
 
     private bool _isCapturingActive;
     private DateTime _captureStartTime;
@@ -114,6 +115,10 @@ public sealed class RotatingLogCaptureManager
             _headFrames.Clear();
             _tailFrames.Clear();
 
+            // Cancel any lingering timeout timer from a previous session
+            _captureTimeoutTimer?.Dispose();
+            _captureTimeoutTimer = null;
+
             _droppedFrameCount = 0;
             _captureStartTime = DateTime.UtcNow;
             _isCapturingActive = true;
@@ -123,21 +128,40 @@ public sealed class RotatingLogCaptureManager
             _tailCameraConfigurationSnapshot =
                 tailCameraConfigurationSnapshot.ToArray();
 
+            // Start a timer that will forcibly stop capture if the timeout is exceeded.
+            // This acts as a fallback in case ScanComplete signal is missed or severely delayed.
+            var timeoutMilliseconds = (int)(_settings.CaptureTimeoutSeconds * 1000);
+            _captureTimeoutTimer = new System.Threading.Timer(
+                callback: _ => OnCaptureTimeoutElapsed(),
+                state: null,
+                dueTime: timeoutMilliseconds,
+                period: Timeout.Infinite);
+
             LogDiagnostics(
                 $"Capture started for Log ID: {_currentLogId}");
 
             LogDiagnostics(
                 $"Capture will continue until ScanComplete or manual stop. " +
-                $"(Reference target: {_settings.TargetFramePairsPerLog} frame pairs)");
+                $"(Reference target: {_settings.TargetFramePairsPerLog} frame pairs; " +
+                $"auto-stop timeout: {_settings.CaptureTimeoutSeconds:F1}s)");
         }
     }
 
     /// <summary>
     /// Adds a new frame from the specified camera position to the capture session.
+    /// Enforces frame-count limits and timeout to prevent stale-frame accumulation
+    /// if ScanComplete signal is missed or delayed.
     /// </summary>
     /// <param name="position">The camera position (head or tail) from which the frame was captured.</param>
     /// <param name="frameArgs">The frame event arguments containing the captured frame.</param>
-    /// <returns>True if the frame was successfully added; otherwise, false.</returns>
+    /// <returns>True if the frame was successfully added; false if rejected due to limit, timeout, or capture not active.</returns>
+    /// <remarks>
+    /// Frames are rejected if:
+    /// 1. Capture is not currently active
+    /// 2. Frame list for this camera has reached MaxFramesPerCamera
+    /// 3. Capture duration exceeds CaptureTimeoutSeconds
+    /// When rejected, the frame is disposed and a diagnostic message is logged.
+    /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     public bool AddFrame(
         CameraPosition position,
@@ -164,6 +188,22 @@ public sealed class RotatingLogCaptureManager
                 return false;
             }
 
+            // Check capture timeout
+            double elapsedSeconds = (DateTime.UtcNow - _captureStartTime).TotalSeconds;
+            if (elapsedSeconds > _settings.CaptureTimeoutSeconds)
+            {
+                frameArgs.Frame.Dispose();
+                _droppedFrameCount++;
+                _diagnostics.RecordFrameDropped(position);
+                _isCapturingActive = false;
+                LogDiagnostics(
+                    $"Capture timeout ({_settings.CaptureTimeoutSeconds:F1}s) reached. " +
+                    $"Forcibly stopping capture after {elapsedSeconds:F2}s. " +
+                    $"Current frame counts: Head {_headFrames.Count}, Tail {_tailFrames.Count}. " +
+                    $"This may indicate a missed or delayed ScanComplete signal.");
+                return false;
+            }
+
             List<ScanFrame> targetFrames = position switch
             {
                 CameraPosition.Head => _headFrames,
@@ -173,6 +213,20 @@ public sealed class RotatingLogCaptureManager
                     position,
                     "Unsupported camera position.")
             };
+
+            // Check frame-count limit per camera
+            if (targetFrames.Count >= _settings.MaxFramesPerCamera)
+            {
+                frameArgs.Frame.Dispose();
+                _droppedFrameCount++;
+                _diagnostics.RecordFrameDropped(position);
+                _isCapturingActive = false;
+                LogDiagnostics(
+                    $"Frame count limit ({_settings.MaxFramesPerCamera}) reached for {position} camera. " +
+                    $"Forcibly stopping capture. Current frame counts: Head {_headFrames.Count}, " +
+                    $"Tail {_tailFrames.Count}. This may indicate stale buffered frames or missed ScanComplete signal.");
+                return false;
+            }
 
             int frameIndex = targetFrames.Count;
 
@@ -247,6 +301,10 @@ public sealed class RotatingLogCaptureManager
             }
 
             _isCapturingActive = false;
+
+            // Stop and dispose the timeout timer since capture is completing normally
+            _captureTimeoutTimer?.Dispose();
+            _captureTimeoutTimer = null;
 
             DateTime captureEndTime = DateTime.UtcNow;
             double captureDuration =
@@ -327,6 +385,10 @@ public sealed class RotatingLogCaptureManager
         {
             _isCapturingActive = false;
 
+            // Stop and dispose the timeout timer
+            _captureTimeoutTimer?.Dispose();
+            _captureTimeoutTimer = null;
+
             DisposeFrames(_headFrames);
             DisposeFrames(_tailFrames);
 
@@ -348,6 +410,30 @@ public sealed class RotatingLogCaptureManager
             frame.GrayImage?.Dispose();
             frame.BinaryImage?.Dispose();
             frame.OverlayImage?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Invoked by the timeout timer when the configured capture timeout has elapsed.
+    /// Forcibly stops capture and logs diagnostics.
+    /// </summary>
+    private void OnCaptureTimeoutElapsed()
+    {
+        lock (_captureLock)
+        {
+            if (!_isCapturingActive)
+            {
+                // Already stopped, nothing to do
+                return;
+            }
+
+            _isCapturingActive = false;
+
+            LogDiagnostics(
+                $"Capture timeout ({_settings.CaptureTimeoutSeconds:F1}s) fired. " +
+                $"Forcibly stopping capture. " +
+                $"Current frame counts: Head {_headFrames.Count}, Tail {_tailFrames.Count}. " +
+                $"This indicates a delayed or missed ScanComplete signal.");
         }
     }
 

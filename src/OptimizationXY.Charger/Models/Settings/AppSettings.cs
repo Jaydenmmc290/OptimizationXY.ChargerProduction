@@ -801,7 +801,7 @@ public sealed class SafetySettings
     /// Set this to true in production to allow PLC-based carriage retract control without
     /// blocking on the application-side safety check.
     /// </summary>
-    public bool ReadKnifeClearanceFromPlc { get; set; } = false;
+    public bool ReadKnifeClearanceFromPlc { get; set; }
 
     /// <summary>
     /// Computes the knife clearance in millimeters based on the given veneer thickness and the configured safety settings.
@@ -982,5 +982,5 @@ public sealed class KinematicSettings
     /// When false (default), the message box will not appear and production will proceed without kinematic selection.
     /// When true, operators will be prompted to choose between kinematic rotation or current XY positions.
     /// </summary>
-    public bool EnableKinematicPositionSelection { get; set; } = false;
+    public bool EnableKinematicPositionSelection { get; set; }
 }

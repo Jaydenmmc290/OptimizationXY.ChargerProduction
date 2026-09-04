@@ -113,6 +113,7 @@ public static class UnwrappedPeelViewBuilder
         long totalSamples = 0;
         long waneSamples = 0;
         long severeWaneSamples = 0;
+        int truncationPixelY = -1;
 
         var sheetStats = DrawPeelAsContinuousSheets(
             canvas,
@@ -125,7 +126,8 @@ public static class UnwrappedPeelViewBuilder
             ref totalSamples,
             ref waneSamples,
             ref severeWaneSamples,
-            settings.EnableTruncatedVisualization);
+            settings.EnableTruncatedVisualization,
+            out truncationPixelY);
 
         PeelSheetSummary sheetSummary =
             DrawSheetBoundariesAndLabels(
@@ -153,9 +155,24 @@ public static class UnwrappedPeelViewBuilder
                 ? 100.0 * severeWaneSamples / totalSamples
                 : 0.0;
 
+        // Crop the image if truncation was applied
+        Mat imageToReturn = image;
+        if (settings.EnableTruncatedVisualization && truncationPixelY >= 0)
+        {
+            // Crop the image to the truncation point, including bottom margin
+            int cropHeight = truncationPixelY + settings.BottomMargin;
+            cropHeight = Math.Min(cropHeight, image.Rows);
+            if (cropHeight > settings.TopMargin)
+            {
+                Rectangle cropRect = new(0, 0, image.Cols, cropHeight);
+                imageToReturn = new Mat(image, cropRect);
+                image.Dispose();
+            }
+        }
+
         return new PeelSimulationResult
         {
-            Image = image,
+            Image = imageToReturn,
             Revolutions = peelRadii.Count,
             OuterDiameterMM = surface.OuterRadiusMM * 2.0,
             CoreDiameterMM = coreRadiusMM * 2.0,
@@ -327,8 +344,10 @@ public static class UnwrappedPeelViewBuilder
             ref long totalSamples,
             ref long waneSamples,
             ref long severeWaneSamples,
-            bool enableTruncation = false)
+            bool enableTruncation,
+            out int truncationPixelY)
     {
+        truncationPixelY = -1;
         var sheetStats = new Dictionary<int, SheetQualityStats>();
 
         if (peelRadii == null || peelRadii.Count == 0)
@@ -498,6 +517,15 @@ public static class UnwrappedPeelViewBuilder
                     sheetStats,
                     settings,
                     expectedSheetCount);
+
+                // If we found a first usable sheet, convert it to a Y-pixel coordinate
+                // by finding the boundary between the first usable sheet and the next sheet
+                if (firstUsableSheet.HasValue && sheetLengthMM > 0)
+                {
+                    double sheetBoundaryMM = (firstUsableSheet.Value + 1) * sheetLengthMM;
+                    double zRatioAtBoundary = Math.Min(1.0, sheetBoundaryMM / totalVeneerLengthMM);
+                    truncationPixelY = rect.Top + (int)Math.Round(zRatioAtBoundary * (rect.Height - 1));
+                }
             }
         }
 

@@ -44,6 +44,12 @@
     <DefineConstants>$(DefineConstants);SAPERA</DefineConstants>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="Tests\**" />
+    <EmbeddedResource Remove="Tests\**" />
+    <None Remove="Tests\**" />
+  </ItemGroup>
+
  
 
   <ItemGroup>
@@ -103,11 +109,6 @@
     <EmbeddedResource Include="licenses.licx">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
-  </ItemGroup>
-
-  
-  <ItemGroup>
-    <Folder Include="Tests\" />
   </ItemGroup>
 
   

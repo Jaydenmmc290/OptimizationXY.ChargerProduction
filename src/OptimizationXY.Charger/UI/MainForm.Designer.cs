@@ -35,10 +35,10 @@ namespace OptimizationXY.Charger.UI
             cmbOptimizationMode = new ComboBox();
             BtnStartCapture = new Button();
             BtnStopCapture = new Button();
+            BtnProductionSetup = new Button();
             lblDiagnostics = new Label();
             lblMode = new Label();
             lblBlock = new Label();
-            BtnProductionSetup = new Button();
             groupConcatenated = new GroupBox();
             pictureBoxConcatenated = new PictureBox();
             groupBoxDiagnostics = new GroupBox();
@@ -68,9 +68,9 @@ namespace OptimizationXY.Charger.UI
             // groupBoxOverlay
             // 
             groupBoxOverlay.Controls.Add(pictureBoxLogOverlay);
-            groupBoxOverlay.Location = new Point(15, 287);
+            groupBoxOverlay.Location = new Point(192, 405);
             groupBoxOverlay.Name = "groupBoxOverlay";
-            groupBoxOverlay.Size = new Size(255, 253);
+            groupBoxOverlay.Size = new Size(254, 262);
             groupBoxOverlay.TabIndex = 35;
             groupBoxOverlay.TabStop = false;
             groupBoxOverlay.Text = "Log Scan Overlay";
@@ -81,7 +81,7 @@ namespace OptimizationXY.Charger.UI
             pictureBoxLogOverlay.Dock = DockStyle.Fill;
             pictureBoxLogOverlay.Location = new Point(3, 19);
             pictureBoxLogOverlay.Name = "pictureBoxLogOverlay";
-            pictureBoxLogOverlay.Size = new Size(249, 231);
+            pictureBoxLogOverlay.Size = new Size(248, 240);
             pictureBoxLogOverlay.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxLogOverlay.TabIndex = 3;
             pictureBoxLogOverlay.TabStop = false;
@@ -92,12 +92,13 @@ namespace OptimizationXY.Charger.UI
             panelControls.Controls.Add(cmbOptimizationMode);
             panelControls.Controls.Add(BtnStartCapture);
             panelControls.Controls.Add(BtnStopCapture);
+            panelControls.Controls.Add(BtnProductionSetup);
             panelControls.Controls.Add(lblDiagnostics);
             panelControls.Controls.Add(lblMode);
             panelControls.Controls.Add(lblBlock);
-            panelControls.Location = new Point(276, 287);
+            panelControls.Location = new Point(15, 278);
             panelControls.Name = "panelControls";
-            panelControls.Size = new Size(634, 119);
+            panelControls.Size = new Size(752, 119);
             panelControls.TabIndex = 39;
             // 
             // lblOptimizationMode
@@ -122,7 +123,7 @@ namespace OptimizationXY.Charger.UI
             // 
             BtnStartCapture.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             BtnStartCapture.Enabled = false;
-            BtnStartCapture.Location = new Point(12, 3);
+            BtnStartCapture.Location = new Point(20, 3);
             BtnStartCapture.Name = "BtnStartCapture";
             BtnStartCapture.Size = new Size(105, 35);
             BtnStartCapture.TabIndex = 9;
@@ -134,13 +135,23 @@ namespace OptimizationXY.Charger.UI
             // 
             BtnStopCapture.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             BtnStopCapture.Enabled = false;
-            BtnStopCapture.Location = new Point(123, 3);
+            BtnStopCapture.Location = new Point(131, 3);
             BtnStopCapture.Name = "BtnStopCapture";
             BtnStopCapture.Size = new Size(105, 35);
             BtnStopCapture.TabIndex = 10;
             BtnStopCapture.Text = "Stop Block";
             BtnStopCapture.UseVisualStyleBackColor = true;
             BtnStopCapture.Click += BtnStopCapture_Click;
+            // 
+            // BtnProductionSetup
+            // 
+            BtnProductionSetup.Location = new Point(618, 3);
+            BtnProductionSetup.Name = "BtnProductionSetup";
+            BtnProductionSetup.Size = new Size(123, 44);
+            BtnProductionSetup.TabIndex = 13;
+            BtnProductionSetup.Text = "Setup / Calibration";
+            BtnProductionSetup.UseVisualStyleBackColor = true;
+            BtnProductionSetup.Click += BtnProductionSetup_Click;
             // 
             // lblDiagnostics
             // 
@@ -169,22 +180,12 @@ namespace OptimizationXY.Charger.UI
             lblBlock.TabIndex = 6;
             lblBlock.Text = "Block: None";
             // 
-            // BtnProductionSetup
-            // 
-            BtnProductionSetup.Location = new Point(916, 362);
-            BtnProductionSetup.Name = "BtnProductionSetup";
-            BtnProductionSetup.Size = new Size(123, 44);
-            BtnProductionSetup.TabIndex = 13;
-            BtnProductionSetup.Text = "Setup / Calibration";
-            BtnProductionSetup.UseVisualStyleBackColor = true;
-            BtnProductionSetup.Click += BtnProductionSetup_Click;
-            // 
             // groupConcatenated
             // 
             groupConcatenated.Controls.Add(pictureBoxConcatenated);
-            groupConcatenated.Location = new Point(12, 12);
+            groupConcatenated.Location = new Point(18, 6);
             groupConcatenated.Name = "groupConcatenated";
-            groupConcatenated.Size = new Size(1014, 260);
+            groupConcatenated.Size = new Size(749, 260);
             groupConcatenated.TabIndex = 36;
             groupConcatenated.TabStop = false;
             groupConcatenated.Text = "LIVE | HEAD + TAIL CONCATENATED FOOTAGE";
@@ -195,7 +196,7 @@ namespace OptimizationXY.Charger.UI
             pictureBoxConcatenated.Dock = DockStyle.Fill;
             pictureBoxConcatenated.Location = new Point(3, 19);
             pictureBoxConcatenated.Name = "pictureBoxConcatenated";
-            pictureBoxConcatenated.Size = new Size(1008, 238);
+            pictureBoxConcatenated.Size = new Size(743, 238);
             pictureBoxConcatenated.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxConcatenated.TabIndex = 0;
             pictureBoxConcatenated.TabStop = false;
@@ -203,9 +204,9 @@ namespace OptimizationXY.Charger.UI
             // groupBoxDiagnostics
             // 
             groupBoxDiagnostics.Controls.Add(txtDiagnostics);
-            groupBoxDiagnostics.Location = new Point(273, 412);
+            groupBoxDiagnostics.Location = new Point(454, 405);
             groupBoxDiagnostics.Name = "groupBoxDiagnostics";
-            groupBoxDiagnostics.Size = new Size(329, 147);
+            groupBoxDiagnostics.Size = new Size(316, 262);
             groupBoxDiagnostics.TabIndex = 37;
             groupBoxDiagnostics.TabStop = false;
             groupBoxDiagnostics.Text = "Diagnostics";
@@ -218,7 +219,7 @@ namespace OptimizationXY.Charger.UI
             txtDiagnostics.Name = "txtDiagnostics";
             txtDiagnostics.ReadOnly = true;
             txtDiagnostics.ScrollBars = ScrollBars.Vertical;
-            txtDiagnostics.Size = new Size(323, 125);
+            txtDiagnostics.Size = new Size(310, 240);
             txtDiagnostics.TabIndex = 0;
             // 
             // groupBoxProfileMeasurements
@@ -235,9 +236,9 @@ namespace OptimizationXY.Charger.UI
             groupBoxProfileMeasurements.Controls.Add(txtUsableSheets);
             groupBoxProfileMeasurements.Controls.Add(lblUsableVeneerLength);
             groupBoxProfileMeasurements.Controls.Add(txtUsableVeneerLength);
-            groupBoxProfileMeasurements.Location = new Point(608, 412);
+            groupBoxProfileMeasurements.Location = new Point(15, 405);
             groupBoxProfileMeasurements.Name = "groupBoxProfileMeasurements";
-            groupBoxProfileMeasurements.Size = new Size(423, 147);
+            groupBoxProfileMeasurements.Size = new Size(161, 255);
             groupBoxProfileMeasurements.TabIndex = 40;
             groupBoxProfileMeasurements.TabStop = false;
             groupBoxProfileMeasurements.Text = "Spindle Output";
@@ -245,7 +246,7 @@ namespace OptimizationXY.Charger.UI
             // lblHeadX
             // 
             lblHeadX.AutoSize = true;
-            lblHeadX.Location = new Point(6, 55);
+            lblHeadX.Location = new Point(6, 22);
             lblHeadX.Name = "lblHeadX";
             lblHeadX.Size = new Size(45, 15);
             lblHeadX.TabIndex = 27;
@@ -253,7 +254,7 @@ namespace OptimizationXY.Charger.UI
             // 
             // txtHeadX
             // 
-            txtHeadX.Location = new Point(65, 52);
+            txtHeadX.Location = new Point(65, 19);
             txtHeadX.Name = "txtHeadX";
             txtHeadX.ReadOnly = true;
             txtHeadX.Size = new Size(80, 23);
@@ -262,7 +263,7 @@ namespace OptimizationXY.Charger.UI
             // lblHeadY
             // 
             lblHeadY.AutoSize = true;
-            lblHeadY.Location = new Point(6, 22);
+            lblHeadY.Location = new Point(6, 55);
             lblHeadY.Name = "lblHeadY";
             lblHeadY.Size = new Size(45, 15);
             lblHeadY.TabIndex = 26;
@@ -270,7 +271,7 @@ namespace OptimizationXY.Charger.UI
             // 
             // txtHeadY
             // 
-            txtHeadY.Location = new Point(65, 19);
+            txtHeadY.Location = new Point(65, 52);
             txtHeadY.Name = "txtHeadY";
             txtHeadY.ReadOnly = true;
             txtHeadY.Size = new Size(80, 23);
@@ -313,7 +314,7 @@ namespace OptimizationXY.Charger.UI
             // lblUsableSheets
             // 
             lblUsableSheets.AutoSize = true;
-            lblUsableSheets.Location = new Point(235, 81);
+            lblUsableSheets.Location = new Point(6, 202);
             lblUsableSheets.Name = "lblUsableSheets";
             lblUsableSheets.Size = new Size(79, 15);
             lblUsableSheets.TabIndex = 19;
@@ -321,7 +322,7 @@ namespace OptimizationXY.Charger.UI
             // 
             // txtUsableSheets
             // 
-            txtUsableSheets.Location = new Point(323, 76);
+            txtUsableSheets.Location = new Point(7, 220);
             txtUsableSheets.Name = "txtUsableSheets";
             txtUsableSheets.ReadOnly = true;
             txtUsableSheets.Size = new Size(80, 23);
@@ -330,7 +331,7 @@ namespace OptimizationXY.Charger.UI
             // lblUsableVeneerLength
             // 
             lblUsableVeneerLength.AutoSize = true;
-            lblUsableVeneerLength.Location = new Point(161, 113);
+            lblUsableVeneerLength.Location = new Point(6, 148);
             lblUsableVeneerLength.Name = "lblUsableVeneerLength";
             lblUsableVeneerLength.Size = new Size(153, 15);
             lblUsableVeneerLength.TabIndex = 17;
@@ -338,7 +339,7 @@ namespace OptimizationXY.Charger.UI
             // 
             // txtUsableVeneerLength
             // 
-            txtUsableVeneerLength.Location = new Point(323, 105);
+            txtUsableVeneerLength.Location = new Point(6, 166);
             txtUsableVeneerLength.Name = "txtUsableVeneerLength";
             txtUsableVeneerLength.ReadOnly = true;
             txtUsableVeneerLength.Size = new Size(92, 23);
@@ -348,12 +349,11 @@ namespace OptimizationXY.Charger.UI
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1050, 567);
+            ClientSize = new Size(773, 672);
             Controls.Add(groupBoxProfileMeasurements);
             Controls.Add(panelControls);
             Controls.Add(groupBoxDiagnostics);
             Controls.Add(groupConcatenated);
-            Controls.Add(BtnProductionSetup);
             Controls.Add(groupBoxOverlay);
             Name = "MainForm";
             Text = "Optimization XY";

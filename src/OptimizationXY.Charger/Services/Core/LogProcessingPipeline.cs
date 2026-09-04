@@ -329,35 +329,46 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         int validFrames = 0;
         int invalidFrames = 0;
         int totalProfilePoints = 0;
+        object lockObj = new();  // Lock for thread-safe counter updates
 
-        foreach (var frame in _state.ScanFrames)  // Process each scan frame
-        {
-            token.ThrowIfCancellationRequested();
-
-            try
+        // Parallel processing of frames - each frame's profile is independent
+        Parallel.ForEach(
+            _state.ScanFrames,
+            new ParallelOptions { CancellationToken = token, MaxDegreeOfParallelism = Environment.ProcessorCount },
+            frame =>
             {
-                frame.Profile = BuildProfileFromFrame(
-                    frame,
-                    lookupTable,
-                    token);
+                token.ThrowIfCancellationRequested();
 
-                frame.IsValid = true;
-                frame.StatusMessage = "OK";
+                try
+                {
+                    frame.Profile = BuildProfileFromFrame(
+                        frame,
+                        lookupTable,
+                        token);
 
-                validFrames++;
-                totalProfilePoints += frame.Profile.Count;  // Accumulate total profile points for valid frames
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                frame.IsValid = false;
-                frame.StatusMessage = ex.Message;
-                invalidFrames++;
-            }
-        }
+                    frame.IsValid = true;
+                    frame.StatusMessage = "OK";
+
+                    lock (lockObj)
+                    {
+                        validFrames++;
+                        totalProfilePoints += frame.Profile.Count;  // Accumulate total profile points for valid frames
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    frame.IsValid = false;
+                    frame.StatusMessage = ex.Message;
+                    lock (lockObj)
+                    {
+                        invalidFrames++;
+                    }
+                }
+            });
 
         _state.DiagnosticsReport +=
             "ROTATING FRAME PROCESSING\r\n" +
@@ -1315,9 +1326,51 @@ BuildFinalSpindleRecommendation(
 
         try
         {
-            if (mode is
-                SpindleOptimizationMode.LargestInscribedCylinder or
-                SpindleOptimizationMode.CompareInscribedGeometry)
+            if (mode == SpindleOptimizationMode.CompareInscribedGeometry)
+            {
+                // Parallelize cylinder and oval searches when comparing both
+                Task<InscribedGeometryResult> cylinderTask =
+                    Task.Run(() =>
+                        InscribedGeometryOptimizer.FindLargestCylinder(
+                            _state.BinnedRadiusField,
+                            _state.Settings.Optimization,
+                            _state.Settings.InscribedGeometry,
+                            _state.Settings.MachineLimits,
+                            token),
+                        token);
+
+                Task<InscribedGeometryResult> ovalTask =
+                    Task.Run(() =>
+                        InscribedGeometryOptimizer.FindLargestOval(
+                            _state.BinnedRadiusField,
+                            _state.Settings.Optimization,
+                            _state.Settings.InscribedGeometry,
+                            _state.Settings.MachineLimits,
+                            token),
+                        token);
+
+                try
+                {
+                    Task.WaitAll([cylinderTask, ovalTask], token);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+
+                cylinder = cylinderTask.Result;
+                oval = ovalTask.Result;
+
+                cylinderPeel = BuildPeelForGeometry(cylinder);
+                ovalPeel = BuildPeelForGeometry(oval);
+
+                _state.DiagnosticsReport +=
+                    BuildInscribedGeometryReport(cylinder, cylinderPeel);
+
+                _state.DiagnosticsReport +=
+                    BuildInscribedGeometryReport(oval, ovalPeel);
+            }
+            else if (mode == SpindleOptimizationMode.LargestInscribedCylinder)
             {
                 cylinder =
                     InscribedGeometryOptimizer.FindLargestCylinder(
@@ -1335,10 +1388,7 @@ BuildFinalSpindleRecommendation(
                         cylinder,
                         cylinderPeel);
             }
-
-            if (mode is
-                SpindleOptimizationMode.LargestInscribedOval or
-                SpindleOptimizationMode.CompareInscribedGeometry)
+            else if (mode == SpindleOptimizationMode.LargestInscribedOval)
             {
                 oval =
                     InscribedGeometryOptimizer.FindLargestOval(
@@ -3072,10 +3122,61 @@ double maxSpindleMovementMM)
             "\r\nPIPELINE TIMING REPORT\r\n" +
             $"Total Time: {(totalMS / 1000.0):F2} sec\r\n";
 
+        // Group entries to aggregate per-frame operations (Frame X - Operation Y) into operation summaries
+        // This makes the report much more concise and readable by hiding verbose per-frame details.
+        var groupedEntries = new Dictionary<string, (double TotalMs, int Count)>();
+        var opaqueEntries = new List<PipelineTimingEntry>(); // Non-frame entries displayed as-is
+
         foreach (var entry in entries)
         {
-            report +=
-                $"{entry.StepName}: {entry.ElapsedSeconds:F2} sec\r\n";
+            // Check if this is a per-frame timing entry (format: "Frame N - OpName")
+            if (entry.StepName.StartsWith("Frame ", StringComparison.OrdinalIgnoreCase))
+            {
+                // Extract the operation name (everything after "Frame N - ")
+                int dashIndex = entry.StepName.IndexOf(" - ", StringComparison.Ordinal);
+                if (dashIndex > 0)
+                {
+                    string operationName = entry.StepName.Substring(dashIndex + 3);
+
+                    if (groupedEntries.TryGetValue(operationName, out (double TotalMs, int Count) value))
+                    {
+                        var (existing, count) = value;
+                        groupedEntries[operationName] = (existing + entry.ElapsedMilliseconds, count + 1);
+                    }
+                    else
+                    {
+                        groupedEntries[operationName] = (entry.ElapsedMilliseconds, 1);
+                    }
+                    continue;
+                }
+            }
+
+            // Not a per-frame entry; add to opaque list to display as-is
+            opaqueEntries.Add(entry);
+        }
+
+        // First, output aggregated per-frame operations
+        if (groupedEntries.Count > 0)
+        {
+            report += "\nPer-Frame Operations (Aggregated):\r\n";
+            foreach (var kvp in groupedEntries.OrderBy(x => x.Key))
+            {
+                double totalSeconds = kvp.Value.TotalMs / 1000.0;
+                int count = kvp.Value.Count;
+                report +=
+                    $"{kvp.Key} (total, {count} frames): {totalSeconds:F2} sec\r\n";
+            }
+        }
+
+        // Then, output non-frame entries (the main pipeline stages)
+        if (opaqueEntries.Count > 0)
+        {
+            report += "\nPipeline Stages:\r\n";
+            foreach (var entry in opaqueEntries)
+            {
+                report +=
+                    $"{entry.StepName}: {entry.ElapsedSeconds:F2} sec\r\n";
+            }
         }
 
         return report;  // Return the constructed timing report string summarizing the elapsed time for each step in the pipeline, including the total time and individual step times in seconds
@@ -3201,18 +3302,42 @@ double maxSpindleMovementMM)
             "Bin Rotating Scan Radius Field",
             "Binning radius field...",
             () => BinRotatingScanRadiusField(token));
-        RunStage(
-            "Analyze Ovality",
-            "Analyzing ovality...",
-            () => AnalyzeOvality(token));
-        RunStage(
-            "Analyze Radius Defects",
-            "Analyzing defects...",
-            () => AnalyzeRadiusDefects(token));
+
+        // Parallelize independent analysis stages
+        // AnalyzeOvality and AnalyzeRadiusDefects are independent and can run in parallel
+        progress?.Invoke("Analyzing ovality and defects...");
+        RunTimed(
+            "Analyze Ovality And Radius Defects (Parallel)",
+            () =>
+            {
+                var ovalityTask = Task.Run(() =>
+                {
+                    token.ThrowIfCancellationRequested();
+                    AnalyzeOvality(token);
+                }, token);
+
+                var defectsTask = Task.Run(() =>
+                {
+                    token.ThrowIfCancellationRequested();
+                    AnalyzeRadiusDefects(token);
+                }, token);
+
+                // Wait for both to complete before proceeding
+                try
+                {
+                    Task.WaitAll([ovalityTask, defectsTask], token);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+            });
+
         RunStage(
             "Analyze Defect Patches",
             "Analyzing defect patches...",
             () => AnalyzeDefectPatches(token));
+
         if (_state.Settings.OptimizationMode ==
             SpindleOptimizationMode.PenaltyScored)
         {

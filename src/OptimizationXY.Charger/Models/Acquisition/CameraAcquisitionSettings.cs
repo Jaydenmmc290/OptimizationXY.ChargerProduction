@@ -57,6 +57,22 @@ public sealed class CameraAcquisitionSettings
     public double? TestAngularStepDegrees { get; set; }
 
     /// <summary>
+    /// Maximum number of frames per camera (head or tail) before capture is forcibly stopped.
+    /// This is a safety limit to prevent stale buffered frames or missed ScanComplete signals
+    /// from causing unbounded frame accumulation. Typical healthy runs are 90–100 frame pairs;
+    /// this limit is set to roughly 2x that to catch overcapture while remaining flexible for
+    /// slower or longer scans. Default: 150 frames per camera.
+    /// </summary>
+    public int MaxFramesPerCamera { get; set; } = 150;
+
+    /// <summary>
+    /// Maximum duration (in seconds) for a capture session before it is forcibly stopped.
+    /// This is a safety fallback if ScanComplete signal is missed or severely delayed.
+    /// Default: 20 seconds (slightly less than the PLC 30-second timeout).
+    /// </summary>
+    public double CaptureTimeoutSeconds { get; set; } = 20.0;
+
+    /// <summary>
     /// Validates the camera acquisition settings. Throws an exception if any required
     /// settings are missing or invalid.
     /// </summary>
@@ -89,6 +105,14 @@ public sealed class CameraAcquisitionSettings
             throw new ArgumentOutOfRangeException(nameof(TargetFramePairsPerLog));
         if (QueueCapacityPerCamera < 1)
             throw new ArgumentOutOfRangeException(nameof(QueueCapacityPerCamera));
+        if (MaxFramesPerCamera < TargetFramePairsPerLog)
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxFramesPerCamera),
+                "MaxFramesPerCamera must be at least as large as TargetFramePairsPerLog.");
+        if (!double.IsFinite(CaptureTimeoutSeconds) || CaptureTimeoutSeconds <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(CaptureTimeoutSeconds),
+                "CaptureTimeoutSeconds must be a positive finite value.");
 
         if (Concatenation is null)
             throw new InvalidOperationException("Dual-camera concatenation settings are required.");
