@@ -17,7 +17,7 @@ Analyze radius defects
 Analyze defect patches
 ```
 
-## 1. Recovery Optimized (default production strategy)
+## 1. Recovery Optimized 
 
 This mode first generates four seed fixed spindle axes when enabled: current baseline, penalty-search best tested, largest inscribed cylinder, and largest inscribed oval. It then performs a bounded metrics-only direct veneer-recovery refinement around those seeds. The refined position and all seed positions are rendered with the full physical circular rotary-lathe virtual peel, and the exact rendered results select the winner by:
 
@@ -32,7 +32,7 @@ Penalty/risk values remain diagnostics and can generate one seed, but they do no
 
 Default direct-refinement settings are a 2 mm local radius, 2 mm step, and a 500-position cap. The search uses the binned measured surface without allocating display images; the selected refined candidate is then re-evaluated by the full point-cloud peel renderer before final comparison.
 
-## 2. Penalty-Scored Optimizer
+## 2. Penalty-Scored Optimizer(default production strategy)
 
 This is the existing optimizer. Adaptive weights, wane balance, defect patches, movement cost, guardrails, and the final risk score may influence the selected head/tail spindle position.
 
