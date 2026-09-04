@@ -32,11 +32,11 @@ Penalty/risk values remain diagnostics and can generate one seed, but they do no
 
 Default direct-refinement settings are a 2 mm local radius, 2 mm step, and a 500-position cap. The search uses the binned measured surface without allocating display images; the selected refined candidate is then re-evaluated by the full point-cloud peel renderer before final comparison.
 
-## 2. Penalty-Scored Optimizer(default production strategy)
+## 2. Penalty-Scored Optimizer
 
 This is the existing optimizer. Adaptive weights, wane balance, defect patches, movement cost, guardrails, and the final risk score may influence the selected head/tail spindle position.
 
-## 3. Largest Inscribed Cylinder
+## 3. Largest Inscribed Cylinder (default production strategy)
 
 This mode performs a geometry-only coarse-to-fine search. It selects the head/tail spindle axis that maximizes the minimum circular radius contained inside the measured log for the full analyzed length.
 
