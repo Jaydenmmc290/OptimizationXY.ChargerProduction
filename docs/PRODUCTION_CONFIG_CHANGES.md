@@ -49,16 +49,16 @@ Follow these steps to make your machine fully operational without additional com
 ### 2. Update `OptimizationMode`
 
 **Change from:**
-```json
-"OptimizationMode": "CompareInscribedGeometry"
+```json 
+"OptimizationMode": "RecoveryOptimized"
 ```
 
 **To:**
 ```json
-"OptimizationMode": "RecoveryOptimized"
+"OptimizationMode": "CompareInscribedGeometry"
 ```
 
-**Why:** Production requires RecoveryOptimized mode with all four seed strategies (which you already have configured).
+**Why:** Production requires CompareInscribedGeometry mode .
 
 ---
 

@@ -33,7 +33,7 @@ An extra buffer can be added only after measuring machine uncertainty, stopping 
 A production PLC write is blocked unless all required checks pass, including:
 
 - Operating mode is `Production`.
-- `RecoveryOptimized` mode and direct virtual-peel refinement are enabled.
+- `InscribedGeomotry` mode and direct virtual-peel refinement are enabled.
 - All physical commissioning flags and approval fields are complete.
 - Both cameras use encoder acquisition.
 - Exactly 36 valid concatenated frames are present.
@@ -68,11 +68,6 @@ The PLC must independently enforce at least:
 
 The PLC must reject a result when any check fails and should expose a read-only acceptance/rejection status in a future approved restricted interface.
 
-## Recovery algorithm safety
-
-The recovery optimizer may choose baseline, penalty-search, cylinder, oval, or direct recovery-refinement axis candidates. The direct search is bounded around established seeds and hard-limited by commissioned head/tail travel. It never commands rotation. Even when the oval strategy is selected, the virtual peel models a fixed axis with circular rotary-lathe motion; the program does not request elliptical knife or log motion.
-
-Geometry and recovery selection do not override machine hard limits. If the best candidate exceeds a hard limit, the output is zeroed/blocked and the PLC packet is not sent.
 
 ## Residual risks requiring physical validation
 
