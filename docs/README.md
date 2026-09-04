@@ -1,15 +1,22 @@
-# Optimization XY Charger
+# Optimization XY Charger Documentation
 
 Windows Forms software for dual-camera rotating-log acquisition, calibrated 3D geometry analysis, defect mapping, virtual peel simulation, and head/tail spindle-axis recommendations.
 
-## Repository layout
+## Documentation map
 
-```text
-src/OptimizationXY.Charger/  Application source
-scripts/                     Build, publish, and calibration scripts
-docs/                        Architecture and commissioning notes
-.github/workflows/            Non-hardware CI build and dependency audit
-```
+Start with:
+
+- `START_HERE.md` — first installation, commissioning, and update overview.
+- `PRODUCTION_DEPLOYMENT.md` — supported ClickOnce deployment and update process.
+- `PRODUCTION_SETUP_WIZARD.md` — in-program production setup and camera assignment.
+- `CALIBRATION.md` — scanner calibration requirements.
+- `COMMISSIONING_CHECKLIST.md` — final machine commissioning checks.
+- `SAFETY_AND_INTERLOCKS.md` — production safety requirements.
+- `ARCHITECTURE.md` — system architecture and major components.
+- `DUAL_CAMERA_CONCATENATION.md` — head/tail image registration and concatenation.
+- `OPTIMIZATION_MODES.md` — optimization strategy behavior.
+
+PLC and restricted-library documentation is maintained separately and is not changed as part of the ClickOnce documentation cleanup.
 
 ## Current measurement flow
 
@@ -23,142 +30,77 @@ Each complete scan captures 36 synchronized positions:
   -> 36 concatenated frames enter the processing pipeline
 ```
 
-The live combined preview uses the same crop, orientation, overlap, vertical-offset, camera-side, and equal-height rules as the saved processing images. See `docs/DUAL_CAMERA_CONCATENATION.md`.
+The live combined preview uses the same crop, orientation, overlap, vertical-offset, camera-side, and equal-height rules as the saved processing images. See `DUAL_CAMERA_CONCATENATION.md`.
 
-## Lathe operator scan view
+## Production deployment
 
-A separate full-screen, read-only operator form normally opens on the second monitor. It shows the processed head-to-tail radius profile, red missing-scan sections, scan-completeness metrics, and current PLC `ScanStart`/`ScanComplete` state. It uses the existing PLC events and adds no PLC tags or writes.
+ClickOnce is the supported production deployment method.
 
-## Optimization modes
+The normal production flow is:
 
-The operator can select one of five modes:
-
-- `RecoveryOptimized`: default production mode. Builds baseline, penalty-search, largest-cylinder, and largest-oval seeds, performs a bounded direct XY recovery refinement around those seeds, renders the candidates with the physical circular virtual peel, and chooses the best usable-sheet result.
-- `PenaltyScored`: existing adaptive defect/wane/risk optimizer.
-- `LargestInscribedCylinder`: chooses the fixed spindle axis with the largest conservative circular envelope.
-- `LargestInscribedOval`: chooses the fixed spindle axis with the largest conservative elliptical envelope.
-- `CompareInscribedGeometry`: builds cylinder and oval candidates, simulates both on the physical circular rotary lathe, and selects the output with the greatest usable full 50-inch sheet recovery.
-
-All modes still run preprocessing, calibration, profile extraction, point-cloud construction, centerline fitting, radius-field construction/binning, radius-defect analysis, and defect-patch analysis. In the two inscribed-geometry modes, defect and penalty values remain diagnostics only; they do not move the spindle recommendation. See `docs/OPTIMIZATION_MODES.md`.
-
-## Requirements
-
-- Windows x64
-- .NET 10 SDK pinned by `global.json`
-- Teledyne DALSA Sapera SDK/runtime for Genie Nano hardware operation
-- ASComm IoT 1.5 and approved production runtime licensing
-- `XYRestricted.dll` and `AutomatedSolutions.ASCommStd.dll` under `lib/XYRestricted`
-- Visual Studio with the .NET desktop workload, or the .NET CLI
-
-The project can compile without Sapera for CI and non-hardware engineering. Camera operations then fail with a clear runtime message instead of a missing-reference compiler error.
-
-## Build
-
-Hardware build, using `SAPERA_SDK_DIR`:
-
-```powershell
-$env:SAPERA_SDK_DIR = "C:\Program Files\Teledyne DALSA\Sapera\Components\NET\Bin"
-./scripts/build.ps1
+```text
+Development computer
+  -> build and test
+  -> Visual Studio ClickOnce Publish
+  -> approved deployment location
+  -> production computer installs once
+  -> future published versions are delivered as ClickOnce updates
 ```
 
-Non-hardware validation build:
+The previous ZIP-based process using `publish-production.ps1` and `install-production.ps1` is legacy and should not be used for normal production installation or updates.
 
-```powershell
-./scripts/build.ps1 -SkipSapera
-```
-
-The MSBuild equivalents are `SaperaSdkDir=<path>` and `UseSapera=false`.
-
-## Publish
-
-Engineering publish:
-
-```powershell
-./scripts/publish.ps1 -SelfContained
-```
-
-Machine release publish:
-
-```powershell
-./scripts/publish-production.ps1
-```
-
-The production script requires Sapera hardware support, verifies restricted PLC dependencies and safety defaults, and creates a hash-manifested release ZIP.
+See `PRODUCTION_DEPLOYMENT.md` for the full process.
 
 ## First-run production setup
 
-The main operator form includes **Setup / Calibration** and opens it automatically when SQL, camera, laser, length-scale, or active-calibration evidence is missing. The wizard can:
+The main operator form includes **Setup / Calibration** and opens it automatically when required setup or calibration evidence is missing.
 
-- create/upgrade the local `OptimizationXY` SQL Express database with Windows Integrated Security;
-- configure direct Sapera server/resource connections, learn and lock physical camera serial numbers, and reconnect the final head/tail cameras;
+The wizard can:
+
+- create or upgrade the local OptimizationXY SQL Express database when database saving is enabled;
+- discover Sapera acquisition cameras;
+- assign the physical Head / Dog and Tail cameras;
+- learn and verify physical camera serial numbers;
+- reconnect the final head/tail cameras;
 - open separate head/tail previews for physical-side confirmation;
+- configure and verify camera crop, orientation, vertical registration, overlap, and seam;
 - verify the laser line with the production preprocessing path;
 - capture a concatenated image and calculate axial pixels/mm from two clicked marks;
-- capture known round references and automatically build the lookup table;
+- capture known round references and build the scanner lookup calibration;
 - stage, hash, validate, archive, activate, and roll back calibration packages.
 
-See `docs/PRODUCTION_SETUP_WIZARD.md` and `docs/CALIBRATION.md`. Production does not accept a loose lookup-table JSON; create and activate a complete package through the in-program wizard.
+See `PRODUCTION_SETUP_WIZARD.md` and `CALIBRATION.md`.
 
 ## Runtime data
 
-By default, writable data is stored outside the application installation directory:
+Writable production data is kept outside the ClickOnce-managed application installation.
+
+The configured runtime data root contains items such as:
 
 ```text
-%LOCALAPPDATA%\OptimizationXY\Charger\
-  Config\appsettings.json
-  Config\Calibration\scanner-lookup-table.json
-  Config\Calibration\scanner-calibration.json
-  Config\Calibration\head-camera-configuration.snapshot
-  Config\Calibration\tail-camera-configuration.snapshot
-  Config\Calibration\sha256-manifest.txt
-  Config\Calibration\Archive\
-  Config\Setup\production-setup-status.json
-  Logs\Application.log
-  SavedScans\
+Config\
+Config\Calibration\
+Config\Setup\
+Logs\
+SavedScans\
 ```
 
-Override the root when the production machine uses a dedicated data drive:
+Do not use the ClickOnce installation directory as permanent storage for machine configuration, calibration packages, logs, or scan records.
 
-```powershell
-$env:OPTIMIZATION_XY_DATA_DIR = "D:\OptimizationXYData"
-```
+## Updates
 
-## Saved scan contents
+After the production computer has installed the application once through ClickOnce:
 
-Each `SavedScans\...\Scan_####` folder contains:
+1. make and test the software change on the development computer;
+2. publish the next version using the same approved Visual Studio ClickOnce profile;
+3. start the installed production application;
+4. allow ClickOnce to install the newer published version according to the configured update policy;
+5. perform the validation appropriate for the change before returning the machine to normal production.
 
-- `DiagnosticsReport.txt`
-- copy-preserved concatenated input images under `Frames\`
-- `frames.csv` with sequence, angle, status, and source/saved paths
-- `point_cloud.csv`
-- `scanner-calibration.json` containing the exact lookup table used for the result
-- `head-camera-configuration.snapshot` and `tail-camera-configuration.snapshot` containing the exact direct Sapera identity, requested settings, and applied/read-back features frozen when capture began
-- available images under `Overlays\`
-- `unwrapped_peel_view.png` for the selected final recommendation
-- `largest_inscribed_cylinder_peel.png` when a cylinder candidate was evaluated
-- `largest_inscribed_oval_peel.png` when an oval candidate was evaluated
-- `direct_recovery_refinement_peel.png` for the direct veneer-recovery search result
-- command/readiness/transmission JSON records
-- `software-build.json` containing the application version and SHA-256 identity of the running binary
-- `sha256-manifest.txt` covering the complete saved record
+Do not copy the Git repository to the production computer for normal updates.
 
-## Safety defaults
+## Commissioning
 
-- Production starts fail-closed in `Commissioning` mode; physical approval flags are false.
-- A named operating-system mutex blocks a second controller instance.
-- Production requires `RecoveryOptimized` with direct virtual-peel refinement enabled.
-- PLC-triggered production capture requires a fresh `ScanStart` edge and a good `ScanComplete` after the 36-frame quota.
-- Manual start, manual early-stop, and optimization-mode changes are disabled in Production mode.
-- Carriage/knife clearance is never less than 10 peel thicknesses; default 3.2 mm veneer gives 32.0 mm.
-- No rotation value or rotation tag is generated; rotation remains PLC-controlled.
-- PLC outputs are saved first, validated, written only through the restricted tags, and read back with quality/tolerance checks.
-- Each production scan preserves its scanner calibration, both direct camera-configuration snapshots, operator scan-quality result, settings, software-build hash, and a complete SHA-256 manifest before PLC motion data is authorized.
-- Missing or invalid scanner calibration blocks processing.
-- SQL persistence is disabled and its connection string is blank by default until the in-program local SQL Express setup succeeds.
-- Raw measurement point clouds never use visualization gap fill.
-- Geometry searches honor machine travel as a hard feasibility limit, not as a score.
-- Production concatenation rejects unequal frame heights by default instead of silently rescaling measurement data.
-- Logs rotate at 10 MB and retain ten archives.
-- Hardware builds target x64.
+Installation and software update success do not replace machine commissioning.
 
-Read `docs/PRODUCTION_DEPLOYMENT.md`, `docs/COMMISSIONING_CHECKLIST.md`, `docs/PLC_INTEGRATION.md`, and `docs/SAFETY_AND_INTERLOCKS.md` before commissioning the application.
+Before enabling Production mode, complete the required camera, calibration, machine-direction, travel-limit, clearance, guarding, interlock, emergency-stop, and controlled-scan checks described in `COMMISSIONING_CHECKLIST.md` and `SAFETY_AND_INTERLOCKS.md`.
