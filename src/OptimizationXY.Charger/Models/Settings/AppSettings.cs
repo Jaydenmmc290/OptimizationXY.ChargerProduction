@@ -607,7 +607,7 @@ public sealed class OptimizationSettings
     /// <summary>
     /// Step size in millimeters for the coarse search phase of the optimization process. This value defines the increment by which the spindle moves during the coarse search for optimal settings.
     /// </summary>
-    public double CoarseStepMM { get; set; } = 5.0;
+    public double CoarseStepMM { get; set; } = 2.5;
 
 
     /// <summary>
@@ -618,7 +618,7 @@ public sealed class OptimizationSettings
     public double MediumStepMM { get; set; } = 2.5; 
 
     public double FineSearchRadiusMM { get; set; } = 2.5;  
-    public double FineStepMM { get; set; } = 1.0;  
+    public double FineStepMM { get; set; } = 0.5;
 
 
 
@@ -751,6 +751,13 @@ public sealed class PlcIntegrationSettings
     public int ReadbackTimeoutMilliseconds { get; set; } = 5000;
     public double FloatComparisonTolerance { get; set; } = 0.01;
     public bool WriteCarriageRetractFirst { get; set; } = true;
+
+    /// <summary>
+    /// When true, enables writing the spindle rotation tag after the ScannedBlockData write.
+    /// This is used for kinematics rotation output support.
+    /// TEMPORARY: This setting is a placeholder for future rotation DLL integration.
+    /// </summary>
+    public bool EnableRotationTagWrite { get; set; } = true;
 
     /// <summary>
     /// Maximum amount of time to wait for the required PLC network

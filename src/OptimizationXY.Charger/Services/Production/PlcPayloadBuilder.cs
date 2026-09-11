@@ -105,7 +105,10 @@ public static class PlcPayloadBuilder
             LargestMeasuredRadiusMM = largestRadiusMM * MM_TO_INCHES,
             SmallestMeasuredRadiusMM = smallestRadiusMM * MM_TO_INCHES,
             KnifeClearanceMM = knifeClearanceMM * MM_TO_INCHES,
-            SafeCarriageRetractRadiusMM = (largestRadiusMM + knifeClearanceMM) * MM_TO_INCHES
+            SafeCarriageRetractRadiusMM = (largestRadiusMM + knifeClearanceMM) * MM_TO_INCHES,
+
+            // Populate spindle rotation from kinematics calculations
+            SpindleRotationDegrees = state.KinematicVisualizationState?.SpindleRotationDeg ?? 0.0
         };
 
         ValidateFinite(payload.SafeCarriageRetractRadiusMM);

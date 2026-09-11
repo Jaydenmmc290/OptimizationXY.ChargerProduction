@@ -259,9 +259,9 @@ public sealed class LogProcessingCoordinator
     /// Prepares the production command by building the PLC payload and evaluating production readiness.
     /// 
     /// Process:
-    /// 1. If FinalSpindleRecommendation exists, present operator with kinematic selection choice
-    /// 2. Operator selects either "Use Kinematic Rotation" or "Continue With Current XY"
-    /// 3. Selected recommendation (original or kinematic-adjusted) is used for PLC payload
+    /// 1. If FinalSpindleRecommendation exists and kinematics enabled, automatically apply kinematic rotation
+    /// 2. Kinematic calculation runs in background (no operator interaction)
+    /// 3. Kinematic-adjusted recommendation is used for PLC payload
     /// 4. Build PLC payload and evaluate production readiness
     /// </summary>
     /// <param name="plcConnected">Indicates whether the PLC is connected.</param>
@@ -271,30 +271,30 @@ public sealed class LogProcessingCoordinator
         var state = PipelineState.Instance;
 
         // ============================================================
-        // KINEMATIC POSITION SELECTION STEP
-        // Present operator with choice between kinematic rotation and current positions
+        // KINEMATIC ROTATION STEP (Automatic, no UI interaction)
+        // Silently apply kinematic rotation for position verification
         // ============================================================
         var settings = PipelineState.Instance.Settings;
         if (state.FinalSpindleRecommendation != null && settings.Kinematic.EnableKinematicPositionSelection)
         {
             try
             {
-                LogDiagnostics("[KINEMATIC] Presenting operator with position selection choice...");
+                LogDiagnostics("[KINEMATIC] Automatically applying kinematic rotation calculations...");
 
                 state.FinalSpindleRecommendation = Kinematic.KinematicPositionSelector.GetOperatorPositionSelection(
                     state.FinalSpindleRecommendation);
 
-                LogDiagnostics("[KINEMATIC] Operator selection complete.");
+                LogDiagnostics("[KINEMATIC] Kinematic rotation calculation complete.");
             }
             catch (Exception ex)
             {
-                LogDiagnostics($"[KINEMATIC] Error during operator selection: {ex.Message}");
-                // Continue with existing recommendation if selection fails
+                LogDiagnostics($"[KINEMATIC] Error during kinematic calculation: {ex.Message}");
+                // Continue with existing recommendation if calculation fails
             }
         }
         else if (state.FinalSpindleRecommendation != null && !settings.Kinematic.EnableKinematicPositionSelection)
         {
-            LogDiagnostics("[KINEMATIC] Kinematic position selection is disabled; proceeding with current XY positions.");
+            LogDiagnostics("[KINEMATIC] Kinematic rotation is disabled; proceeding with current XY positions.");
         }
 
         try

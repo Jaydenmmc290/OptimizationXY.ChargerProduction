@@ -27,6 +27,12 @@ public sealed class PlcCommandPayload
     public double KnifeClearanceMM { get; set; }
     public double SafeCarriageRetractRadiusMM { get; set; }
 
+    /// <summary>
+    /// Gets or sets the spindle rotation amount in degrees.
+    /// This value is sent to the PLC as the SpindleRotate tag when kinematics rotation is enabled.
+    /// The new rotation DLL expects this as a single REAL (float) value.
+    /// </summary>
+    public double SpindleRotationDegrees { get; set; }
 
     /// <summary>
     /// Gets the scanned block data as an array of floats, including head and tail coordinates, diameters, radii, and block count.
@@ -68,4 +74,10 @@ public sealed class PlcCommandPayload
         0.0f,
         BlockCount
     ];
+
+    /// <summary>
+    /// Gets the spindle rotation value as a single float.
+    /// This is the value sent to the PLC's SpindleRotate tag.
+    /// </summary>
+    public float SpindleRotateValue => (float)SpindleRotationDegrees;
 }

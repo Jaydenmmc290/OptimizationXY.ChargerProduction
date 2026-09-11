@@ -493,7 +493,7 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             settings.Geometry.LocalCenterlineSliceThicknessMM,
             settings.Geometry.MinPointsPerLocalCenterlineSlice);  // Use the geometry settings for local centerline fitting
 
-        if (_state.LocalCenterlines.Count < 3)
+        if (_state.LocalCenterlines.Count < 2)
             throw new InvalidOperationException("Not enough reliable rotating-scan centerline slices.");
 
         var sweepSlices = TrimCenterlineEnds(  // Trim the ends of the local centerline slices to avoid bad data at the log ends, using a trim fraction of 3%
@@ -603,7 +603,7 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         if (_state.RadiusField == null || _state.RadiusField.Count == 0)
             throw new InvalidOperationException("Build radius field first.");
 
-        var settings = _state.Settings;  // Retrieve the application settings for geometry and other parameters
+        var settings = _state.Settings;  // Retrieve the application settings for geometry and other parameters. 
 
         _state.BinnedRadiusField = RadiusFieldBinner.Bin(
             _state.RadiusField,
@@ -1583,7 +1583,7 @@ BuildFinalSpindleRecommendation(
                             : 0.0,
                     CommandTailYMM =
                         machineMoveAllowed
-                            ? move.TailMoveYMM
+                            ? -move.TailMoveYMM
                             : 0.0,
                     CommandHeadXMM =
                         machineMoveAllowed
@@ -1591,7 +1591,7 @@ BuildFinalSpindleRecommendation(
                             : 0.0,
                     CommandHeadYMM =
                         machineMoveAllowed
-                            ? move.HeadMoveYMM
+                            ? -move.HeadMoveYMM
                             : 0.0,
 
                     BestTestedTailXMM = move.TailMoveXMM,
@@ -2021,11 +2021,11 @@ BuildFinalSpindleRecommendation(
                     CommandTailXMM =
                         machineMoveAllowed ? move.TailMoveXMM : 0.0,
                     CommandTailYMM =
-                        machineMoveAllowed ? move.TailMoveYMM : 0.0,
+                        machineMoveAllowed ? -move.TailMoveYMM : 0.0,
                     CommandHeadXMM =
                         machineMoveAllowed ? move.HeadMoveXMM : 0.0,
                     CommandHeadYMM =
-                        machineMoveAllowed ? move.HeadMoveYMM : 0.0,
+                        machineMoveAllowed ? -move.HeadMoveYMM : 0.0,
 
                     BestTestedTailXMM = move.TailMoveXMM,
                     BestTestedTailYMM = move.TailMoveYMM,
@@ -3022,9 +3022,9 @@ double maxSpindleMovementMM)
             RiskScoreReductionPercent = riskScoreReductionPercent,
 
             CommandTailXMM = isRecommended ? move.TailMoveXMM : 0.0,
-            CommandTailYMM = isRecommended ? move.TailMoveYMM : 0.0,
+            CommandTailYMM = isRecommended ? -move.TailMoveYMM : 0.0,
             CommandHeadXMM = isRecommended ? move.HeadMoveXMM : 0.0,
-            CommandHeadYMM = isRecommended ? move.HeadMoveYMM : 0.0,
+            CommandHeadYMM = isRecommended ? -move.HeadMoveYMM : 0.0,
 
             BestTestedTailXMM = move.TailMoveXMM,
             BestTestedTailYMM = move.TailMoveYMM,

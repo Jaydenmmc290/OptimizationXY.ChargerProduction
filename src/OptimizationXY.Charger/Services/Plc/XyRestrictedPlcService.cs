@@ -270,6 +270,52 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
                 written,
                 token).ConfigureAwait(false);
 
+            // Spindle rotation tag write support.
+            // SpindleRotate is a single REAL (float) value written when kinematics rotation is enabled.
+            // This write occurs after ScannedBlockData to maintain the PLC write order.
+            if (_settings.EnableRotationTagWrite && payload.SpindleRotationDegrees != 0.0)
+            {
+                try
+                {
+                    // Write single float to SpindleRotate tag
+                    _xy.WriteTag(XyTag.SpindleRotate, payload.SpindleRotateValue);
+                    written.Add(XyTag.SpindleRotate.ToTagName());
+                    Log($"PLC write: SpindleRotate [{payload.SpindleRotateValue:F3}]");
+
+                    if (_settings.RequireReadbackVerification)
+                    {
+                        // Readback verification for single float value
+                        var tcs = new TaskCompletionSource<TagDataChangedEventArgs>(
+                            TaskCreationOptions.RunContinuationsAsynchronously);
+
+                        string tagName = XyTag.SpindleRotate.ToTagName();
+                        if (!_pendingReadbacks.TryAdd(tagName, tcs))
+                        {
+                            throw new InvalidOperationException(
+                                $"A readback request is already pending for {tagName}.");
+                        }
+
+                        try
+                        {
+                            _xy.ReadTag(XyTag.SpindleRotate);
+
+                            await tcs.Task.WaitAsync(
+                                TimeSpan.FromMilliseconds(_settings.ReadbackTimeoutMilliseconds),
+                                token).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            _pendingReadbacks.TryRemove(tagName, out _);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "SpindleRotate tag write or readback failed.");
+                    throw;
+                }
+            }
+
             if (!_settings.WriteCarriageRetractFirst)
             {
                 await WriteAndVerifyAsync(

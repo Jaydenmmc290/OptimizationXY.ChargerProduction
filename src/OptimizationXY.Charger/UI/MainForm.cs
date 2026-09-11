@@ -2126,35 +2126,12 @@ string message)
 
                 AppendDiagnostics("Saving results...");
 
-                // PERFORMANCE OPTIMIZATION: Run save and production readiness check in parallel to hide I/O latency.
-                // 
-                // Previous implementation (blocking):
-                //   1. Wait for SaveResults() to complete (file I/O, JSON serialization, image encoding) ~3.6s
-                //   2. Then perform production readiness checks (CPU-bound) ~0.1s
-                //   Total: ~3.7s sequential
-                //
-                // Optimized implementation (parallel):
-                //   1. Fire off SaveResultsAsync() on background thread
-                //   2. Simultaneously run production readiness checks on UI thread
-                //   3. Wait for both to complete
-                //   Total: ~max(3.6s I/O, 0.1s readiness) ≈ 3.6s (saves ~3.6s per scan)
-                //
-                // This is safe because:
-                // - Readiness checks read from PipelineState (completed before save starts)
-                // - Save doesn't modify shared state used by readiness checks
-                // - Exception handling is preserved (save failure still blocks PLC in production mode)
-
-                Task<string> saveTask = _processingCoordinator.SaveResultsAsync();
-
-                // Prepare production readiness checks while save I/O is happening in the background
-                ProductionReadinessReport readiness =
-                    _processingCoordinator.PrepareProductionCommand(
-                        _plcService?.IsConnected == true);
-
-                // Wait for the save to complete before allowing further operations
+                // Save the results to disk before checking production readiness.
+                // Production readiness checks include validation of saved files (e.g., operator-scan-quality.json,
+                // scanner-calibration.json, camera-configuration snapshots), so we must complete the save operation first.
                 try
                 {
-                    string savePath = await saveTask;
+                    string savePath = await _processingCoordinator.SaveResultsAsync();
                     AppendDiagnostics($"Results saved: {savePath}");
                 }
                 catch (Exception saveEx)
@@ -2168,6 +2145,11 @@ string message)
                             saveEx);
                     }
                 }
+
+                // Now that save is complete, perform production readiness checks
+                ProductionReadinessReport readiness =
+                    _processingCoordinator.PrepareProductionCommand(
+                        _plcService?.IsConnected == true);
 
                 if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
                 {
@@ -2327,27 +2309,33 @@ string message)
         {
             var rec = state.FinalSpindleRecommendation;
 
-            // Update the Spindle Output textboxes with the command positions (in MM)
+            // Convert MM to inches (1 inch = 25.4 mm)
+            double tailXInches = rec.CommandTailXMM / 25.4;
+            double tailYInches = rec.CommandTailYMM / 25.4;
+            double headXInches = rec.CommandHeadXMM / 25.4;
+            double headYInches = rec.CommandHeadYMM / 25.4;
+
+            // Update the Spindle Output textboxes with the command positions (in inches)
             try
             {
                 if (InvokeRequired)
                 {
                     Invoke(new Action(() =>
                     {
-                        txtHeadX.Text = rec.CommandHeadXMM.ToString("F2");
-                        txtHeadY.Text = rec.CommandHeadYMM.ToString("F2");
-                        txtTailX.Text = rec.CommandTailXMM.ToString("F2");
-                        txtTailY.Text = rec.CommandTailYMM.ToString("F2");
+                        txtHeadX.Text = headXInches.ToString("F3");
+                        txtHeadY.Text = headYInches.ToString("F3");
+                        txtTailX.Text = tailXInches.ToString("F3");
+                        txtTailY.Text = tailYInches.ToString("F3");
                         txtUsableSheets.Text = rec.UsableFullSheets.ToString();
                         txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2");
                     }));
                 }
                 else
                 {
-                    txtHeadX.Text = rec.CommandHeadXMM.ToString("F2");
-                    txtHeadY.Text = rec.CommandHeadYMM.ToString("F2");
-                    txtTailX.Text = rec.CommandTailXMM.ToString("F2");
-                    txtTailY.Text = rec.CommandTailYMM.ToString("F2");
+                    txtHeadX.Text = headXInches.ToString("F3");
+                    txtHeadY.Text = headYInches.ToString("F3");
+                    txtTailX.Text = tailXInches.ToString("F3");
+                    txtTailY.Text = tailYInches.ToString("F3");
                     txtUsableSheets.Text = rec.UsableFullSheets.ToString();
                     txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2");
                 }
@@ -2356,12 +2344,6 @@ string message)
             {
                 Logger.Warn(ex, "Failed to update Spindle Output fields.");
             }
-
-            // Convert MM to inches (1 inch = 25.4 mm)
-            double tailXInches = rec.CommandTailXMM / 25.4;
-            double tailYInches = rec.CommandTailYMM / 25.4;
-            double headXInches = rec.CommandHeadXMM / 25.4;
-            double headYInches = rec.CommandHeadYMM / 25.4;
 
             AppendDiagnostics("");
             AppendDiagnostics("============================================");

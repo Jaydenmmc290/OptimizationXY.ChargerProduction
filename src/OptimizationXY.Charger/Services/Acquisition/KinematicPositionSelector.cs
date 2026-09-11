@@ -1,5 +1,4 @@
 using System;
-using System.Windows.Forms;
 using NLog;
 using OptimizationXY.Charger.Models.Optimization.Spindle;
 using OptimizationXY.Charger.Services.Core;
@@ -8,84 +7,54 @@ using OptimizationXY.Charger.Services.Production;
 namespace OptimizationXY.Charger.Kinematic;
 
 /// <summary>
-/// Orchestrates the operator selection between Kinematic Rotation and Current XY positions.
+/// Automatically applies kinematic rotation to optimize spindle positions.
 /// 
 /// This service:
-/// 1. Presents a clear UI choice to the operator (MessageBox with two options)
-/// 2. If Kinematic selected: runs KinematicsCalculator to rotate positions
-/// 3. Captures complete visual diagnostic state during calculation
-/// 4. Validates output using same safety checks as PlcPayloadBuilder
-/// 5. Returns an updated FinalSpindleRecommendation with selected positions
-/// 6. Logs all decisions and calculations for testing/verification
+/// 1. Runs KinematicsCalculator to rotate positions automatically (no UI prompt)
+/// 2. Captures complete mathematical calculation state
+/// 3. Validates output using same safety checks as PlcPayloadBuilder
+/// 4. Returns an updated FinalSpindleRecommendation with kinematic-adjusted positions
+/// 5. Logs all calculations for verification and sanity checks
 /// 
-/// The service is stateless between calls and thread-safe for non-UI operations.
-/// UI interactions are synchronous (blocking) to ensure operator engagement.
+/// The service is stateless between calls and thread-safe.
+/// All calculations run silently in the background for verification purposes.
 /// </summary>
 public sealed class KinematicPositionSelector
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>
-    /// Presents operator with choice between Kinematic Rotation and Current XY positions,
-    /// executes selected path, and returns updated FinalSpindleRecommendation.
-    /// 
-    /// This is the main entry point for the kinematic selection feature.
+    /// Automatically applies kinematic rotation to optimize spindle positions.
+    /// No operator interaction required - calculation runs silently in background.
     /// 
     /// PROCESS:
-    /// 1. Shows MessageBox asking operator to choose between two options
-    /// 2. If operator cancels, returns original recommendation unchanged
-    /// 3. If "Use Kinematic Rotation" selected:
-    ///    - Calls KinematicsCalculator.CalculateCorrectedPositions()
-    ///    - Captures full visual diagnostic state
-    ///    - Validates kinematic output (finite values, ranges match)
-    ///    - Creates updated recommendation with kinematic-adjusted positions
-    ///    - Logs complete calculation and decision
-    /// 4. If "Continue With Current XY" selected:
-    ///    - Returns original recommendation unchanged
-    ///    - Logs operator decision
-    /// 5. In both cases, adds diagnostics to state for audit trail
+    /// 1. Calls KinematicsCalculator.CalculateCorrectedPositions()
+    /// 2. Captures mathematical calculation state
+    /// 3. Validates kinematic output (finite values, ranges match)
+    /// 4. Creates updated recommendation with kinematic-adjusted positions
+    /// 5. Logs complete calculation for verification
+    /// 6. Returns result for PLC transmission
     /// 
     /// SAFETY: 
-    /// - Both paths produce FinalSpindleRecommendation objects that pass through
-    ///   PlcPayloadBuilder.ValidateFinite() before PLC write
-    /// - Kinematic output validated identically to Optimization output
-    /// - No PLC write occurs until both validation layers pass
+    /// - Output validated identically to Optimization output
+    /// - No PLC write occurs until PlcPayloadBuilder.ValidateFinite() passes
     /// </summary>
     /// <param name="originalRecommendation">The FinalSpindleRecommendation from Optimization</param>
-    /// <returns>FinalSpindleRecommendation with either original or kinematic-adjusted positions</returns>
+    /// <returns>FinalSpindleRecommendation with kinematic-adjusted positions</returns>
     /// <exception cref="ArgumentNullException">If originalRecommendation is null</exception>
     public static FinalSpindleRecommendation GetOperatorPositionSelection(
         FinalSpindleRecommendation originalRecommendation)
     {
         ArgumentNullException.ThrowIfNull(originalRecommendation);
 
-        // Log the beginning of the operator selection process
+        // Log the beginning of the kinematic calculation (no UI dialog)
         Logger.Debug(
-            "Kinematic selection process starting. Original positions: " +
+            "Kinematic rotation starting automatically. Input positions: " +
             $"Head=({originalRecommendation.CommandHeadXMM:F3}, {originalRecommendation.CommandHeadYMM:F3}) " +
             $"Tail=({originalRecommendation.CommandTailXMM:F3}, {originalRecommendation.CommandTailYMM:F3})");
 
-        // Present operator with choice using MessageBox
-        DialogResult choice = MessageBox.Show(
-            "Choose position calculation method:\r\n\r\n" +
-            "• Use Kinematic Rotation: Apply rotation logic to avoid collision zones\r\n" +
-            "• Continue With Current XY: Use existing optimization positions\r\n\r\n" +
-            "Click the appropriate button to proceed.",
-            "Position Selection - Kinematic Mode Available",
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Question,
-            MessageBoxDefaultButton.Button2);
-
-        // If operator cancels or clicks "No", use current positions
-        if (choice == DialogResult.No)
-        {
-            Logger.Info("Operator selected: Continue With Current XY (no kinematic rotation applied)");
-            return originalRecommendation;
-        }
-
-        // Operator clicked "Yes" - use Kinematic Rotation
-        Logger.Info("Operator selected: Use Kinematic Rotation (applying rotation logic to positions)");
-
+        // Automatically apply kinematic rotation (no MessageBox dialog)
+        Logger.Info("Automatically applying kinematic rotation to optimize positions");
         return ApplyKinematicRotation(originalRecommendation);
     }
 
@@ -120,20 +89,8 @@ public sealed class KinematicPositionSelector
 
             pipelineState.DiagnosticsReport += 
                 $"[KINEMATIC] Input Optimization positions:\r\n" +
-                $"  Head X: {original.CommandHeadXMM:F4} mm\r\n" +
-                $"  Head Y: {original.CommandHeadYMM:F4} mm\r\n" +
-                $"  Tail X: {original.CommandTailXMM:F4} mm\r\n" +
-                $"  Tail Y: {original.CommandTailYMM:F4} mm\r\n";
-
-            // Store input values in visualization state
-            state.InputHeadXMM = original.CommandHeadXMM;
-            state.InputHeadYMM = original.CommandHeadYMM;
-            state.InputTailXMM = original.CommandTailXMM;
-            state.InputTailYMM = original.CommandTailYMM;
-
-            state.RotationZoneLeftLimitDeg = calculator.Config.RotationZoneLeftLimit;
-            state.RotationZoneRightLimitDeg = calculator.Config.RotationZoneRightLimit;
-            state.CorrectionOffsetsApplied = calculator.Config.EnableXYCorrectionOffset;
+                $"  Head: X={original.CommandHeadXMM:F4}mm, Y={original.CommandHeadYMM:F4}mm\r\n" +
+                $"  Tail: X={original.CommandTailXMM:F4}mm, Y={original.CommandTailYMM:F4}mm\r\n";
 
             // Call kinematic calculator
             calculator.CalculateCorrectedPositions(
@@ -146,13 +103,22 @@ public sealed class KinematicPositionSelector
                 out double correctedTailX,
                 out double correctedTailY);
 
+            // Calculate forward kinematics for cylinder positions (A1, B1, A2, B2)
+            calculator.CalculateForwardKinematics(
+                correctedHeadX,
+                correctedHeadY,
+                correctedTailX,
+                correctedTailY,
+                out double a1,
+                out double b1,
+                out double a2,
+                out double b2);
+
             // Store final corrected positions
             state.FinalHeadXMM = correctedHeadX;
             state.FinalHeadYMM = correctedHeadY;
             state.FinalTailXMM = correctedTailX;
             state.FinalTailYMM = correctedTailY;
-
-            state.CalculatedAtUtc = DateTime.UtcNow;
 
             // Validate kinematic output using same method as PlcPayloadBuilder
             string validationError = ValidateKinematicOutput(
@@ -171,34 +137,27 @@ public sealed class KinematicPositionSelector
                 return original;
             }
 
-            state.IsValid = true;
-            state.HeadPositionChangeMM = state.CalculateHeadPositionChange();
-            state.TailPositionChangeMM = state.CalculateTailPositionChange();
-
-            Logger.Info(
-                $"Kinematic calculation successful. Head moved {state.HeadPositionChangeMM:F3} mm, " +
-                $"Tail moved {state.TailPositionChangeMM:F3} mm");
-
             pipelineState.DiagnosticsReport +=
-                $"[KINEMATIC] Calculated corrected positions:\r\n" +
-                $"  Head X: {correctedHeadX:F4} mm (change: {correctedHeadX - original.CommandHeadXMM:+0.0000;-0.0000} mm)\r\n" +
-                $"  Head Y: {correctedHeadY:F4} mm (change: {correctedHeadY - original.CommandHeadYMM:+0.0000;-0.0000} mm)\r\n" +
-                $"  Tail X: {correctedTailX:F4} mm (change: {correctedTailX - original.CommandTailXMM:+0.0000;-0.0000} mm)\r\n" +
-                $"  Tail Y: {correctedTailY:F4} mm (change: {correctedTailY - original.CommandTailYMM:+0.0000;-0.0000} mm)\r\n" +
-                $"[KINEMATIC] Position changes: Head {state.HeadPositionChangeMM:F3} mm, Tail {state.TailPositionChangeMM:F3} mm\r\n" +
-                $"[KINEMATIC] Rotation zone: {state.RotationZoneLeftLimitDeg:F1}° to {state.RotationZoneRightLimitDeg:F1}°\r\n" +
-                $"[KINEMATIC] Validation: PASSED - kinematic positions are valid\r\n";
+                $"[KINEMATIC] Output Kinematic positions:\r\n" +
+                $"  Head: X={correctedHeadX:F4}mm, Y={correctedHeadY:F4}mm\r\n" +
+                $"  Tail: X={correctedTailX:F4}mm, Y={correctedTailY:F4}mm\r\n" +
+                $"[KINEMATIC] Cylinder targets (A1, B1, A2, B2):\r\n" +
+                $"  A1 (Head X): {a1:F4}\r\n" +
+                $"  B1 (Head Y): {b1:F4}\r\n" +
+                $"  A2 (Tail X): {a2:F4}\r\n" +
+                $"  B2 (Tail Y): {b2:F4}\r\n" +
+                $"[KINEMATIC] Validation: PASSED\r\n";
 
             // Create new recommendation with kinematic-adjusted positions
             var kinematicRecommendation = new FinalSpindleRecommendation
             {
                 // Copy all original fields
                 OptimizationMode = original.OptimizationMode,
-                SelectedStrategy = original.SelectedStrategy + " (with Kinematic Rotation)",
+                SelectedStrategy = original.SelectedStrategy,
                 IsRecommended = original.IsRecommended,
                 MachineMoveAllowed = original.MachineMoveAllowed,
-                RecommendedAction = $"{original.RecommendedAction} [Rotated by Kinematics]",
-                Reason = $"{original.Reason} [Applied kinematic rotation to avoid collision zone]",
+                RecommendedAction = original.RecommendedAction,
+                Reason = original.Reason,
                 Warnings = new List<string>(original.Warnings),
 
                 RiskScore = original.RiskScore,
@@ -240,17 +199,9 @@ public sealed class KinematicPositionSelector
                 FineCandidates = original.FineCandidates,
             };
 
-            // Add kinematic-specific warning if positions changed significantly
-            if (state.HeadPositionChangeMM > 5.0 || state.TailPositionChangeMM > 5.0)
-            {
-                kinematicRecommendation.Warnings.Add(
-                    $"Kinematic rotation applied: Head moved {state.HeadPositionChangeMM:F2} mm, " +
-                    $"Tail moved {state.TailPositionChangeMM:F2} mm to avoid collision zone");
-            }
-
             Logger.Info(
-                $"[KINEMATIC] Final recommendation created with kinematic positions. " +
-                $"Final positions: Head=({correctedHeadX:F3}, {correctedHeadY:F3}) " +
+                $"[KINEMATIC] Final kinematic positions returned: " +
+                $"Head=({correctedHeadX:F3}, {correctedHeadY:F3}) " +
                 $"Tail=({correctedTailX:F3}, {correctedTailY:F3})");
 
             return kinematicRecommendation;
