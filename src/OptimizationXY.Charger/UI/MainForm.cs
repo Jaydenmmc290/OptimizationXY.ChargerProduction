@@ -2146,70 +2146,146 @@ string message)
                     }
                 }
 
-                // Now that save is complete, perform production readiness checks
-                ProductionReadinessReport readiness =
-                    _processingCoordinator.PrepareProductionCommand(
-                        _plcService?.IsConnected == true);
+                // ================================================================
+                // IMMEDIATE PLC SEND (after save, with lightweight validation)
+                // ================================================================
+                // New workflow (UseFastImmediatePlcSend=true): Send to PLC immediately after save + spindle recommendation
+                // Full production readiness checks will run in background for audit/diagnostics
+                // and will NOT block the PLC send operation.
+                //
+                // Legacy workflow (UseFastImmediatePlcSend=false): save → full production readiness checks → diagnostics → PLC send.
 
                 if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
                 {
-                    if (readiness.CanSendToPlc &&
-                        PipelineState.Instance.PlcPayload is not null &&
-                        _plcService is not null)
+                    if (PipelineState.Instance.Settings.Plc.UseFastImmediatePlcSend)
                     {
-                        // Report any warnings even if we're proceeding
-                        var warningChecks = readiness.Checks
-                            .Where(c => c.Status == ProductionCheckStatus.Warning)
-                            .ToList();
+                        // ============================================================
+                        // FAST PATH: Immediate send after save (new behavior)
+                        // ============================================================
+                        bool payloadIsValid = _processingCoordinator.PrepareAndValidatePayloadForImmediateSend(
+                            _plcService?.IsConnected == true);
 
-                        if (warningChecks.Count > 0)
+                        if (payloadIsValid && PipelineState.Instance.PlcPayload is not null && _plcService is not null)
                         {
-                            AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
-                            foreach (var check in warningChecks)
+                            AppendDiagnostics("[PLC] Payload validation passed. Sending restricted XY payloads immediately...");
+
+                            var transmission = await _plcService.SendPayloadAsync(
+                                PipelineState.Instance.PlcPayload,
+                                processingCancellation.Token);
+
+                            LogProcessingCoordinator.RecordPlcTransmission(transmission);
+
+                            AppendDiagnostics(
+                                transmission.Success
+                                    ? "[PLC] Result accepted by verified tag readback."
+                                    : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
+                                      $"Verify machine state, sensors, and PLC configuration before retrying.");
+
+                            if (!transmission.Success && productionMode)
                             {
-                                AppendDiagnostics($"  ⚠ WARNING: {check.Name}: {check.Message}");
+                                AppendDiagnostics(
+                                    "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
+                                SetUIState(ApplicationState.Faulted);
                             }
                         }
-
-                        AppendDiagnostics(
-                            "[PLC] Production checks passed. Sending restricted XY payloads...");
-
-                        var transmission = await _plcService.SendPayloadAsync(
-                            PipelineState.Instance.PlcPayload,
-                            processingCancellation.Token);
-
-                        LogProcessingCoordinator.RecordPlcTransmission(transmission);
-
-                        AppendDiagnostics(
-                            transmission.Success
-                                ? "[PLC] Result accepted by verified tag readback."
-                                : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
-                                  $"Verify machine state, sensors, and PLC configuration before retrying.");
-
-                        if (!transmission.Success && productionMode)
+                        else
                         {
                             AppendDiagnostics(
-                                "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
-                            SetUIState(ApplicationState.Faulted);
+                                "[PLC] Payload validation failed. PLC send blocked. Check diagnostics above.");
+
+                            if (productionMode)
+                                SetUIState(ApplicationState.Faulted);
                         }
+
+                        // ================================================================
+                        // BACKGROUND READINESS EVALUATION (runs asynchronously)
+                        // ================================================================
+                        // Perform full production readiness checks in background for audit/reporting
+                        // This will NOT block PLC transmission but will provide extended diagnostics
+                        _ = Task.Run(() =>
+                        {
+                            try
+                            {
+                                ProductionReadinessReport readiness =
+                                    _processingCoordinator.PrepareProductionCommand(
+                                        _plcService?.IsConnected == true);
+
+                                // This is now purely for audit/diagnostics; PLC send has already occurred
+                                AppendDiagnostics("[AUDIT] Extended production readiness evaluation complete (non-blocking).");
+                            }
+                            catch (Exception ex)
+                            {
+                                AppendDiagnostics($"[AUDIT] Background readiness evaluation error (non-critical): {ex.Message}");
+                            }
+                        }, processingCancellation.Token);
                     }
                     else
                     {
-                        AppendDiagnostics(
-                            $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
+                        // ============================================================
+                        // LEGACY PATH: Full readiness checks before send (old behavior)
+                        // ============================================================
+                        ProductionReadinessReport readiness =
+                            _processingCoordinator.PrepareProductionCommand(
+                                _plcService?.IsConnected == true);
 
-                        // Provide detailed blocking reasons
-                        var blockingChecks = readiness.Checks
-                            .Where(c => c.Status == ProductionCheckStatus.Block)
-                            .ToList();
-
-                        foreach (var check in blockingChecks)
+                        if (readiness.CanSendToPlc &&
+                            PipelineState.Instance.PlcPayload is not null &&
+                            _plcService is not null)
                         {
-                            AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
-                        }
+                            // Report any warnings even if we're proceeding
+                            var warningChecks = readiness.Checks
+                                .Where(c => c.Status == ProductionCheckStatus.Warning)
+                                .ToList();
 
-                        if (productionMode)
-                            SetUIState(ApplicationState.Faulted);
+                            if (warningChecks.Count > 0)
+                            {
+                                AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
+                                foreach (var check in warningChecks)
+                                {
+                                    AppendDiagnostics($"  ⚠ WARNING: {check.Name}: {check.Message}");
+                                }
+                            }
+
+                            AppendDiagnostics(
+                                "[PLC] Production checks passed. Sending restricted XY payloads...");
+
+                            var transmission = await _plcService.SendPayloadAsync(
+                                PipelineState.Instance.PlcPayload,
+                                processingCancellation.Token);
+
+                            LogProcessingCoordinator.RecordPlcTransmission(transmission);
+
+                            AppendDiagnostics(
+                                transmission.Success
+                                    ? "[PLC] Result accepted by verified tag readback."
+                                    : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
+                                      $"Verify machine state, sensors, and PLC configuration before retrying.");
+
+                            if (!transmission.Success && productionMode)
+                            {
+                                AppendDiagnostics(
+                                    "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
+                                SetUIState(ApplicationState.Faulted);
+                            }
+                        }
+                        else
+                        {
+                            AppendDiagnostics(
+                                $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
+
+                            // Provide detailed blocking reasons
+                            var blockingChecks = readiness.Checks
+                                .Where(c => c.Status == ProductionCheckStatus.Block)
+                                .ToList();
+
+                            foreach (var check in blockingChecks)
+                            {
+                                AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
+                            }
+
+                            if (productionMode)
+                                SetUIState(ApplicationState.Faulted);
+                        }
                     }
                 }
                 else

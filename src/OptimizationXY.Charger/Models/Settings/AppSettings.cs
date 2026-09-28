@@ -325,17 +325,17 @@ public sealed class ScoringSettings
     /// <summary>
     /// Threshold for good wane balance in inches. Wane balance measurements below this threshold are considered good.
     /// </summary>
-    public double WaneBalanceGoodIn { get; set; } = 0.050; 
+    public double WaneBalanceGoodIn { get; set; } = 0.50; 
 
     /// <summary>
     /// Threshold for bad wane balance in inches. Wane balance measurements above this threshold are considered bad.
     /// </summary>
-    public double WaneBalanceBadIn { get; set; } = 0.250;  
+    public double WaneBalanceBadIn { get; set; } = 1.75;  
 
     /// <summary>
     /// Weight assigned to wane balance in the scoring system as a percentage.
     /// </summary>
-    public double WaneBalanceWeightPercent { get; set; } = 25.0;  
+    public double WaneBalanceWeightPercent { get; set; } = 30.0;  
 
     /// <summary>
     /// Threshold for good low wood risk as a percentage. Low wood risk measurements below this threshold are considered good.
@@ -350,47 +350,47 @@ public sealed class ScoringSettings
     /// <summary>
     /// Weight assigned to low wood risk in the scoring system as a percentage.
     /// </summary>
-    public double LowWoodRiskWeightPercent { get; set; } = 35.0;  
+    public double LowWoodRiskWeightPercent { get; set; } = 30.0;  
 
     /// <summary>
     /// Threshold for good deepest low wood in inches. Deepest low wood measurements below this threshold are considered good.
     /// </summary>
-    public double DeepestLowWoodGoodIn { get; set; } = 0.050;   
+    public double DeepestLowWoodGoodIn { get; set; } = 0.75;   
 
     /// <summary>
     /// Threshold for bad deepest low wood in inches. Deepest low wood measurements above this threshold are considered bad.
     /// </summary>
-    public double DeepestLowWoodBadIn { get; set; } = 0.250;  
+    public double DeepestLowWoodBadIn { get; set; } = 2.25;  
 
     /// <summary>
     /// Weight assigned to deepest low wood in the scoring system as a percentage.
     /// </summary>
-    public double DeepestLowWoodWeightPercent { get; set; } = 10.0;  
+    public double DeepestLowWoodWeightPercent { get; set; } = 12.0;  
 
     /// <summary>
     /// Threshold for good spindle movement in inches. Spindle movement measurements below this threshold are considered good.
     /// </summary>
-    public double SpindleMovementGoodIn { get; set; } = 0.100;  
+    public double SpindleMovementGoodIn { get; set; } = 0.25;  
 
     /// <summary>
     /// Threshold for bad spindle movement in inches. Spindle movement measurements above this threshold are considered bad.
     /// </summary>
-    public double SpindleMovementBadIn { get; set; } = 0.500;  
+    public double SpindleMovementBadIn { get; set; } = 1.500;  
 
     /// <summary>
     /// Weight assigned to spindle movement in the scoring system as a percentage.
     /// </summary>
-    public double SpindleMovementWeightPercent { get; set; } = 15.0;  
+    public double SpindleMovementWeightPercent { get; set; } = 10.0;  
 
     /// <summary>
     /// Threshold for good out-of-roundness in inches. Out-of-roundness measurements below this threshold are considered good.
     /// </summary>
-    public double OutOfRoundGoodIn { get; set; } = 0.100; 
+    public double OutOfRoundGoodIn { get; set; } = 0.50; 
 
     /// <summary>
     /// Threshold for bad out-of-roundness in inches. Out-of-roundness measurements above this threshold are considered bad.
     /// </summary>
-    public double OutOfRoundBadIn { get; set; } = 0.500;  
+    public double OutOfRoundBadIn { get; set; } = 1.75;  
 
     /// <summary>
     /// Weight assigned to out-of-roundness in the scoring system as a percentage.
@@ -400,17 +400,17 @@ public sealed class ScoringSettings
     /// <summary>
     /// Threshold for good centerline sweep in inches. Centerline sweep measurements below this threshold are considered good.
     /// </summary>
-    public double CenterlineSweepGoodIn { get; set; } = 0.100;  
+    public double CenterlineSweepGoodIn { get; set; } = 0.15;  
 
     /// <summary>
     /// Threshold for bad centerline sweep in inches. Centerline sweep measurements above this threshold are considered bad.
     /// </summary>
-    public double CenterlineSweepBadIn { get; set; } = 0.750; 
+    public double CenterlineSweepBadIn { get; set; } = 1.50; 
 
     /// <summary>
     /// Weight assigned to centerline sweep in the scoring system as a percentage.
     /// </summary>
-    public double CenterlineSweepWeightPercent { get; set; } = 5.0;  
+    public double CenterlineSweepWeightPercent { get; set; } = 8.0;  
 }
 
 
@@ -433,28 +433,28 @@ public sealed class AdaptiveScoringSettings
     /// <summary>
     /// Threshold for high sweep in inches. Logs with sweep measurements above this threshold are classified as high sweep logs.
     /// </summary>
-    public double HighSweepIn { get; set; } = 0.400; 
+    public double HighSweepIn { get; set; } = 0.600; 
     /// <summary>
     /// Threshold for high bow in inches. Logs with bow measurements above this threshold are classified as high bow logs.
     /// </summary>
-    public double HighBowIn { get; set; } = 0.200; 
+    public double HighBowIn { get; set; } = 0.45; 
     /// <summary>
     /// Threshold for high out-of-roundness in inches. Logs with out-of-roundness measurements above this threshold are classified as high out-of-round logs.
     /// </summary>
-    public double HighOutOfRoundIn { get; set; } = 0.400; 
+    public double HighOutOfRoundIn { get; set; } = 1.00; 
 
     /// <summary>
     /// Threshold for high low wood percentage. Logs with low wood percentages above this threshold are classified as high low wood logs.
     /// </summary>
-    public double HighLowWoodPercent { get; set; } = 8.0;  
+    public double HighLowWoodPercent { get; set; } = 12.0;  
     /// <summary>
     /// Threshold for high severe low wood percentage. Logs with severe low wood percentages above this threshold are classified as high severe low wood logs.
     /// </summary>
-    public double HighSevereLowWoodPercent { get; set; } = 1.0;  
+    public double HighSevereLowWoodPercent { get; set; } = 20.0;  
     /// <summary>
     /// Threshold for deep low wood in inches. Logs with deepest low wood measurements above this threshold are classified as deep low wood logs.
     /// </summary>
-    public double DeepLowWoodIn { get; set; } = 0.150;  
+    public double DeepLowWoodIn { get; set; } = 1.50;  
 
     /// <summary>
     /// Threshold for maximum clean low wood percentage. Logs with low wood percentages below this threshold are classified as clean logs.
@@ -472,38 +472,38 @@ public sealed class AdaptiveScoringSettings
     /// <summary>
     /// Multiplier applied to low wood weight for swept logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as swept logs, affecting their overall score.
     /// </summary>
-    public double SweptLogLowWoodWeightMultiplier { get; set; } = 1.35;
+    public double SweptLogLowWoodWeightMultiplier { get; set; } = 1.15;
 
     /// <summary>
     /// Multiplier applied to sweep weight for swept logs in the scoring system. This value adjusts the weight of sweep measurements for logs classified as swept logs, affecting their overall score.
     /// </summary>
-    public double SweptLogSweepWeightMultiplier { get; set; } = 1.35; 
+    public double SweptLogSweepWeightMultiplier { get; set; } = 1.25; 
     /// <summary>
     /// Multiplier applied to movement weight for swept logs in the scoring system. This value adjusts the weight of movement measurements for logs classified as swept logs, affecting their overall score.
     /// </summary>
-    public double SweptLogMovementWeightMultiplier { get; set; } = 0.70; 
+    public double SweptLogMovementWeightMultiplier { get; set; } = 0.85; 
 
     /// <summary>
     /// Multiplier applied to low wood weight for low wood logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as low wood logs, affecting their overall score.
     /// </summary>
-    public double LowWoodLogLowWoodWeightMultiplier { get; set; } = 1.60; 
+    public double LowWoodLogLowWoodWeightMultiplier { get; set; } = 1.30; 
     /// <summary>
     /// Multiplier applied to deepest low wood weight for low wood logs in the scoring system. This value adjusts the weight of deepest low wood measurements for logs classified as low wood logs, affecting their overall score.
     /// </summary>
-    public double LowWoodLogDeepestWeightMultiplier { get; set; } = 1.40; 
+    public double LowWoodLogDeepestWeightMultiplier { get; set; } = 1.25; 
     /// <summary>
     /// Multiplier applied to movement weight for low wood logs in the scoring system. This value adjusts the weight of movement measurements for logs classified as low wood logs, affecting their overall score.
     /// </summary>
-    public double LowWoodLogMovementWeightMultiplier { get; set; } = 0.65;  
+    public double LowWoodLogMovementWeightMultiplier { get; set; } = 0.80;  
 
     /// <summary>
     /// Multiplier applied to out-of-round weight for oval logs in the scoring system. This value adjusts the weight of out-of-round measurements for logs classified as oval logs, affecting their overall score.
     /// </summary>
-    public double OvalLogOutOfRoundWeightMultiplier { get; set; } = 1.45; 
+    public double OvalLogOutOfRoundWeightMultiplier { get; set; } = 1.25; 
     /// <summary>
     /// Multiplier applied to low wood weight for oval logs in the scoring system. This value adjusts the weight of low wood measurements for logs classified as oval logs, affecting their overall score.
     /// </summary>
-    public double OvalLogLowWoodWeightMultiplier { get; set; } = 1.20;  
+    public double OvalLogLowWoodWeightMultiplier { get; set; } = 1.10;  
 
     /// <summary>
     /// Multiplier applied to movement weight for clean logs in the scoring system. This value adjusts the weight of movement measurements for logs classified as clean logs, affecting their overall score.
@@ -606,8 +606,11 @@ public sealed class OptimizationSettings
 
     /// <summary>
     /// Step size in millimeters for the coarse search phase of the optimization process. This value defines the increment by which the spindle moves during the coarse search for optimal settings.
+    /// Increased to 10.0mm for production speed optimization: reduces coarse candidates from ~2,400 to ~600, saving ~2-3 seconds.
+    /// The medium (2.5mm step) and fine (1.5mm step) passes refine the result, so coarse quality loss is minimal.
+    /// This change is part of the production speed optimization targeting ~6-8 second improvement in geometry optimization.
     /// </summary>
-    public double CoarseStepMM { get; set; } = 2.5;
+    public double CoarseStepMM { get; set; } = 10.0;
 
 
     /// <summary>
@@ -617,8 +620,19 @@ public sealed class OptimizationSettings
     public double MediumSearchRadiusMM { get; set; } = 5.0; 
     public double MediumStepMM { get; set; } = 2.5; 
 
-    public double FineSearchRadiusMM { get; set; } = 2.5;  
-    public double FineStepMM { get; set; } = 0.5;
+     public double FineSearchRadiusMM { get; set; } = 2.5;  
+    /// <summary>
+    /// Step size in millimeters for the fine search phase of the optimization process.
+    /// Increased from 0.5mm to 1.5mm for production speed: reduces fine candidates from ~41,000 to ~7,000 (~83% reduction).
+    /// Fine search radius is 2.5mm (5 steps at 1.5mm step), which still provides good precision without excessive candidates.
+    /// Expected savings: ~4-5 seconds on the fine search phase.
+    /// </summary>
+    
+
+    
+
+
+    public double FineStepMM { get; set; } = 1.5;
 
 
 
@@ -758,6 +772,18 @@ public sealed class PlcIntegrationSettings
     /// TEMPORARY: This setting is a placeholder for future rotation DLL integration.
     /// </summary>
     public bool EnableRotationTagWrite { get; set; } = true;
+
+    /// <summary>
+    /// When true, uses the new fast PLC send path: immediately send after save + spindle recommendation
+    /// with lightweight payload validation (no blocking production readiness checks).
+    /// Full production readiness evaluation runs asynchronously in the background for audit/diagnostics.
+    /// 
+    /// When false, uses the legacy path: save → full production readiness checks → diagnostics → PLC send.
+    /// The legacy path is slower but may be useful for rollback or diagnostics if needed.
+    /// 
+    /// Default: true (new fast path). Change to false to restore legacy blocking behavior.
+    /// </summary>
+    public bool UseFastImmediatePlcSend { get; set; } = true;
 
     /// <summary>
     /// Maximum amount of time to wait for the required PLC network

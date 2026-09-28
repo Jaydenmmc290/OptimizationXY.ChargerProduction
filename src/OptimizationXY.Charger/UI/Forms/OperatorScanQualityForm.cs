@@ -36,6 +36,7 @@ public partial class OperatorScanQualityForm : Form
                 "SCANNING BLOCK",
                 $"Capturing rotating profile: {runtime.CapturedPairs} / {runtime.ExpectedPairs} frame pairs.");
             lblFramesValue.Text = $"{runtime.CapturedPairs} / {runtime.ExpectedPairs}";
+            logProfileControl.SetProfile(null);  // Clear old profile so it doesn't linger during new scan capture
             UpdateRuntime(runtime);
         });
     }

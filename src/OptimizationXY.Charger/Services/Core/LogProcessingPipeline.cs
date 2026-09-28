@@ -1579,7 +1579,7 @@ BuildFinalSpindleRecommendation(
 
                     CommandTailXMM =
                         machineMoveAllowed
-                            ? move.TailMoveXMM
+                            ? -move.TailMoveXMM
                             : 0.0,
                     CommandTailYMM =
                         machineMoveAllowed
@@ -1587,7 +1587,7 @@ BuildFinalSpindleRecommendation(
                             : 0.0,
                     CommandHeadXMM =
                         machineMoveAllowed
-                            ? move.HeadMoveXMM
+                            ? -move.HeadMoveXMM
                             : 0.0,
                     CommandHeadYMM =
                         machineMoveAllowed
@@ -2019,11 +2019,11 @@ BuildFinalSpindleRecommendation(
                         penaltyRecommendation.RiskScoreReductionPercent,
 
                     CommandTailXMM =
-                        machineMoveAllowed ? move.TailMoveXMM : 0.0,
+                        machineMoveAllowed ? -move.TailMoveXMM : 0.0,
                     CommandTailYMM =
                         machineMoveAllowed ? -move.TailMoveYMM : 0.0,
                     CommandHeadXMM =
-                        machineMoveAllowed ? move.HeadMoveXMM : 0.0,
+                        machineMoveAllowed ? -move.HeadMoveXMM : 0.0,
                     CommandHeadYMM =
                         machineMoveAllowed ? -move.HeadMoveYMM : 0.0,
 
@@ -3021,9 +3021,9 @@ double maxSpindleMovementMM)
 
             RiskScoreReductionPercent = riskScoreReductionPercent,
 
-            CommandTailXMM = isRecommended ? move.TailMoveXMM : 0.0,
+            CommandTailXMM = isRecommended ? -move.TailMoveXMM : 0.0,
             CommandTailYMM = isRecommended ? -move.TailMoveYMM : 0.0,
-            CommandHeadXMM = isRecommended ? move.HeadMoveXMM : 0.0,
+            CommandHeadXMM = isRecommended ? -move.HeadMoveXMM : 0.0,
             CommandHeadYMM = isRecommended ? -move.HeadMoveYMM : 0.0,
 
             BestTestedTailXMM = move.TailMoveXMM,

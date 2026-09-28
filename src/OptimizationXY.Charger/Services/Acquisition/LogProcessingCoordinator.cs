@@ -350,6 +350,115 @@ public sealed class LogProcessingCoordinator
     }
 
     /// <summary>
+    /// Prepares the PLC payload for immediate send with lightweight safety validation.
+    /// This method performs critical safety checks ONLY:
+    ///   - Payload exists and is not null
+    ///   - All XY offset values are finite (not NaN or Infinity)
+    ///   - Basic machine travel limit checks
+    /// 
+    /// IMPORTANT: This method SKIPS the extended readiness evaluation (diagnostics, calibration depth checks, etc.)
+    /// to achieve fast PLC writes. Call this for time-sensitive production workflows where safety has already
+    /// been verified during commissioning and diagnostics can run asynchronously.
+    /// 
+    /// Full production readiness checks should still be performed asynchronously via PrepareProductionCommand()
+    /// for audit logging and diagnostics, but they will not block the PLC send.
+    /// </summary>
+    /// <param name="plcConnected">Indicates whether the PLC is connected.</param>
+    /// <returns>True if payload is safe to send immediately; false if critical issues detected.</returns>
+    public bool PrepareAndValidatePayloadForImmediateSend(bool plcConnected)
+    {
+        var state = PipelineState.Instance;
+
+        // ============================================================
+        // KINEMATIC ROTATION STEP (Automatic, no UI interaction)
+        // ============================================================
+        var settings = PipelineState.Instance.Settings;
+        if (state.FinalSpindleRecommendation != null && settings.Kinematic.EnableKinematicPositionSelection)
+        {
+            try
+            {
+                LogDiagnostics("[KINEMATIC] Automatically applying kinematic rotation calculations...");
+
+                state.FinalSpindleRecommendation = Kinematic.KinematicPositionSelector.GetOperatorPositionSelection(
+                    state.FinalSpindleRecommendation);
+
+                LogDiagnostics("[KINEMATIC] Kinematic rotation calculation complete.");
+            }
+            catch (Exception ex)
+            {
+                LogDiagnostics($"[KINEMATIC] Error during kinematic calculation: {ex.Message}");
+                return false;
+            }
+        }
+        else if (state.FinalSpindleRecommendation != null && !settings.Kinematic.EnableKinematicPositionSelection)
+        {
+            LogDiagnostics("[KINEMATIC] Kinematic rotation is disabled; proceeding with current XY positions.");
+        }
+
+        // ============================================================
+        // BUILD PLC PAYLOAD
+        // ============================================================
+        try
+        {
+            state.PlcPayload = PlcPayloadBuilder.Build(state);
+        }
+        catch (Exception ex)
+        {
+            state.PlcPayload = null;
+            LogDiagnostics($"[IMMEDIATE_SEND] PLC payload preparation failed: {ex.Message}");
+            return false;
+        }
+
+        if (state.PlcPayload == null)
+        {
+            LogDiagnostics("[IMMEDIATE_SEND] PLC payload is null; cannot proceed.");
+            return false;
+        }
+
+        // ============================================================
+        // LIGHTWEIGHT SAFETY CHECKS (only critical items)
+        // ============================================================
+
+        // Check 1: PLC is connected
+        if (!plcConnected)
+        {
+            LogDiagnostics("[IMMEDIATE_SEND] PLC is not connected; cannot send.");
+            return false;
+        }
+
+        // Check 2: Payload values are finite (not NaN or Infinity)
+        if (double.IsNaN(state.PlcPayload.HeadXMM) || double.IsInfinity(state.PlcPayload.HeadXMM) ||
+            double.IsNaN(state.PlcPayload.HeadYMM) || double.IsInfinity(state.PlcPayload.HeadYMM) ||
+            double.IsNaN(state.PlcPayload.TailXMM) || double.IsInfinity(state.PlcPayload.TailXMM) ||
+            double.IsNaN(state.PlcPayload.TailYMM) || double.IsInfinity(state.PlcPayload.TailYMM) ||
+            double.IsNaN(state.PlcPayload.SafeCarriageRetractRadiusMM) || double.IsInfinity(state.PlcPayload.SafeCarriageRetractRadiusMM))
+        {
+            LogDiagnostics("[IMMEDIATE_SEND] Payload contains NaN or Infinity values; cannot send.");
+            return false;
+        }
+
+        // Check 3: Basic machine travel limits (sanity check on offsets from nominal position)
+        // PlcPayloadBuilder already validates these during payload construction
+        var machineLimits = state.Settings.MachineLimits;
+
+        // Assuming a nominal position around 0,0; check that absolute values don't exceed reasonable bounds
+        if (Math.Abs(state.PlcPayload.HeadXMM) > machineLimits.MaxHeadMoveXMM ||
+            Math.Abs(state.PlcPayload.HeadYMM) > machineLimits.MaxHeadMoveYMM ||
+            Math.Abs(state.PlcPayload.TailXMM) > machineLimits.MaxTailMoveXMM ||
+            Math.Abs(state.PlcPayload.TailYMM) > machineLimits.MaxTailMoveYMM)
+        {
+            LogDiagnostics("[IMMEDIATE_SEND] Payload violates machine travel limits.");
+            return false;
+        }
+
+        LogDiagnostics(
+            $"[IMMEDIATE_SEND] Payload validation passed. Ready for immediate PLC send. " +
+            $"Block {state.PlcPayload.BlockCount}; carriage retract {state.PlcPayload.SafeCarriageRetractRadiusMM:F3} mm.");
+
+        return true;
+    }
+
+    /// <summary>
     /// Records a PLC transmission event.
     /// </summary>
     /// <param name="record">The PLC transmission record to log.</param>
