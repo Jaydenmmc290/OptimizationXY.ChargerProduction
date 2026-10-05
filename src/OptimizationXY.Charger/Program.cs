@@ -43,6 +43,16 @@ internal static class Program
             PipelineState.Instance.Settings =
                 AppSettingsStore.LoadOrCreateDefault();
 
+            // Offline replay of a saved scan: no cameras, no PLC, no SQL.
+            string[] commandLine = Environment.GetCommandLineArgs();
+
+            if (OptimizationXY.Charger.Services.Replay.OfflineReplayRunner.IsRequested(commandLine))
+            {
+                Logger.Info("Offline replay requested; the operator form will not be opened.");
+                OptimizationXY.Charger.Services.Replay.OfflineReplayRunner.Run(commandLine);
+                return;
+            }
+
             Application.Run(new MainForm());
         }
         catch (Exception ex)
