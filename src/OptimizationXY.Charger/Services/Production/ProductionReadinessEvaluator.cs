@@ -534,8 +534,9 @@ public static class ProductionReadinessEvaluator
     /// <summary>
     /// The only checks allowed to stop a PLC write. They cover whether a write can
     /// physically and safely happen: the machine is in Production mode, the PLC is
-    /// connected, there is a recommendation with finite values inside the hard
-    /// travel limits, and the payload itself is safe and well formed.
+    /// connected, the scan itself is good enough to trust, there is a
+    /// recommendation with finite values inside the hard travel limits, and the
+    /// payload itself is safe and well formed.
     /// ("PLC payload" is added by the coordinator after this evaluation and is
     /// always enforced.)
     /// </summary>
@@ -545,6 +546,7 @@ public static class ProductionReadinessEvaluator
             "Operating mode",
             "PLC connection",
             "PLC write order",
+            "Operator scan-quality gate",
             "Final spindle recommendation",
             "Finite command values",
             "Hard machine travel limits",

@@ -96,6 +96,7 @@ application log, but only these can stop a PLC write:
 
 - Operating mode is Production
 - PLC connection
+- Operator scan-quality gate (a scan with large gaps or a Failed status is not sent)
 - PLC payload could be built
 - Final spindle recommendation exists and is allowed
 - Finite command values

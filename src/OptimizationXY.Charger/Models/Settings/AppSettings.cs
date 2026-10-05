@@ -759,7 +759,8 @@ public sealed class ProductionSettings
 
     /// <summary>
     /// When true (default), only the essential checks can stop a PLC write: Production mode,
-    /// PLC connected, a valid payload, a final recommendation, finite values, hard travel limits,
+    /// PLC connected, the operator scan-quality gate, a valid payload, a final recommendation,
+    /// finite values, hard travel limits,
     /// reserved fields zero, knife clearance and write order. Every other readiness check still
     /// runs and is written to the report and application log, but a failure is reported as
     /// "NOT ENFORCED" instead of blocking. Set false to make every check blocking again.
