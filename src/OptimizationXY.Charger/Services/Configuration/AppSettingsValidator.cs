@@ -343,6 +343,14 @@ public static class AppSettingsValidator
                 "InscribedGeometry.OrientationStepDeg must be greater than zero and no more than 180.");
         }
 
+        if (!double.IsFinite(geometry.CenterlinePullWeight) ||
+            geometry.CenterlinePullWeight < 0 ||
+            geometry.CenterlinePullWeight > 10)
+        {
+            throw new InvalidOperationException(
+                "InscribedGeometry.CenterlinePullWeight must be between 0 and 10.");
+        }
+
         if (geometry.GeometryTieToleranceMM < 0)
         {
             throw new InvalidOperationException(

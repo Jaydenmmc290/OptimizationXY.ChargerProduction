@@ -96,15 +96,56 @@ public static class InscribedGeometryOptimizer
 
         SurfaceSample[] samples = BuildSamples(field);
 
+        // ------------------------------------------------------------
+        // Repeatability anchor.
+        //
+        // The largest inscribed cylinder is defined by only a few contact
+        // points, so many different axes give almost the same diameter and
+        // small scan differences move the winner by many millimetres. The
+        // fitted centreline of the block (circle fit per slice, straight
+        // line through the centres) is an average over the whole surface and
+        // is stable from scan to scan. The search is centred on it, and a
+        // candidate must gain CenterlinePullWeight mm of radius for every
+        // millimetre it sits away from it.
+        // ------------------------------------------------------------
+        double pullWeight =
+            double.IsFinite(geometrySettings.CenterlinePullWeight)
+                ? Math.Max(0.0, geometrySettings.CenterlinePullWeight)
+                : 0.0;
+
+        ReferenceAxis? reference =
+            pullWeight > 0.0
+                ? TryFitReferenceAxis(samples)
+                : null;
+
+        if (reference is null)
+            pullWeight = 0.0;
+
+        double startOffsetXMM = 0.0;
+        double startOffsetYMM = 0.0;
+        double startSweepXMM = 0.0;
+        double startSweepYMM = 0.0;
+
+        if (reference is not null)
+        {
+            // Tail = offset + sweep / 2, Head = offset - sweep / 2.
+            startOffsetXMM = (reference.TailXMM + reference.HeadXMM) / 2.0;
+            startOffsetYMM = (reference.TailYMM + reference.HeadYMM) / 2.0;
+            startSweepXMM = reference.TailXMM - reference.HeadXMM;
+            startSweepYMM = reference.TailYMM - reference.HeadYMM;
+        }
+
         SearchPassResult coarse = Search(
             samples,
             kind,
             geometrySettings,
             machineLimits,
-            centerOffsetXMM: 0.0,
-            centerOffsetYMM: 0.0,
-            centerSweepXMM: 0.0,
-            centerSweepYMM: 0.0,
+            reference,
+            pullWeight,
+            centerOffsetXMM: startOffsetXMM,
+            centerOffsetYMM: startOffsetYMM,
+            centerSweepXMM: startSweepXMM,
+            centerSweepYMM: startSweepYMM,
             radiusMM: optimizationSettings.CoarseMaxMoveMM,
             stepMM: optimizationSettings.CoarseStepMM,
             token);
@@ -114,6 +155,8 @@ public static class InscribedGeometryOptimizer
             kind,
             geometrySettings,
             machineLimits,
+            reference,
+            pullWeight,
             coarse.OffsetXMM,
             coarse.OffsetYMM,
             coarse.SweepXMM,
@@ -127,6 +170,8 @@ public static class InscribedGeometryOptimizer
             kind,
             geometrySettings,
             machineLimits,
+            reference,
+            pullWeight,
             medium.OffsetXMM,
             medium.OffsetYMM,
             medium.SweepXMM,
@@ -138,6 +183,18 @@ public static class InscribedGeometryOptimizer
         InscribedGeometryResult result = fine.Geometry
             ?? throw new InvalidOperationException(
                 $"The {kind} search did not produce a valid geometry.");
+
+        if (reference is not null)
+        {
+            result.CenterlineAnchorUsed = true;
+            result.CenterlineTailXMM = reference.TailXMM;
+            result.CenterlineTailYMM = reference.TailYMM;
+            result.CenterlineHeadXMM = reference.HeadXMM;
+            result.CenterlineHeadYMM = reference.HeadYMM;
+            result.CenterlineDeviationMM = DeviationFromReference(
+                result.SpindleMovement,
+                reference);
+        }
 
         result.CoarseCandidates = coarse.TestedCandidates;
         result.MediumCandidates = medium.TestedCandidates;
@@ -171,6 +228,8 @@ public static class InscribedGeometryOptimizer
         InscribedGeometryKind kind,
         InscribedGeometrySettings settings,
         MachineLimitSettings machineLimits,
+        ReferenceAxis? reference,
+        double pullWeight,
         double centerOffsetXMM,
         double centerOffsetYMM,
         double centerSweepXMM,
@@ -212,6 +271,8 @@ public static class InscribedGeometryOptimizer
                             kind,
                             settings,
                             machineLimits,
+                            reference,
+                            pullWeight,
                             offsetX,
                             offsetY,
                             sweepX,
@@ -229,7 +290,7 @@ public static class InscribedGeometryOptimizer
 
                         lock (lockObj)
                         {
-                            if (best is null || IsBetter(candidate, best, settings))
+                            if (best is null || IsBetter(candidate, best, settings, pullWeight > 0.0))
                                 best = candidate;
                         }
                     }
@@ -276,6 +337,8 @@ public static class InscribedGeometryOptimizer
         InscribedGeometryKind kind,
         InscribedGeometrySettings settings,
         MachineLimitSettings machineLimits,
+        ReferenceAxis? reference,
+        double pullWeight,
         double offsetXMM,
         double offsetYMM,
         double sweepXMM,
@@ -330,13 +393,26 @@ public static class InscribedGeometryOptimizer
                 "Unsupported inscribed geometry kind.")
         };
 
+        // Radius of the circle with the same area, so cylinder and oval
+        // candidates are pulled toward the centreline on the same scale.
+        double equivalentRadiusMM =
+            kind == InscribedGeometryKind.Cylinder
+                ? geometry.GuaranteedCircularRadiusMM
+                : Math.Sqrt(Math.Max(0.0, geometry.AreaMM2) / Math.PI);
+
+        double deviationMM =
+            reference is null
+                ? 0.0
+                : DeviationFromReference(movement, reference);
+
         return new Candidate
         {
             OffsetXMM = offsetXMM,
             OffsetYMM = offsetYMM,
             SweepXMM = sweepXMM,
             SweepYMM = sweepYMM,
-            Geometry = geometry
+            Geometry = geometry,
+            Score = equivalentRadiusMM - pullWeight * deviationMM
         };
     }
 
@@ -717,12 +793,23 @@ public static class InscribedGeometryOptimizer
     private static bool IsBetter(
         Candidate candidate,
         Candidate current,
-        InscribedGeometrySettings settings)
+        InscribedGeometrySettings settings,
+        bool useCenterlineScore)
     {
         InscribedGeometryResult left = candidate.Geometry;
         InscribedGeometryResult right = current.Geometry;
 
-        if (left.Kind == InscribedGeometryKind.Cylinder)
+        if (useCenterlineScore)
+        {
+            double scoreDifference = candidate.Score - current.Score;
+
+            if (Math.Abs(scoreDifference) >
+                settings.GeometryTieToleranceMM)
+            {
+                return scoreDifference > 0;
+            }
+        }
+        else if (left.Kind == InscribedGeometryKind.Cylinder)
         {
             double difference =
                 left.GuaranteedCircularRadiusMM -
@@ -788,6 +875,147 @@ public static class InscribedGeometryOptimizer
     /// <param name="movement">The optimized spindle movement to evaluate.</param>
     /// <param name="limits">The machine limit settings to compare against.</param>
     /// <returns>True if the optimized spindle movement is within the machine limits; otherwise, false.</returns>
+    /// <summary>
+    /// Largest distance, at the tail or head end, between a candidate axis and
+    /// the fitted centreline of the block.
+    /// </summary>
+    private static double DeviationFromReference(
+        OptimizedSpindleMovement movement,
+        ReferenceAxis reference)
+    {
+        double tailX = movement.TailMoveXMM - reference.TailXMM;
+        double tailY = movement.TailMoveYMM - reference.TailYMM;
+        double headX = movement.HeadMoveXMM - reference.HeadXMM;
+        double headY = movement.HeadMoveYMM - reference.HeadYMM;
+
+        return Math.Max(
+            Math.Sqrt(tailX * tailX + tailY * tailY),
+            Math.Sqrt(headX * headX + headY * headY));
+    }
+
+    /// <summary>
+    /// Fits the centreline of the block in the machine frame: a least-squares
+    /// circle per Z slice, then a straight line through the slice centres.
+    /// Returns null when there is not enough data for a trustworthy fit.
+    /// </summary>
+    private static ReferenceAxis? TryFitReferenceAxis(
+        SurfaceSample[] samples)
+    {
+        const int MinimumSamplesPerSlice = 12;
+        const int MinimumSlices = 5;
+
+        List<double> sliceT = [];
+        List<double> sliceX = [];
+        List<double> sliceY = [];
+
+        foreach (var slice in samples.GroupBy(
+                     sample => (long)Math.Round(sample.NormalizedZ * 1_000_000.0)))
+        {
+            SurfaceSample[] slicePoints = [.. slice];
+
+            if (slicePoints.Length < MinimumSamplesPerSlice)
+                continue;
+
+            double meanX = slicePoints.Average(item => item.XMM);
+            double meanY = slicePoints.Average(item => item.YMM);
+
+            double suu = 0.0, suv = 0.0, svv = 0.0;
+            double su = 0.0, sv = 0.0;
+            double suz = 0.0, svz = 0.0, sz = 0.0;
+            int n = slicePoints.Length;
+
+            foreach (SurfaceSample surfacePoint in slicePoints)
+            {
+                double u = surfacePoint.XMM - meanX;
+                double v = surfacePoint.YMM - meanY;
+                double z = u * u + v * v;
+
+                suu += u * u;
+                suv += u * v;
+                svv += v * v;
+                su += u;
+                sv += v;
+                suz += u * z;
+                svz += v * z;
+                sz += z;
+            }
+
+            double det =
+                suu * (svv * n - sv * sv) -
+                suv * (suv * n - sv * su) +
+                su * (suv * sv - svv * su);
+
+            double scale = Math.Max(1.0, suu + svv);
+            if (!double.IsFinite(det) ||
+                Math.Abs(det) < 1e-9 * scale * scale)
+            {
+                continue;
+            }
+
+            double detA =
+                suz * (svv * n - sv * sv) -
+                suv * (svz * n - sv * sz) +
+                su * (svz * sv - svv * sz);
+
+            double detB =
+                suu * (svz * n - sv * sz) -
+                suz * (suv * n - sv * su) +
+                su * (suv * sz - svz * su);
+
+            double centerX = meanX + 0.5 * detA / det;
+            double centerY = meanY + 0.5 * detB / det;
+
+            if (!double.IsFinite(centerX) || !double.IsFinite(centerY))
+                continue;
+
+            sliceT.Add(slicePoints[0].NormalizedZ);
+            sliceX.Add(centerX);
+            sliceY.Add(centerY);
+        }
+
+        if (sliceT.Count < MinimumSlices)
+            return null;
+
+        double meanT = sliceT.Average();
+        double meanCenterX = sliceX.Average();
+        double meanCenterY = sliceY.Average();
+
+        double sumTT = 0.0;
+        double sumTX = 0.0;
+        double sumTY = 0.0;
+
+        for (int sliceIndex = 0; sliceIndex < sliceT.Count; sliceIndex++)
+        {
+            double dt = sliceT[sliceIndex] - meanT;
+            sumTT += dt * dt;
+            sumTX += dt * (sliceX[sliceIndex] - meanCenterX);
+            sumTY += dt * (sliceY[sliceIndex] - meanCenterY);
+        }
+
+        double slopeX = sumTT > 1e-9 ? sumTX / sumTT : 0.0;
+        double slopeY = sumTT > 1e-9 ? sumTY / sumTT : 0.0;
+
+        // NormalizedZ = 0 is the tail end, 1 is the head end.
+        double tailXMM = meanCenterX - slopeX * meanT;
+        double tailYMM = meanCenterY - slopeY * meanT;
+        double headXMM = tailXMM + slopeX;
+        double headYMM = tailYMM + slopeY;
+
+        if (!double.IsFinite(tailXMM) ||
+            !double.IsFinite(tailYMM) ||
+            !double.IsFinite(headXMM) ||
+            !double.IsFinite(headYMM))
+        {
+            return null;
+        }
+
+        return new ReferenceAxis(
+            tailXMM,
+            tailYMM,
+            headXMM,
+            headYMM);
+    }
+
     private static bool IsWithinMachineLimits(
         OptimizedSpindleMovement movement,
         MachineLimitSettings limits)
@@ -956,7 +1184,20 @@ public static class InscribedGeometryOptimizer
         public double SweepXMM { get; init; }
         public double SweepYMM { get; init; }
         public InscribedGeometryResult Geometry { get; init; } = new();
+
+        // Equivalent inscribed radius minus the centreline pull. Used to rank
+        // candidates when the centreline anchor is active.
+        public double Score { get; init; }
     }
+
+    /// <summary>
+    /// Fitted centreline of the block in the machine frame.
+    /// </summary>
+    private sealed record ReferenceAxis(
+        double TailXMM,
+        double TailYMM,
+        double HeadXMM,
+        double HeadYMM);
 
     /// <summary>
     /// Represents the result of a search pass, including the best offsets, sweeps, resulting geometry, and the number of tested candidates.

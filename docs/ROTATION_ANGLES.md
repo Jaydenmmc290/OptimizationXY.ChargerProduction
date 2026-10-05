@@ -46,6 +46,22 @@ All have defaults, so an existing `appsettings.json` keeps working unchanged.
   surface points.
 - Inscribed-geometry samples are placed at the centre of each angular bin.
 
+## Repeatable positions (`InscribedGeometry.CenterlinePullWeight`)
+
+The largest inscribed cylinder is set by a few contact points, so many axes give almost
+the same diameter and small scan differences used to move the chosen position by many
+millimetres. The search is now centred on the fitted centreline of the block (circle fit
+per slice, straight line through the centres), and a candidate must gain
+`CenterlinePullWeight` mm of radius for every mm it sits away from that centreline.
+
+| Value | Behaviour |
+|---|---|
+| `0` | Old behaviour: largest cylinder anywhere, search centred on the current spindle axis |
+| `0.5` (default) | Same diameter as the old search on the test block, about a quarter of the position scatter |
+| `1.0` or more | Effectively uses the fitted centreline itself: most repeatable, a few mm less diameter |
+
+The report lists the fitted centreline and the chosen axis's distance from it.
+
 ## Blocks larger than the largest calibration reference
 
 A radius up to `MaximumCalibrationExtrapolationPixels` beyond the largest measured

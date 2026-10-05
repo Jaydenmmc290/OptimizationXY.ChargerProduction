@@ -2358,6 +2358,13 @@ BuildFinalSpindleRecommendation(
                   $"Minor Diameter: {FormatLength(geometry.MinorSemiAxisMM * 2.0)}\r\n" +
                   $"Orientation: {geometry.OrientationDeg:F1} deg\r\n";
 
+        string centerlineLines =
+            geometry.CenterlineAnchorUsed
+                ? $"Fitted Centerline Tail X/Y: {FormatLength(geometry.CenterlineTailXMM)} / {FormatLength(geometry.CenterlineTailYMM)}\r\n" +
+                  $"Fitted Centerline Head X/Y: {FormatLength(geometry.CenterlineHeadXMM)} / {FormatLength(geometry.CenterlineHeadYMM)}\r\n" +
+                  $"Axis Distance From Fitted Centerline: {FormatLength(geometry.CenterlineDeviationMM)}\r\n"
+                : "Fitted Centerline Anchor: Not used\r\n";
+
         return
             $"\r\n{geometry.StrategyName.ToUpperInvariant()}\r\n" +
             geometryLine +
@@ -2365,6 +2372,7 @@ BuildFinalSpindleRecommendation(
             $"Tail Y: {FormatLength(geometry.SpindleMovement.TailMoveYMM)}\r\n" +
             $"Head X: {FormatLength(geometry.SpindleMovement.HeadMoveXMM)}\r\n" +
             $"Head Y: {FormatLength(geometry.SpindleMovement.HeadMoveYMM)}\r\n" +
+            centerlineLines +
             $"Tested Candidates: {geometry.TestedCandidates}\r\n" +
             $"Usable Full 50-in Sheets: {peel.UsableFullSheets} of {peel.TotalFullSheets}\r\n" +
             $"Rejected Full 50-in Sheets: {peel.RejectedFullSheets}\r\n" +

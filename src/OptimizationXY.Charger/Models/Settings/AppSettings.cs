@@ -728,6 +728,15 @@ public sealed class InscribedGeometrySettings
     /// prefer the one requiring less spindle movement.
     /// </summary>
     public double GeometryTieToleranceMM { get; set; } = 0.01;
+
+    /// <summary>
+    /// Repeatability control. The search is centred on the fitted centreline of the block, and a
+    /// candidate axis must gain this many millimetres of inscribed radius for every millimetre it
+    /// sits away from that centreline. 0 restores the unanchored search (largest cylinder at any
+    /// position, search centred on the current spindle axis). Higher values give more repeatable
+    /// positions and slightly less diameter; 1.0 or more effectively selects the centreline itself.
+    /// </summary>
+    public double CenterlinePullWeight { get; set; } = 0.5;
 }
 
 /// <summary>
