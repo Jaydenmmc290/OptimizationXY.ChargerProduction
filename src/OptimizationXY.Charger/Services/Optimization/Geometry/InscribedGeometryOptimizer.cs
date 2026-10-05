@@ -642,6 +642,29 @@ public static class InscribedGeometryOptimizer
         double maxZ = field.Max(point => point.ZBinMM);
         double length = Math.Max(0.001, maxZ - minZ);
 
+        // AngleBinDeg is the lower edge of each angular bin. The measured surface
+        // in that bin is, on average, half a bin further round, so samples are
+        // placed at the bin centre to avoid rotating the whole field.
+        double[] distinctAngles = [.. field
+            .Select(point => point.AngleBinDeg)
+            .Where(double.IsFinite)
+            .Distinct()
+            .OrderBy(angle => angle)];
+
+        double angleBinSizeDeg = 0.0;
+        for (int index = 1; index < distinctAngles.Length; index++)
+        {
+            double step = distinctAngles[index] - distinctAngles[index - 1];
+
+            if (step > 0.0001 &&
+                (angleBinSizeDeg <= 0.0 || step < angleBinSizeDeg))
+            {
+                angleBinSizeDeg = step;
+            }
+        }
+
+        double halfAngleBinDeg = angleBinSizeDeg / 2.0;
+
         return [.. field
             .Select(point =>
             {
@@ -655,7 +678,7 @@ public static class InscribedGeometryOptimizer
                         : point.MeanRadiusMM;
 
                 double angleRad =
-                    point.AngleBinDeg *
+                    (point.AngleBinDeg + halfAngleBinDeg) *
                     Math.PI /
                     180.0;
 

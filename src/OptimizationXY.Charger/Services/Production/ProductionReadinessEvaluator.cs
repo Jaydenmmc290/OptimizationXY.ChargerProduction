@@ -191,6 +191,19 @@ public static class ProductionReadinessEvaluator
             frameCountGood ? ProductionCheckStatus.Pass : ProductionCheckStatus.Block,
             $"Expected {expectedFrames}; received {state.ScanFrames.Count}; valid {validFrames}.");
 
+        var revolution = state.RevolutionAngles;
+        bool revolutionVerified = revolution?.RevolutionVerified == true;
+
+        Add(
+            report,
+            "Rotation coverage",
+            revolutionVerified
+                ? ProductionCheckStatus.Pass
+                : ProductionCheckStatus.Warning,
+            revolution is null
+                ? "Frame angles were not assigned from a measured revolution."
+                : revolution.Message);
+
         int droppedFrames = state.CaptureAudit?.DroppedFrameCount ?? 0;
         Add(
             report,

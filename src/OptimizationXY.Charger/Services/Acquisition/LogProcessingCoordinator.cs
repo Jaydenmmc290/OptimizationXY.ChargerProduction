@@ -329,8 +329,9 @@ public sealed class LogProcessingCoordinator
                     Status = ProductionCheckStatus.Pass,
                     Message =
                         $"Block {state.PlcPayload.BlockCount}; safe carriage retract " +
-                        $"{state.PlcPayload.SafeCarriageRetractRadiusMM:F3} mm " +
-                        $"including {state.PlcPayload.KnifeClearanceMM:F3} mm knife clearance."
+                        $"{state.PlcPayload.SafeCarriageRetractRadiusMM:F3} in " +
+                        $"including {state.PlcPayload.KnifeClearanceMM:F3} in knife clearance " +
+                        "(payload values are inches)."
                 });
         }
 
