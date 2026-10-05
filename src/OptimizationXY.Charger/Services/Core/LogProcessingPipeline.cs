@@ -493,7 +493,7 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             settings.Geometry.LocalCenterlineSliceThicknessMM,
             settings.Geometry.MinPointsPerLocalCenterlineSlice);  // Use the geometry settings for local centerline fitting
 
-        if (_state.LocalCenterlines.Count < 3)
+        if (_state.LocalCenterlines.Count < 2)
             throw new InvalidOperationException("Not enough reliable rotating-scan centerline slices.");
 
         var sweepSlices = TrimCenterlineEnds(  // Trim the ends of the local centerline slices to avoid bad data at the log ends, using a trim fraction of 3%
@@ -561,6 +561,20 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         if (_state.RadiusField.Count == 0)
             throw new InvalidOperationException("Radius field build returned no points.");
 
+        // Keep machine-position math in the scanner/current-spindle frame.
+        // RadiusField is deliberately PCA-centerline-relative for diagnostics;
+        // this second field preserves PointCloud X/Y, where (0,0) is the
+        // current spindle axis used by the peel simulator.
+        _state.OptimizationRadiusField =
+            RotatingScanPointCloudBuilder.BuildMachineFrameRadiusField(
+                _state.PointCloud);
+
+        if (_state.OptimizationRadiusField.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Machine-frame optimization radius field returned no points.");
+        }
+
         double minRadius = _state.RadiusField.Min(p => p.RadiusMM);  // Calculate the minimum radius from the radius field points
         double maxRadius = _state.RadiusField.Max(p => p.RadiusMM);  // Calculate the maximum radius from the radius field points
         double avgRadius = _state.RadiusField.Average(p => p.RadiusMM);  // Calculate the average radius from the radius field points
@@ -584,6 +598,12 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Avg Diameter: {FormatLength(avgDiameter)}\r\n" +
             $"Max Diameter: {FormatLength(maxDiameter)}\r\n";
 
+        _state.DiagnosticsReport +=
+            "Coordinate Frames:\r\n" +
+            "- Diagnostic radius field: fitted PCA-centerline-relative.\r\n" +
+            "- Optimization radius field: scanner/current-spindle-relative; current axis = (0,0).\r\n" +
+            $"- Optimization points: {_state.OptimizationRadiusField.Count}\r\n";
+
     }
 
     // ------------------------------------------------------------
@@ -603,13 +623,19 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         if (_state.RadiusField == null || _state.RadiusField.Count == 0)
             throw new InvalidOperationException("Build radius field first.");
 
-        var settings = _state.Settings;  // Retrieve the application settings for geometry and other parameters
+        var settings = _state.Settings;  // Retrieve the application settings for geometry and other parameters. 
 
         _state.BinnedRadiusField = RadiusFieldBinner.Bin(
             _state.RadiusField,
             zBinSizeMM: settings.Geometry.RadiusFieldZBinSizeMM,  // Use the Z bin size from the settings for radius field binning
             angleBinSizeDeg: settings.Geometry.RadiusFieldAngleBinSizeDeg,  // Use the angle bin size from the settings for radius field binning
             minPointsPerBin: settings.Geometry.MinPointsPerRadiusBin);  // Use the minimum points per bin from the settings
+
+        _state.OptimizationBinnedRadiusField = RadiusFieldBinner.Bin(
+            _state.OptimizationRadiusField,
+            zBinSizeMM: settings.Geometry.RadiusFieldZBinSizeMM,
+            angleBinSizeDeg: settings.Geometry.RadiusFieldAngleBinSizeDeg,
+            minPointsPerBin: settings.Geometry.MinPointsPerRadiusBin);
 
         _state.PointCloudOverlay?.Dispose();
         _state.PointCloudOverlay =
@@ -618,6 +644,25 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
 
         if (_state.BinnedRadiusField.Count == 0)
             throw new InvalidOperationException("Binned radius field returned no points.");
+
+        if (_state.OptimizationBinnedRadiusField.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Binned machine-frame optimization field returned no points.");
+        }
+
+        var optimizationZBins = _state.OptimizationBinnedRadiusField
+            .GroupBy(point => point.ZBinMM)
+            .ToList();
+
+        _state.DiagnosticsReport +=
+            "\r\nMACHINE-FRAME OPTIMIZATION FIELD\r\n" +
+            $"Bins: {_state.OptimizationBinnedRadiusField.Count}\r\n" +
+            $"Z Slices: {optimizationZBins.Count}\r\n" +
+            $"Distinct Angle Bins: {_state.OptimizationBinnedRadiusField.Select(point => point.AngleBinDeg).Distinct().Count()}\r\n" +
+            $"Minimum Angle Bins Per Slice: {optimizationZBins.Min(group => group.Count())}\r\n" +
+            $"Average Angle Bins Per Slice: {optimizationZBins.Average(group => group.Count()):F1}\r\n" +
+            $"Maximum Angle Bins Per Slice: {optimizationZBins.Max(group => group.Count())}\r\n";
 
         var zBins = _state.BinnedRadiusField  // Group the binned radius field points by their Z bin values to analyze coverage and distribution
             .GroupBy(p => p.ZBinMM)  // Group the binned radius field points by their Z bin values
@@ -838,8 +883,12 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         if (_state.PointCloud == null || _state.PointCloud.Count == 0)  // Ensure that the point cloud has been built before optimizing the spindle axis
             throw new InvalidOperationException("Build point cloud first.");
 
-        if (_state.BinnedRadiusField == null || _state.BinnedRadiusField.Count == 0)  // Ensure that the binned radius field has been built before optimizing the spindle axis
-            throw new InvalidOperationException("Bin radius field first.");
+        if (_state.OptimizationBinnedRadiusField == null ||
+            _state.OptimizationBinnedRadiusField.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Build the machine-frame optimization field first.");
+        }
 
         if (_state.RadiusDefectPatches == null)
             throw new InvalidOperationException("Analyze defect patches first.");  // Ensure that the defect patches have been analyzed before optimizing the spindle axis
@@ -911,7 +960,7 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         // ------------------------------------------------------------
         double baselineAxisWaneScore =
 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
-    _state.BinnedRadiusField,
+    _state.OptimizationBinnedRadiusField,
     tailXMM: 0.0,
     tailYMM: 0.0,
     headXMM: 0.0,
@@ -973,7 +1022,7 @@ SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
         // ------------------------------------------------------------
         var finalSetup =
 ChargerOptimizer.FindBestSetupCoarseToFine(
-    _state.BinnedRadiusField,
+    _state.OptimizationBinnedRadiusField,
     _state.RadiusDefectPatches,
     baselineInternalSearchScore,
     activeOptimization,
@@ -1297,10 +1346,11 @@ BuildFinalSpindleRecommendation(
         if (_state.PointCloud == null || _state.PointCloud.Count == 0)
             throw new InvalidOperationException("Build point cloud first.");
 
-        if (_state.BinnedRadiusField == null ||
-            _state.BinnedRadiusField.Count == 0)
+        if (_state.OptimizationBinnedRadiusField == null ||
+            _state.OptimizationBinnedRadiusField.Count == 0)
         {
-            throw new InvalidOperationException("Bin radius field first.");
+            throw new InvalidOperationException(
+                "Build the machine-frame optimization field first.");
         }
 
         SpindleOptimizationMode mode =
@@ -1332,7 +1382,7 @@ BuildFinalSpindleRecommendation(
                 Task<InscribedGeometryResult> cylinderTask =
                     Task.Run(() =>
                         InscribedGeometryOptimizer.FindLargestCylinder(
-                            _state.BinnedRadiusField,
+                            _state.OptimizationBinnedRadiusField,
                             _state.Settings.Optimization,
                             _state.Settings.InscribedGeometry,
                             _state.Settings.MachineLimits,
@@ -1342,7 +1392,7 @@ BuildFinalSpindleRecommendation(
                 Task<InscribedGeometryResult> ovalTask =
                     Task.Run(() =>
                         InscribedGeometryOptimizer.FindLargestOval(
-                            _state.BinnedRadiusField,
+                            _state.OptimizationBinnedRadiusField,
                             _state.Settings.Optimization,
                             _state.Settings.InscribedGeometry,
                             _state.Settings.MachineLimits,
@@ -1374,7 +1424,7 @@ BuildFinalSpindleRecommendation(
             {
                 cylinder =
                     InscribedGeometryOptimizer.FindLargestCylinder(
-                        _state.BinnedRadiusField,
+                        _state.OptimizationBinnedRadiusField,
                         _state.Settings.Optimization,
                         _state.Settings.InscribedGeometry,
                         _state.Settings.MachineLimits,
@@ -1392,7 +1442,7 @@ BuildFinalSpindleRecommendation(
             {
                 oval =
                     InscribedGeometryOptimizer.FindLargestOval(
-                        _state.BinnedRadiusField,
+                        _state.OptimizationBinnedRadiusField,
                         _state.Settings.Optimization,
                         _state.Settings.InscribedGeometry,
                         _state.Settings.MachineLimits,
@@ -1501,7 +1551,7 @@ BuildFinalSpindleRecommendation(
 
             double baselineWaneScore =
                 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
-                    _state.BinnedRadiusField,
+                    _state.OptimizationBinnedRadiusField,
                     tailXMM: 0.0,
                     tailYMM: 0.0,
                     headXMM: 0.0,
@@ -1510,7 +1560,7 @@ BuildFinalSpindleRecommendation(
 
             double selectedWaneScore =
                 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
-                    _state.BinnedRadiusField,
+                    _state.OptimizationBinnedRadiusField,
                     move.TailMoveXMM,
                     move.TailMoveYMM,
                     move.HeadMoveXMM,
@@ -1579,19 +1629,19 @@ BuildFinalSpindleRecommendation(
 
                     CommandTailXMM =
                         machineMoveAllowed
-                            ? move.TailMoveXMM
+                            ? -move.TailMoveXMM
                             : 0.0,
                     CommandTailYMM =
                         machineMoveAllowed
-                            ? move.TailMoveYMM
+                            ? -move.TailMoveYMM
                             : 0.0,
                     CommandHeadXMM =
                         machineMoveAllowed
-                            ? move.HeadMoveXMM
+                            ? -move.HeadMoveXMM
                             : 0.0,
                     CommandHeadYMM =
                         machineMoveAllowed
-                            ? move.HeadMoveYMM
+                            ? -move.HeadMoveYMM
                             : 0.0,
 
                     BestTestedTailXMM = move.TailMoveXMM,
@@ -1800,6 +1850,13 @@ BuildFinalSpindleRecommendation(
                 "Recovery optimization can run only in RecoveryOptimized mode.");
         }
 
+        if (_state.OptimizationBinnedRadiusField == null ||
+            _state.OptimizationBinnedRadiusField.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Build the machine-frame optimization field first.");
+        }
+
         FinalSpindleRecommendation penaltyRecommendation =
             _state.FinalSpindleRecommendation ??
             throw new InvalidOperationException(
@@ -1858,7 +1915,7 @@ BuildFinalSpindleRecommendation(
             if (settings.IncludeCylinderCandidate)
             {
                 cylinder = InscribedGeometryOptimizer.FindLargestCylinder(
-                    _state.BinnedRadiusField,
+                    _state.OptimizationBinnedRadiusField,
                     _state.Settings.Optimization,
                     _state.Settings.InscribedGeometry,
                     _state.Settings.MachineLimits,
@@ -1879,7 +1936,7 @@ BuildFinalSpindleRecommendation(
             if (settings.IncludeOvalCandidate)
             {
                 oval = InscribedGeometryOptimizer.FindLargestOval(
-                    _state.BinnedRadiusField,
+                    _state.OptimizationBinnedRadiusField,
                     _state.Settings.Optimization,
                     _state.Settings.InscribedGeometry,
                     _state.Settings.MachineLimits,
@@ -1900,7 +1957,7 @@ BuildFinalSpindleRecommendation(
             if (settings.EnableDirectRecoveryRefinement)
             {
                 directRecoverySearch = DirectRecoveryOptimizer.FindBest(
-                    _state.BinnedRadiusField,
+                    _state.OptimizationBinnedRadiusField,
                     [.. candidates.Select(candidate => candidate.Movement)],
                     _state.Settings,
                     token);
@@ -1965,7 +2022,7 @@ BuildFinalSpindleRecommendation(
 
             double selectedWaneScore =
                 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
-                    _state.BinnedRadiusField,
+                    _state.OptimizationBinnedRadiusField,
                     move.TailMoveXMM,
                     move.TailMoveYMM,
                     move.HeadMoveXMM,
@@ -2019,13 +2076,13 @@ BuildFinalSpindleRecommendation(
                         penaltyRecommendation.RiskScoreReductionPercent,
 
                     CommandTailXMM =
-                        machineMoveAllowed ? move.TailMoveXMM : 0.0,
+                        machineMoveAllowed ? -move.TailMoveXMM : 0.0,
                     CommandTailYMM =
-                        machineMoveAllowed ? move.TailMoveYMM : 0.0,
+                        machineMoveAllowed ? -move.TailMoveYMM : 0.0,
                     CommandHeadXMM =
-                        machineMoveAllowed ? move.HeadMoveXMM : 0.0,
+                        machineMoveAllowed ? -move.HeadMoveXMM : 0.0,
                     CommandHeadYMM =
-                        machineMoveAllowed ? move.HeadMoveYMM : 0.0,
+                        machineMoveAllowed ? -move.HeadMoveYMM : 0.0,
 
                     BestTestedTailXMM = move.TailMoveXMM,
                     BestTestedTailYMM = move.TailMoveYMM,
@@ -3021,10 +3078,10 @@ double maxSpindleMovementMM)
 
             RiskScoreReductionPercent = riskScoreReductionPercent,
 
-            CommandTailXMM = isRecommended ? move.TailMoveXMM : 0.0,
-            CommandTailYMM = isRecommended ? move.TailMoveYMM : 0.0,
-            CommandHeadXMM = isRecommended ? move.HeadMoveXMM : 0.0,
-            CommandHeadYMM = isRecommended ? move.HeadMoveYMM : 0.0,
+            CommandTailXMM = isRecommended ? -move.TailMoveXMM : 0.0,
+            CommandTailYMM = isRecommended ? -move.TailMoveYMM : 0.0,
+            CommandHeadXMM = isRecommended ? -move.HeadMoveXMM : 0.0,
+            CommandHeadYMM = isRecommended ? -move.HeadMoveYMM : 0.0,
 
             BestTestedTailXMM = move.TailMoveXMM,
             BestTestedTailYMM = move.TailMoveYMM,

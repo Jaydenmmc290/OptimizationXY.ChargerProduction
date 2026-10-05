@@ -147,6 +147,59 @@ public static class RotatingScanPointCloudBuilder
             .ThenBy(p => Math.Atan2(p.Y, p.X))];
     }
 
+    /// <summary>
+    /// Converts the raw point cloud into a cylindrical field in the scanner /
+    /// current-spindle coordinate frame. The current spindle axis is (0,0).
+    ///
+    /// This is intentionally separate from RadiusFieldGenerator.Build, which
+    /// creates the fitted-centerline-relative field used for shape diagnostics.
+    /// Machine-position optimization must retain the PointCloud XY origin.
+    /// </summary>
+    public static List<RadiusFieldPoint> BuildMachineFrameRadiusField(
+        List<Point3D> pointCloud)
+    {
+        if (pointCloud == null || pointCloud.Count == 0)
+            return [];
+
+        var field = new List<RadiusFieldPoint>(pointCloud.Count);
+
+        foreach (Point3D point in pointCloud)
+        {
+            if (!double.IsFinite(point.X) ||
+                !double.IsFinite(point.Y) ||
+                !double.IsFinite(point.Z))
+            {
+                continue;
+            }
+
+            double radiusMM = Math.Sqrt(
+                point.X * point.X +
+                point.Y * point.Y);
+
+            if (!double.IsFinite(radiusMM) || radiusMM <= 0.0)
+                continue;
+
+            double angleDeg =
+                Math.Atan2(point.Y, point.X) *
+                180.0 /
+                Math.PI;
+
+            if (angleDeg < 0.0)
+                angleDeg += 360.0;
+
+            field.Add(new RadiusFieldPoint
+            {
+                Z = point.Z,
+                X = point.X,
+                Y = point.Y,
+                RadiusMM = radiusMM,
+                AngleDeg = angleDeg
+            });
+        }
+
+        return field;
+    }
+
     // ------------------------------------------------------------
     // Fills missing radius values along the log length.
     //
