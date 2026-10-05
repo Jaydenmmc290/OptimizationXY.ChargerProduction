@@ -88,3 +88,22 @@ geometry are not changed.
 This branch changes the commanded positions substantially. Before enabling it on the
 machine, scan a round reference mounted a known distance off-centre at a marked angle
 and confirm head/tail, X/Y sign and rotation direction.
+
+## Readiness checks and the PLC write (`Production.EnforceOnlyEssentialReadinessChecks`)
+
+Default `true`. Every readiness check still runs and is written to the report and the
+application log, but only these can stop a PLC write:
+
+- Operating mode is Production
+- PLC connection
+- PLC payload could be built
+- Final spindle recommendation exists and is allowed
+- Finite command values
+- Hard machine travel limits
+- Knife clearance and the carriage-retract payload
+- PLC write order
+- Reserved PLC fields are zero
+
+Any other check that fails is shown as `[WARNING] ... NOT ENFORCED (would have blocked)` and
+logged as `ERROR (not enforced)` before the write. A failed result save is also logged and
+no longer stops the write. Set the setting to `false` to make every check blocking again.

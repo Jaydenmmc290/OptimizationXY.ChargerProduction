@@ -2150,7 +2150,20 @@ string message)
                 {
                     AppendDiagnostics($"Save failed: {saveEx.Message}");
 
-                    if (productionMode)
+                    // With essential-only enforcement a failed save is logged and
+                    // reported, but it does not stop the PLC write.
+                    bool saveFailureBlocksPlc =
+                        productionMode &&
+                        !PipelineState.Instance.Settings.Production.EnforceOnlyEssentialReadinessChecks;
+
+                    if (!saveFailureBlocksPlc && productionMode)
+                    {
+                        AppendDiagnostics(
+                            "ERROR: Production result saving failed. The scan audit record was not preserved. " +
+                            "Continuing to the PLC write because only essential checks are enforced.");
+                    }
+
+                    if (saveFailureBlocksPlc)
                     {
                         throw new InvalidOperationException(
                             "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
@@ -2181,7 +2194,10 @@ string message)
                             AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
                             foreach (var check in warningChecks)
                             {
-                                AppendDiagnostics($"  ⚠ WARNING: {check.Name}: {check.Message}");
+                                AppendDiagnostics(
+                                    check.NotEnforced
+                                        ? $"  ✗ ERROR (not enforced): {check.Name}: {check.Message}"
+                                        : $"  ⚠ WARNING: {check.Name}: {check.Message}");
                             }
                         }
 

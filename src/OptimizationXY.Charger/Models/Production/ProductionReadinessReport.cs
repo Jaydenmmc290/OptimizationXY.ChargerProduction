@@ -24,6 +24,12 @@ public sealed class ProductionReadinessCheck
     public string Name { get; set; } = string.Empty;
     public ProductionCheckStatus Status { get; set; }
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// True when this check failed but is advisory only: it is reported and
+    /// logged, and it does not stop the PLC write.
+    /// </summary>
+    public bool NotEnforced { get; set; }
 }
 
 /// <summary>
@@ -45,6 +51,9 @@ public sealed class ProductionReadinessReport
     public int WarningCount =>
         Checks.Count(check => check.Status == ProductionCheckStatus.Warning);
 
+    public int NotEnforcedCount =>
+        Checks.Count(check => check.NotEnforced);
+
     /// <summary>
     /// Builds a summary string of the production readiness report.
     /// </summary>
@@ -57,7 +66,8 @@ public sealed class ProductionReadinessReport
             $"PLC Connected: {(PlcConnected ? "Yes" : "No")}",
             $"Machine Command Allowed: {(CanSendToPlc ? "Yes" : "No")}",
             $"Blocking Checks: {BlockingCount}",
-            $"Warnings: {WarningCount}"
+            $"Warnings: {WarningCount}",
+            $"Failed But Not Enforced: {NotEnforcedCount}"
         };
 
         foreach (ProductionReadinessCheck check in Checks)
