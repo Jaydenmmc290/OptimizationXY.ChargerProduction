@@ -19,7 +19,7 @@ public static class LaserRadiusProfileBuilder
     /// <param name="smoothingWindow">The window size for the optional median smoothing filter.</param>
     /// <returns>A list of log profile columns representing the smoothed log profile.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the lookup table is invalid or has fewer than two points.</exception>
-    public static List<LogProfileColumn> BuildFromLookupTable(List<LaserProfileColumn> laserProfile,ScannerLookupTable lookupTable,int smoothingWindow = 9)
+    public static List<LogProfileColumn> BuildFromLookupTable(List<LaserProfileColumn> laserProfile,ScannerLookupTable lookupTable,int smoothingWindow = 9,double maximumLargeRadiusExtrapolationPixels = 0.0)
     {
         if (laserProfile == null || laserProfile.Count == 0)
             return [];
@@ -38,7 +38,8 @@ public static class LaserRadiusProfileBuilder
             double radiusMM = LookupTableInterpolator.GetRadiusMM(
                 lookupTable,
                 p.X,
-                p.LaserCenterY);
+                p.LaserCenterY,
+                maximumLargeRadiusExtrapolationPixels);
 
             profile.Add(new LogProfileColumn
             {

@@ -138,7 +138,9 @@ public sealed class LogProcessingPipeline
             () => LaserRadiusProfileBuilder.BuildFromLookupTable(
                 laserProfile,
                 lookupTable,
-                smoothingWindow: 9));
+                smoothingWindow: 9,
+                maximumLargeRadiusExtrapolationPixels:
+                    _state.Settings.RotatingScan.MaximumCalibrationExtrapolationPixels));
 
         if (profile.Count == 0)
             throw new InvalidOperationException("Profile build failed.");
@@ -377,6 +379,47 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Invalid frames: {invalidFrames}\r\n" +
             $"Total profile points: {totalProfilePoints}\r\n" +
             $"Average profile points/frame: {(validFrames > 0 ? totalProfilePoints / (double)validFrames : 0):F1}\r\n\r\n";
+
+        // ------------------------------------------------------------
+        // CALIBRATION RANGE USE
+        // Reports how much of the scan lies beyond the largest measured
+        // calibration reference (values there are extrapolated).
+        // ------------------------------------------------------------
+        double largestCalibratedRadiusMM = lookupTable.MaximumCalibratedRadiusMM;
+        int extrapolatedPoints = 0;
+        int measuredPoints = 0;
+        double largestMeasuredRadiusMM = 0.0;
+
+        foreach (var processedFrame in _state.ScanFrames)
+        {
+            if (!processedFrame.IsValid || processedFrame.Profile is null)
+                continue;
+
+            foreach (var column in processedFrame.Profile)
+            {
+                measuredPoints++;
+
+                if (column.RadiusMM > largestMeasuredRadiusMM)
+                    largestMeasuredRadiusMM = column.RadiusMM;
+
+                if (column.RadiusMM > largestCalibratedRadiusMM + 0.001)
+                    extrapolatedPoints++;
+            }
+        }
+
+        double extrapolatedPercent = measuredPoints > 0
+            ? 100.0 * extrapolatedPoints / measuredPoints
+            : 0.0;
+        double beyondReferenceMM = Math.Max(
+            0.0,
+            largestMeasuredRadiusMM - largestCalibratedRadiusMM);
+
+        _state.DiagnosticsReport +=
+            "CALIBRATION RANGE USE\r\n" +
+            $"Largest Calibrated Radius: {largestCalibratedRadiusMM:F2} mm\r\n" +
+            $"Extrapolation Allowance: {_state.Settings.RotatingScan.MaximumCalibrationExtrapolationPixels:F1} px\r\n" +
+            $"Largest Measured Radius: {largestMeasuredRadiusMM:F2} mm ({beyondReferenceMM:F2} mm beyond the largest reference)\r\n" +
+            $"Points Beyond Largest Reference (extrapolated): {extrapolatedPoints} of {measuredPoints} ({extrapolatedPercent:F1}%)\r\n\r\n";
 
         // ------------------------------------------------------------
         // ROTATION ANGLES

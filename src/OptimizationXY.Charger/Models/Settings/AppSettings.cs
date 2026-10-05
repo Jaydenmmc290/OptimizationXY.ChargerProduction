@@ -213,6 +213,15 @@ public sealed class RotatingScanSettings
     public bool UseMeasuredRevolutionAngles { get; set; } = true;
 
     /// <summary>
+    /// How many laser pixels past the LARGEST measured calibration reference a radius may be
+    /// extrapolated, by continuing the straight line through the two nearest references. Lets
+    /// blocks slightly larger than the biggest reference be scanned without altering the
+    /// calibration package. 0 disables it (frames beyond the calibrated range are rejected).
+    /// For larger blocks, add a larger measured reference instead of raising this.
+    /// </summary>
+    public double MaximumCalibrationExtrapolationPixels { get; set; } = 15.0;
+
+    /// <summary>
     /// Two frames whose radius profiles differ by no more than this RMS value (mm) are treated
     /// as the same resting log position.
     /// </summary>

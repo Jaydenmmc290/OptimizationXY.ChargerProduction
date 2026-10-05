@@ -34,6 +34,7 @@ All have defaults, so an existing `appsettings.json` keeps working unchanged.
 | `StationaryProfileChangeMM` | `0.8` | RMS profile change below this is a resting log |
 | `RevolutionClosureToleranceMM` | `1.5` | RMS match needed to accept the 360 degree frame |
 | `MinimumFramesPerRevolution` | `20` | Shortest revolution accepted |
+| `MaximumCalibrationExtrapolationPixels` | `15` | Laser pixels a radius may be extrapolated past the largest measured reference; `0` disables |
 | `ReverseRotationDirection` | `false` | Set after the off-centre reference test if Y is mirrored |
 | `LaserAngleOffsetDeg` | `0` | Machine angle at which the laser strikes the log |
 
@@ -44,6 +45,15 @@ All have defaults, so an existing `appsettings.json` keeps working unchanged.
 - Local centerline slices use a least-squares circle fit instead of the average of
   surface points.
 - Inscribed-geometry samples are placed at the centre of each angular bin.
+
+## Blocks larger than the largest calibration reference
+
+A radius up to `MaximumCalibrationExtrapolationPixels` beyond the largest measured
+reference is calculated by continuing the straight line through the two nearest
+references (about 2.1 mm per pixel with the current package, so 15 px is about 32 mm of
+radius). Values inside the calibrated range are unchanged. The diagnostics report lists
+how many points were extrapolated under `CALIBRATION RANGE USE`. For blocks beyond this
+allowance, calibrate with a larger measured reference rather than raising the setting.
 
 Calibration files, the calibration fingerprint, camera configuration and the image
 geometry are not changed.
