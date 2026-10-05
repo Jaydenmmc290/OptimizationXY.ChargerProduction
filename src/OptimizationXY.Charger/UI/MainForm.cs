@@ -656,6 +656,10 @@ public partial class MainForm : Form
         // When ScanComplete rises (true), finish the active capture with whatever frames were captured
         if (complete && _captureManager?.IsCapturingActive == true)
         {
+            // Stop taking frames immediately. Finishing the capture is asynchronous and
+            // the cameras keep delivering frames of the now-stationary log until it completes.
+            _captureManager.StopFrameIntake();
+
             AppendDiagnosticsThreadSafe(
                 $"[PLC] ScanComplete detected. Finishing capture with {_captureManager.HeadFrameCount} head and " +
                 $"{_captureManager.TailFrameCount} tail frames.");

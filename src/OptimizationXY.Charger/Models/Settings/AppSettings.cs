@@ -205,6 +205,43 @@ public sealed class RotatingScanSettings
     public double MinValidEndDiameterFraction { get; set; } = 0.18;
 
     /// <summary>
+    /// When true (default), frame angles are taken from the scan itself: the frames between
+    /// rotation start and the return to the starting profile are divided evenly over 360 degrees,
+    /// and frames of the resting log are excluded. When false, the legacy fixed step
+    /// (frame index x 360 / TargetFramePairsPerLog) is used.
+    /// </summary>
+    public bool UseMeasuredRevolutionAngles { get; set; } = true;
+
+    /// <summary>
+    /// Two frames whose radius profiles differ by no more than this RMS value (mm) are treated
+    /// as the same resting log position.
+    /// </summary>
+    public double StationaryProfileChangeMM { get; set; } = 0.8;
+
+    /// <summary>
+    /// Maximum RMS difference (mm) between the starting profile and a later profile for that later
+    /// frame to be accepted as the completion of one full revolution.
+    /// </summary>
+    public double RevolutionClosureToleranceMM { get; set; } = 1.5;
+
+    /// <summary>
+    /// A revolution is never accepted with fewer frames than this.
+    /// </summary>
+    public int MinimumFramesPerRevolution { get; set; } = 20;
+
+    /// <summary>
+    /// Set true if the log turns the opposite way to the mathematical positive direction of the
+    /// machine X/Y frame. Verify with an off-centre reference before changing.
+    /// </summary>
+    public bool ReverseRotationDirection { get; set; } = false;
+
+    /// <summary>
+    /// Machine-frame angle (degrees) at which the laser line strikes the log. 0 means the laser
+    /// measures along machine +X. Verify with an off-centre reference before changing.
+    /// </summary>
+    public double LaserAngleOffsetDeg { get; set; } = 0.0;
+
+    /// <summary>
     /// Indicates whether to fill in missing points during the rotating scan process. If true, the application will attempt to
     /// interpolate or estimate missing data points based on available information; if false, missing points will remain unfilled.
     /// </summary>

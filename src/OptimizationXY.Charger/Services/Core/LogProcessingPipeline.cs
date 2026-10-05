@@ -378,7 +378,45 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Total profile points: {totalProfilePoints}\r\n" +
             $"Average profile points/frame: {(validFrames > 0 ? totalProfilePoints / (double)validFrames : 0):F1}\r\n\r\n";
 
-        foreach (var bad in _state.ScanFrames.Where(f => !f.IsValid).Take(10))
+        // ------------------------------------------------------------
+        // ROTATION ANGLES
+        // The cameras are not triggered by log rotation, so the angle of
+        // each frame is taken from the scan itself: resting frames before
+        // and after the revolution are excluded and the frames in between
+        // are divided evenly over 360 degrees.
+        // ------------------------------------------------------------
+        var rotatingScanSettings = _state.Settings.RotatingScan;
+
+        var revolution = rotatingScanSettings.UseMeasuredRevolutionAngles
+            ? OptimizationXY.Charger.Services.Acquisition.RevolutionAngleAssigner.Assign(
+                _state.ScanFrames,
+                rotatingScanSettings)
+            : OptimizationXY.Charger.Services.Acquisition.RevolutionAngleAssigner.AssignFixedStep(
+                _state.ScanFrames,
+                _state.Settings.Acquisition.GetAngularStepDegrees());
+
+        _state.RevolutionAngles = revolution;
+
+        int framesUsedForGeometry = _state.ScanFrames.Count(f => f.IsValid);
+        string revolutionVerifiedText = revolution.RevolutionVerified ? "Yes" : "No";
+        string closureErrorText = double.IsFinite(revolution.ClosureErrorMM)
+            ? $"{revolution.ClosureErrorMM:F2} mm RMS"
+            : "n/a";
+
+        _state.DiagnosticsReport +=
+            "ROTATION ANGLE ASSIGNMENT\r\n" +
+            $"Method: {revolution.Method}\r\n" +
+            $"Full Revolution Verified: {revolutionVerifiedText}\r\n" +
+            $"Revolution Frames: {revolution.FirstRotatingFrame} to {revolution.EndFrameExclusive - 1}\r\n" +
+            $"Frames Per Revolution: {revolution.FramesPerRevolution}\r\n" +
+            $"Angle Step: {revolution.AngleStepDeg:F3} deg\r\n" +
+            $"Closure Error: {closureErrorText}\r\n" +
+            $"Resting Frames Excluded Before Rotation: {revolution.FramesExcludedBeforeRotation}\r\n" +
+            $"Resting Frames Excluded After Rotation: {revolution.FramesExcludedAfterRotation}\r\n" +
+            $"Frames Used For Geometry: {framesUsedForGeometry}\r\n" +
+            $"{revolution.Message}\r\n\r\n";
+
+        foreach (var bad in _state.ScanFrames.Where(f => !f.IsValid && !f.ExcludedFromRevolution).Take(10))
         {
             _state.DiagnosticsReport +=
                 $"Bad frame {bad.FrameIndex} | {Path.GetFileName(bad.ImagePath)} | {bad.StatusMessage}\r\n";  // Log up to 10 bad frames for diagnostics

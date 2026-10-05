@@ -202,6 +202,20 @@ public static class AppSettingsValidator
 
         if (settings.RotatingScan.MinimumProfilePointsPerFrame <= 0)
             throw new InvalidOperationException("MinimumProfilePointsPerFrame must be greater than zero.");
+
+        if (!double.IsFinite(settings.RotatingScan.StationaryProfileChangeMM) ||
+            settings.RotatingScan.StationaryProfileChangeMM <= 0)
+            throw new InvalidOperationException("StationaryProfileChangeMM must be greater than zero.");
+
+        if (!double.IsFinite(settings.RotatingScan.RevolutionClosureToleranceMM) ||
+            settings.RotatingScan.RevolutionClosureToleranceMM <= 0)
+            throw new InvalidOperationException("RevolutionClosureToleranceMM must be greater than zero.");
+
+        if (settings.RotatingScan.MinimumFramesPerRevolution < 3)
+            throw new InvalidOperationException("MinimumFramesPerRevolution must be at least 3.");
+
+        if (!double.IsFinite(settings.RotatingScan.LaserAngleOffsetDeg))
+            throw new InvalidOperationException("LaserAngleOffsetDeg must be a finite number.");
     }
 
     /// <summary>

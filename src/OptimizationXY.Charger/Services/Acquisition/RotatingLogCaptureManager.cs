@@ -19,6 +19,7 @@ public sealed class RotatingLogCaptureManager
     private System.Threading.Timer? _captureTimeoutTimer;
 
     private bool _isCapturingActive;
+    private bool _frameIntakeStopped;
     private DateTime _captureStartTime;
     private int _droppedFrameCount;
     private string _currentLogId;
@@ -122,6 +123,7 @@ public sealed class RotatingLogCaptureManager
             _droppedFrameCount = 0;
             _captureStartTime = DateTime.UtcNow;
             _isCapturingActive = true;
+            _frameIntakeStopped = false;
             _currentLogId = GenerateLogId();
             _headCameraConfigurationSnapshot =
                 headCameraConfigurationSnapshot.ToArray();
@@ -163,6 +165,27 @@ public sealed class RotatingLogCaptureManager
     /// When rejected, the frame is disposed and a diagnostic message is logged.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <summary>
+    /// Stops accepting frames for the active capture without finishing it.
+    /// Called the moment the PLC reports ScanComplete so frames that arrive while
+    /// the capture is being finalized (the log is no longer turning) are not
+    /// added to the scan. These frames are not counted as dropped source frames.
+    /// </summary>
+    public void StopFrameIntake()
+    {
+        lock (_captureLock)
+        {
+            if (!_isCapturingActive || _frameIntakeStopped)
+                return;
+
+            _frameIntakeStopped = true;
+
+            LogDiagnostics(
+                $"Frame intake stopped at ScanComplete with " +
+                $"{_headFrames.Count} head and {_tailFrames.Count} tail frames.");
+        }
+    }
+
     public bool AddFrame(
         CameraPosition position,
         CameraFrameEventArgs frameArgs)
@@ -185,6 +208,13 @@ public sealed class RotatingLogCaptureManager
             {
                 frameArgs.Frame.Dispose();
                 _diagnostics.RecordFrameDropped(position);
+                return false;
+            }
+
+            if (_frameIntakeStopped)
+            {
+                // ScanComplete has been received; later frames are not part of the scan.
+                frameArgs.Frame.Dispose();
                 return false;
             }
 
