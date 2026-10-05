@@ -656,6 +656,10 @@ public partial class MainForm : Form
         // When ScanComplete rises (true), finish the active capture with whatever frames were captured
         if (complete && _captureManager?.IsCapturingActive == true)
         {
+            // Stop taking frames immediately. Finishing the capture is asynchronous and
+            // the cameras keep delivering frames of the now-stationary log until it completes.
+            _captureManager.StopFrameIntake();
+
             AppendDiagnosticsThreadSafe(
                 $"[PLC] ScanComplete detected. Finishing capture with {_captureManager.HeadFrameCount} head and " +
                 $"{_captureManager.TailFrameCount} tail frames.");
@@ -2146,7 +2150,20 @@ string message)
                 {
                     AppendDiagnostics($"Save failed: {saveEx.Message}");
 
-                    if (productionMode)
+                    // With essential-only enforcement a failed save is logged and
+                    // reported, but it does not stop the PLC write.
+                    bool saveFailureBlocksPlc =
+                        productionMode &&
+                        !PipelineState.Instance.Settings.Production.EnforceOnlyEssentialReadinessChecks;
+
+                    if (!saveFailureBlocksPlc && productionMode)
+                    {
+                        AppendDiagnostics(
+                            "ERROR: Production result saving failed. The scan audit record was not preserved. " +
+                            "Continuing to the PLC write because only essential checks are enforced.");
+                    }
+
+                    if (saveFailureBlocksPlc)
                     {
                         throw new InvalidOperationException(
                             "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
@@ -2177,7 +2194,10 @@ string message)
                             AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
                             foreach (var check in warningChecks)
                             {
-                                AppendDiagnostics($"  ⚠ WARNING: {check.Name}: {check.Message}");
+                                AppendDiagnostics(
+                                    check.NotEnforced
+                                        ? $"  ✗ ERROR (not enforced): {check.Name}: {check.Message}"
+                                        : $"  ⚠ WARNING: {check.Name}: {check.Message}");
                             }
                         }
 

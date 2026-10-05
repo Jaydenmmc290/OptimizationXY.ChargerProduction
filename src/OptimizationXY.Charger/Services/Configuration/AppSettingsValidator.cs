@@ -202,6 +202,25 @@ public static class AppSettingsValidator
 
         if (settings.RotatingScan.MinimumProfilePointsPerFrame <= 0)
             throw new InvalidOperationException("MinimumProfilePointsPerFrame must be greater than zero.");
+
+        if (!double.IsFinite(settings.RotatingScan.StationaryProfileChangeMM) ||
+            settings.RotatingScan.StationaryProfileChangeMM <= 0)
+            throw new InvalidOperationException("StationaryProfileChangeMM must be greater than zero.");
+
+        if (!double.IsFinite(settings.RotatingScan.RevolutionClosureToleranceMM) ||
+            settings.RotatingScan.RevolutionClosureToleranceMM <= 0)
+            throw new InvalidOperationException("RevolutionClosureToleranceMM must be greater than zero.");
+
+        if (settings.RotatingScan.MinimumFramesPerRevolution < 3)
+            throw new InvalidOperationException("MinimumFramesPerRevolution must be at least 3.");
+
+        if (!double.IsFinite(settings.RotatingScan.MaximumCalibrationExtrapolationPixels) ||
+            settings.RotatingScan.MaximumCalibrationExtrapolationPixels < 0 ||
+            settings.RotatingScan.MaximumCalibrationExtrapolationPixels > 40)
+            throw new InvalidOperationException("MaximumCalibrationExtrapolationPixels must be between 0 and 40.");
+
+        if (!double.IsFinite(settings.RotatingScan.LaserAngleOffsetDeg))
+            throw new InvalidOperationException("LaserAngleOffsetDeg must be a finite number.");
     }
 
     /// <summary>
@@ -322,6 +341,14 @@ public static class AppSettingsValidator
         {
             throw new InvalidOperationException(
                 "InscribedGeometry.OrientationStepDeg must be greater than zero and no more than 180.");
+        }
+
+        if (!double.IsFinite(geometry.CenterlinePullWeight) ||
+            geometry.CenterlinePullWeight < 0 ||
+            geometry.CenterlinePullWeight > 10)
+        {
+            throw new InvalidOperationException(
+                "InscribedGeometry.CenterlinePullWeight must be between 0 and 10.");
         }
 
         if (geometry.GeometryTieToleranceMM < 0)

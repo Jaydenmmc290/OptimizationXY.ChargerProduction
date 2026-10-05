@@ -205,6 +205,52 @@ public sealed class RotatingScanSettings
     public double MinValidEndDiameterFraction { get; set; } = 0.18;
 
     /// <summary>
+    /// When true (default), frame angles are taken from the scan itself: the frames between
+    /// rotation start and the return to the starting profile are divided evenly over 360 degrees,
+    /// and frames of the resting log are excluded. When false, the legacy fixed step
+    /// (frame index x 360 / TargetFramePairsPerLog) is used.
+    /// </summary>
+    public bool UseMeasuredRevolutionAngles { get; set; } = true;
+
+    /// <summary>
+    /// How many laser pixels past the LARGEST measured calibration reference a radius may be
+    /// extrapolated, by continuing the straight line through the two nearest references. Lets
+    /// blocks slightly larger than the biggest reference be scanned without altering the
+    /// calibration package. 0 disables it (frames beyond the calibrated range are rejected).
+    /// For larger blocks, add a larger measured reference instead of raising this.
+    /// </summary>
+    public double MaximumCalibrationExtrapolationPixels { get; set; } = 15.0;
+
+    /// <summary>
+    /// Two frames whose radius profiles differ by no more than this RMS value (mm) are treated
+    /// as the same resting log position.
+    /// </summary>
+    public double StationaryProfileChangeMM { get; set; } = 0.8;
+
+    /// <summary>
+    /// Maximum RMS difference (mm) between the starting profile and a later profile for that later
+    /// frame to be accepted as the completion of one full revolution.
+    /// </summary>
+    public double RevolutionClosureToleranceMM { get; set; } = 1.5;
+
+    /// <summary>
+    /// A revolution is never accepted with fewer frames than this.
+    /// </summary>
+    public int MinimumFramesPerRevolution { get; set; } = 20;
+
+    /// <summary>
+    /// Set true if the log turns the opposite way to the mathematical positive direction of the
+    /// machine X/Y frame. Verify with an off-centre reference before changing.
+    /// </summary>
+    public bool ReverseRotationDirection { get; set; } = false;
+
+    /// <summary>
+    /// Machine-frame angle (degrees) at which the laser line strikes the log. 0 means the laser
+    /// measures along machine +X. Verify with an off-centre reference before changing.
+    /// </summary>
+    public double LaserAngleOffsetDeg { get; set; } = 0.0;
+
+    /// <summary>
     /// Indicates whether to fill in missing points during the rotating scan process. If true, the application will attempt to
     /// interpolate or estimate missing data points based on available information; if false, missing points will remain unfilled.
     /// </summary>
@@ -682,6 +728,15 @@ public sealed class InscribedGeometrySettings
     /// prefer the one requiring less spindle movement.
     /// </summary>
     public double GeometryTieToleranceMM { get; set; } = 0.01;
+
+    /// <summary>
+    /// Repeatability control. The search is centred on the fitted centreline of the block, and a
+    /// candidate axis must gain this many millimetres of inscribed radius for every millimetre it
+    /// sits away from that centreline. 0 restores the unanchored search (largest cylinder at any
+    /// position, search centred on the current spindle axis). Higher values give more repeatable
+    /// positions and slightly less diameter; 1.0 or more effectively selects the centreline itself.
+    /// </summary>
+    public double CenterlinePullWeight { get; set; } = 0.5;
 }
 
 /// <summary>
@@ -701,6 +756,16 @@ public enum ChargerOperatingMode
 public sealed class ProductionSettings
 {
     public ChargerOperatingMode OperatingMode { get; set; } = ChargerOperatingMode.Commissioning;
+
+    /// <summary>
+    /// When true (default), only the essential checks can stop a PLC write: Production mode,
+    /// PLC connected, the operator scan-quality gate, a valid payload, a final recommendation,
+    /// finite values, hard travel limits,
+    /// reserved fields zero, knife clearance and write order. Every other readiness check still
+    /// runs and is written to the report and application log, but a failure is reported as
+    /// "NOT ENFORCED" instead of blocking. Set false to make every check blocking again.
+    /// </summary>
+    public bool EnforceOnlyEssentialReadinessChecks { get; set; } = true;
 
     /// <summary>
     /// Production PLC writes remain blocked until every commissioning item below

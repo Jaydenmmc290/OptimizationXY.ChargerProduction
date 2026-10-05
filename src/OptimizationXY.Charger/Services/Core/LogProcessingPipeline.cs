@@ -138,7 +138,9 @@ public sealed class LogProcessingPipeline
             () => LaserRadiusProfileBuilder.BuildFromLookupTable(
                 laserProfile,
                 lookupTable,
-                smoothingWindow: 9));
+                smoothingWindow: 9,
+                maximumLargeRadiusExtrapolationPixels:
+                    _state.Settings.RotatingScan.MaximumCalibrationExtrapolationPixels));
 
         if (profile.Count == 0)
             throw new InvalidOperationException("Profile build failed.");
@@ -378,7 +380,86 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Total profile points: {totalProfilePoints}\r\n" +
             $"Average profile points/frame: {(validFrames > 0 ? totalProfilePoints / (double)validFrames : 0):F1}\r\n\r\n";
 
-        foreach (var bad in _state.ScanFrames.Where(f => !f.IsValid).Take(10))
+        // ------------------------------------------------------------
+        // CALIBRATION RANGE USE
+        // Reports how much of the scan lies beyond the largest measured
+        // calibration reference (values there are extrapolated).
+        // ------------------------------------------------------------
+        double largestCalibratedRadiusMM = lookupTable.MaximumCalibratedRadiusMM;
+        int extrapolatedPoints = 0;
+        int measuredPoints = 0;
+        double largestMeasuredRadiusMM = 0.0;
+
+        foreach (var processedFrame in _state.ScanFrames)
+        {
+            if (!processedFrame.IsValid || processedFrame.Profile is null)
+                continue;
+
+            foreach (var column in processedFrame.Profile)
+            {
+                measuredPoints++;
+
+                if (column.RadiusMM > largestMeasuredRadiusMM)
+                    largestMeasuredRadiusMM = column.RadiusMM;
+
+                if (column.RadiusMM > largestCalibratedRadiusMM + 0.001)
+                    extrapolatedPoints++;
+            }
+        }
+
+        double extrapolatedPercent = measuredPoints > 0
+            ? 100.0 * extrapolatedPoints / measuredPoints
+            : 0.0;
+        double beyondReferenceMM = Math.Max(
+            0.0,
+            largestMeasuredRadiusMM - largestCalibratedRadiusMM);
+
+        _state.DiagnosticsReport +=
+            "CALIBRATION RANGE USE\r\n" +
+            $"Largest Calibrated Radius: {largestCalibratedRadiusMM:F2} mm\r\n" +
+            $"Extrapolation Allowance: {_state.Settings.RotatingScan.MaximumCalibrationExtrapolationPixels:F1} px\r\n" +
+            $"Largest Measured Radius: {largestMeasuredRadiusMM:F2} mm ({beyondReferenceMM:F2} mm beyond the largest reference)\r\n" +
+            $"Points Beyond Largest Reference (extrapolated): {extrapolatedPoints} of {measuredPoints} ({extrapolatedPercent:F1}%)\r\n\r\n";
+
+        // ------------------------------------------------------------
+        // ROTATION ANGLES
+        // The cameras are not triggered by log rotation, so the angle of
+        // each frame is taken from the scan itself: resting frames before
+        // and after the revolution are excluded and the frames in between
+        // are divided evenly over 360 degrees.
+        // ------------------------------------------------------------
+        var rotatingScanSettings = _state.Settings.RotatingScan;
+
+        var revolution = rotatingScanSettings.UseMeasuredRevolutionAngles
+            ? OptimizationXY.Charger.Services.Acquisition.RevolutionAngleAssigner.Assign(
+                _state.ScanFrames,
+                rotatingScanSettings)
+            : OptimizationXY.Charger.Services.Acquisition.RevolutionAngleAssigner.AssignFixedStep(
+                _state.ScanFrames,
+                _state.Settings.Acquisition.GetAngularStepDegrees());
+
+        _state.RevolutionAngles = revolution;
+
+        int framesUsedForGeometry = _state.ScanFrames.Count(f => f.IsValid);
+        string revolutionVerifiedText = revolution.RevolutionVerified ? "Yes" : "No";
+        string closureErrorText = double.IsFinite(revolution.ClosureErrorMM)
+            ? $"{revolution.ClosureErrorMM:F2} mm RMS"
+            : "n/a";
+
+        _state.DiagnosticsReport +=
+            "ROTATION ANGLE ASSIGNMENT\r\n" +
+            $"Method: {revolution.Method}\r\n" +
+            $"Full Revolution Verified: {revolutionVerifiedText}\r\n" +
+            $"Revolution Frames: {revolution.FirstRotatingFrame} to {revolution.EndFrameExclusive - 1}\r\n" +
+            $"Frames Per Revolution: {revolution.FramesPerRevolution}\r\n" +
+            $"Angle Step: {revolution.AngleStepDeg:F3} deg\r\n" +
+            $"Closure Error: {closureErrorText}\r\n" +
+            $"Resting Frames Excluded Before Rotation: {revolution.FramesExcludedBeforeRotation}\r\n" +
+            $"Resting Frames Excluded After Rotation: {revolution.FramesExcludedAfterRotation}\r\n" +
+            $"Frames Used For Geometry: {framesUsedForGeometry}\r\n" +
+            $"{revolution.Message}\r\n\r\n";
+
+        foreach (var bad in _state.ScanFrames.Where(f => !f.IsValid && !f.ExcludedFromRevolution).Take(10))
         {
             _state.DiagnosticsReport +=
                 $"Bad frame {bad.FrameIndex} | {Path.GetFileName(bad.ImagePath)} | {bad.StatusMessage}\r\n";  // Log up to 10 bad frames for diagnostics
@@ -504,8 +585,20 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             CenterlineSweepAnalyzer.Analyze(  // Analyze the centerline sweep using the trimmed local centerline slices to
                 sweepSlices, settings.Sweep);                              // determine tail-head changes, bow, and other sweep characteristics
 
+        // The PCA axis is refined to pass through the fitted slice centres. All
+        // shape analysis is built on this centreline. Spindle moves are NOT
+        // measured from it: they are offsets from the machine origin (the
+        // current spindle axis at X = 0, Y = 0) to the selected axis.
+        var rawPcaAxis = _state.Centerline;
+
+        _state.Centerline =
+            CenterlineMathService.RefineAxisThroughSliceCenters(
+                rawPcaAxis,
+                sweepSlices);
+
         _state.DiagnosticsReport +=
             $"\r\nCENTERLINE ANALYSIS\r\n" +
+            $"Raw PCA Origin (point average): ({Inches(rawPcaAxis.OriginX):F3}, {Inches(rawPcaAxis.OriginY):F3}, {Inches(rawPcaAxis.OriginZ):F3}) in\r\n" +
             $"Global PCA Origin: ({Inches(_state.Centerline.OriginX):F3}, {Inches(_state.Centerline.OriginY):F3}, {Inches(_state.Centerline.OriginZ):F3}) in\r\n" +
             $"Global PCA Direction: ({_state.Centerline.DirectionX:F4}, {_state.Centerline.DirectionY:F4}, {_state.Centerline.DirectionZ:F4})\r\n" +
             $"Local Centerline Slices: {_state.LocalCenterlines.Count}\r\n" +
@@ -522,6 +615,24 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Local Z Range: {FormatLengthRange(minZ, maxZ)}\r\n" +
             $"Sweep Z Range After Trim: {FormatLengthRange(sweepMinZ, sweepMaxZ)}\r\n" +
             $"Local Avg Radius: {FormatLength(avgRadius)}\r\n";
+
+        // Where the block centreline sits relative to the machine origin
+        // (current spindle axis = 0, 0) at each end of the scanned length.
+        double centerlineDirectionZ =
+            Math.Abs(_state.Centerline.DirectionZ) > 1e-9
+                ? _state.Centerline.DirectionZ
+                : 1.0;
+        double centerlineSlopeX = _state.Centerline.DirectionX / centerlineDirectionZ;
+        double centerlineSlopeY = _state.Centerline.DirectionY / centerlineDirectionZ;
+        double centerlineTailX = _state.Centerline.OriginX + centerlineSlopeX * (minZ - _state.Centerline.OriginZ);
+        double centerlineTailY = _state.Centerline.OriginY + centerlineSlopeY * (minZ - _state.Centerline.OriginZ);
+        double centerlineHeadX = _state.Centerline.OriginX + centerlineSlopeX * (maxZ - _state.Centerline.OriginZ);
+        double centerlineHeadY = _state.Centerline.OriginY + centerlineSlopeY * (maxZ - _state.Centerline.OriginZ);
+
+        _state.DiagnosticsReport +=
+            "Block Centerline Relative To Machine Origin (spindle axis = 0, 0):\r\n" +
+            $"- Tail End X / Y: {FormatLength(centerlineTailX)} / {FormatLength(centerlineTailY)}\r\n" +
+            $"- Head End X / Y: {FormatLength(centerlineHeadX)} / {FormatLength(centerlineHeadY)}\r\n";
 
         _state.DiagnosticsReport +=
             $"\r\nCENTERLINE END-TO-END SWEEP\r\n" +
@@ -709,7 +820,9 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         if (_state.BinnedRadiusField == null || _state.BinnedRadiusField.Count == 0)
             throw new InvalidOperationException("Bin radius field first.");
 
-        int frameCount = _state.ScanFrames?.Count ?? 0;
+        // Only frames used for geometry count. Resting frames excluded from the
+        // revolution do not add angular coverage.
+        int frameCount = _state.ScanFrames?.Count(f => f.IsValid) ?? 0;
 
         int minAngleBins =
             frameCount >= 30 ? 30 :  // If there are 30 or more frames, require at least 30 angle bins per slice for ovality analysis
@@ -718,10 +831,40 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
             frameCount >= 8 ? 6 :  // If there are 8 or more frames, require at least 6 angle bins per slice for ovality analysis
             4;  // If there are fewer than 8 frames, require at least 4 angle bins per slice for ovality analysis
 
-        _state.Model.OvalityAnalysis =  // Analyze the binned radius field for ovality patterns using the specified minimum angle bins per slice
-            OvalityAnalyzer.Analyze(  // Call the OvalityAnalyzer to analyze the binned radius field for ovality patterns
-                _state.BinnedRadiusField,
-                minAngleBinsPerSlice: minAngleBins);  // Use the calculated minimum angle bins per slice based on the number of scan frames for ovality analysis
+        // Never demand more angular coverage for this report than the operator
+        // scan-quality gate demands for a usable scan.
+        double angleBinSizeDeg = _state.Settings.Geometry.RadiusFieldAngleBinSizeDeg;
+        if (angleBinSizeDeg > 0)
+        {
+            int expectedAngleBins = Math.Max(1, (int)Math.Round(360.0 / angleBinSizeDeg));
+            int operatorMinimumBins = Math.Max(
+                3,
+                (int)Math.Ceiling(
+                    expectedAngleBins *
+                    _state.Settings.OperatorView.MinimumAngularCoveragePercentPerSlice / 100.0));
+
+            minAngleBins = Math.Min(minAngleBins, operatorMinimumBins);
+        }
+
+        // Roundness is a report, not a positioning input. If no slice reaches
+        // the preferred coverage, analyse with what is available instead of
+        // failing the whole scan.
+        try
+        {
+            _state.Model.OvalityAnalysis =
+                OvalityAnalyzer.Analyze(
+                    _state.BinnedRadiusField,
+                    minAngleBinsPerSlice: minAngleBins);
+        }
+        catch (InvalidOperationException) when (minAngleBins > 6)
+        {
+            minAngleBins = Math.Max(6, minAngleBins / 2);
+
+            _state.Model.OvalityAnalysis =
+                OvalityAnalyzer.Analyze(
+                    _state.BinnedRadiusField,
+                    minAngleBinsPerSlice: minAngleBins);
+        }
 
         var o = _state.Model.OvalityAnalysis;  // Store the result of the ovality analysis in a local variable for easier access
 
@@ -2277,6 +2420,13 @@ BuildFinalSpindleRecommendation(
                   $"Minor Diameter: {FormatLength(geometry.MinorSemiAxisMM * 2.0)}\r\n" +
                   $"Orientation: {geometry.OrientationDeg:F1} deg\r\n";
 
+        string centerlineLines =
+            geometry.CenterlineAnchorUsed
+                ? $"Fitted Centerline Tail X/Y: {FormatLength(geometry.CenterlineTailXMM)} / {FormatLength(geometry.CenterlineTailYMM)}\r\n" +
+                  $"Fitted Centerline Head X/Y: {FormatLength(geometry.CenterlineHeadXMM)} / {FormatLength(geometry.CenterlineHeadYMM)}\r\n" +
+                  $"Axis Distance From Fitted Centerline: {FormatLength(geometry.CenterlineDeviationMM)}\r\n"
+                : "Fitted Centerline Anchor: Not used\r\n";
+
         return
             $"\r\n{geometry.StrategyName.ToUpperInvariant()}\r\n" +
             geometryLine +
@@ -2284,6 +2434,7 @@ BuildFinalSpindleRecommendation(
             $"Tail Y: {FormatLength(geometry.SpindleMovement.TailMoveYMM)}\r\n" +
             $"Head X: {FormatLength(geometry.SpindleMovement.HeadMoveXMM)}\r\n" +
             $"Head Y: {FormatLength(geometry.SpindleMovement.HeadMoveYMM)}\r\n" +
+            centerlineLines +
             $"Tested Candidates: {geometry.TestedCandidates}\r\n" +
             $"Usable Full 50-in Sheets: {peel.UsableFullSheets} of {peel.TotalFullSheets}\r\n" +
             $"Rejected Full 50-in Sheets: {peel.RejectedFullSheets}\r\n" +

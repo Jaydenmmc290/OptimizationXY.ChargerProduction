@@ -25,7 +25,8 @@ public static class LookupTableInterpolator
     public static double GetRadiusMM(
         ScannerLookupTable table,
         int x,
-        double laserY)
+        double laserY,
+        double maximumLargeRadiusExtrapolationPixels = 0.0)
     {
         ArgumentNullException.ThrowIfNull(table);
 
@@ -106,8 +107,61 @@ public static class LookupTableInterpolator
         double minimumCalibratedLaserY = bands[0].LaserY;
         double maximumCalibratedLaserY = bands[^1].LaserY;
 
-        if (laserY < minimumCalibratedLaserY - BoundaryTolerancePixels ||
-            laserY > maximumCalibratedLaserY + BoundaryTolerancePixels)
+        // Optional, bounded extension past the LARGEST measured reference so
+        // blocks slightly bigger than that reference can still be scanned. The
+        // line through the two references nearest that end is continued for at
+        // most the configured number of pixels. Nothing changes inside the
+        // calibrated range, on the small-radius side, or when the allowance is 0.
+        double extrapolationPixels =
+            double.IsFinite(maximumLargeRadiusExtrapolationPixels)
+                ? Math.Max(0.0, maximumLargeRadiusExtrapolationPixels)
+                : 0.0;
+
+        bool largestRadiusAtLowLaserY =
+            bands[0].RadiusMM >= bands[^1].RadiusMM;
+
+        double lowLaserYLimit =
+            minimumCalibratedLaserY -
+            BoundaryTolerancePixels -
+            (largestRadiusAtLowLaserY ? extrapolationPixels : 0.0);
+
+        double highLaserYLimit =
+            maximumCalibratedLaserY +
+            BoundaryTolerancePixels +
+            (largestRadiusAtLowLaserY ? 0.0 : extrapolationPixels);
+
+        if (extrapolationPixels > 0.0 &&
+            laserY >= lowLaserYLimit &&
+            laserY <= highLaserYLimit)
+        {
+            bool beyondLargestReference = largestRadiusAtLowLaserY
+                ? laserY < minimumCalibratedLaserY
+                : laserY > maximumCalibratedLaserY;
+
+            if (beyondLargestReference)
+            {
+                CalibrationBand edge = largestRadiusAtLowLaserY
+                    ? bands[0]
+                    : bands[^1];
+                CalibrationBand inner = largestRadiusAtLowLaserY
+                    ? bands[1]
+                    : bands[^2];
+
+                double edgeDeltaY = edge.LaserY - inner.LaserY;
+
+                if (Math.Abs(edgeDeltaY) < 0.0001)
+                    return edge.RadiusMM;
+
+                double slopeMMPerPixel =
+                    (edge.RadiusMM - inner.RadiusMM) / edgeDeltaY;
+
+                return edge.RadiusMM +
+                       (laserY - edge.LaserY) * slopeMMPerPixel;
+            }
+        }
+
+        if (laserY < lowLaserYLimit ||
+            laserY > highLaserYLimit)
         {
             throw new InvalidOperationException(
                 $"Detected laser Y={laserY:F3} at image X={x} is outside the active calibration range " +

@@ -48,6 +48,18 @@ public sealed class InscribedGeometryResult
     /// </summary>
     public int ValidAngularBins { get; set; }
 
+    /// <summary>True when the search was anchored to the fitted block centreline.</summary>
+    public bool CenterlineAnchorUsed { get; set; }
+
+    /// <summary>Fitted block centreline in the machine frame (mm).</summary>
+    public double CenterlineTailXMM { get; set; }
+    public double CenterlineTailYMM { get; set; }
+    public double CenterlineHeadXMM { get; set; }
+    public double CenterlineHeadYMM { get; set; }
+
+    /// <summary>Largest tail/head distance between the selected axis and the fitted centreline.</summary>
+    public double CenterlineDeviationMM { get; set; }
+
     /// <summary>
     /// Number of candidate orientations that were tested during the inscribed geometry search.
     /// This is a measure of how many potential orientations were evaluated to find the optimal inscribed geometry.

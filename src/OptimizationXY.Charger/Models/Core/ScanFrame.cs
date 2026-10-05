@@ -26,6 +26,11 @@ public class ScanFrame
 
     // Diagnostics
     public bool IsValid { get; set; } = true;
+
+    // True when the frame was captured while the log was not turning (before the
+    // revolution started or after it finished). Such frames are kept for the audit
+    // record but are never used to build the point cloud.
+    public bool ExcludedFromRevolution { get; set; }
     public string StatusMessage { get; set; } = "";
 
     // Optional images for debugging

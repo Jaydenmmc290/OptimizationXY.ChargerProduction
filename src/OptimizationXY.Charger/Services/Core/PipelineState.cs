@@ -60,6 +60,9 @@ namespace OptimizationXY.Charger.Services.Core
         // Rotating scan input
         public List<ScanFrame> ScanFrames { get; set; } = new();
 
+        // How rotation angles were assigned to the frames of the current scan.
+        public OptimizationXY.Charger.Services.Acquisition.RevolutionAngleResult? RevolutionAngles { get; set; }
+
         // Calibration
         public CalibrationResult? Calibration { get; set; }
 
@@ -201,6 +204,7 @@ namespace OptimizationXY.Charger.Services.Core
 
             TimingEntries.Clear();
             ScanFrames.Clear();
+            RevolutionAngles = null;
             PointCloud.Clear();
 
             LocalCenterlines.Clear();

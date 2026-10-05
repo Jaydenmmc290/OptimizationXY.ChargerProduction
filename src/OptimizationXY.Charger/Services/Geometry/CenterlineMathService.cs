@@ -115,6 +115,159 @@ public static class CenterlineMathService
     /// <param name="sliceThicknessMM">The thickness of each slice in millimeters.</param>
     /// <param name="minPointsPerSlice">The minimum number of valid points required per slice.</param>
     /// <returns>A list of LocalCenterlineSlice objects representing the fitted local centerline slices.</returns>
+    /// <summary>
+    /// Refines the global PCA axis so that it passes through the fitted centres
+    /// of the cross-sections.
+    ///
+    /// The PCA origin is the plain average of every surface point, which is
+    /// pulled toward whichever side of the block has more samples. A straight
+    /// line fitted through the per-slice circle centres is not affected by that,
+    /// so the shape analysis built on the centreline (radius field, ovality,
+    /// low-wood map, diameters) is measured from the true middle of the block.
+    /// The PCA result is returned unchanged when there are too few slices.
+    /// </summary>
+    public static CenterlineResult RefineAxisThroughSliceCenters(
+        CenterlineResult pcaAxis,
+        List<LocalCenterlineSlice> slices,
+        int minimumSlices = 10)
+    {
+        ArgumentNullException.ThrowIfNull(pcaAxis);
+
+        if (slices == null || slices.Count < minimumSlices)
+            return pcaAxis;
+
+        double meanZ = slices.Average(s => s.ZMM);
+        double meanX = slices.Average(s => s.CenterXMM);
+        double meanY = slices.Average(s => s.CenterYMM);
+
+        double sumZZ = 0.0;
+        double sumZX = 0.0;
+        double sumZY = 0.0;
+
+        foreach (LocalCenterlineSlice slice in slices)
+        {
+            double dz = slice.ZMM - meanZ;
+            sumZZ += dz * dz;
+            sumZX += dz * (slice.CenterXMM - meanX);
+            sumZY += dz * (slice.CenterYMM - meanY);
+        }
+
+        if (!double.IsFinite(sumZZ) || sumZZ < 1.0)
+            return pcaAxis;
+
+        // X and Y of the centreline change by this much per millimetre of Z.
+        double slopeX = sumZX / sumZZ;
+        double slopeY = sumZY / sumZZ;
+
+        double originZ = double.IsFinite(pcaAxis.OriginZ)
+            ? pcaAxis.OriginZ
+            : meanZ;
+
+        double originX = meanX + slopeX * (originZ - meanZ);
+        double originY = meanY + slopeY * (originZ - meanZ);
+
+        double length = Math.Sqrt(slopeX * slopeX + slopeY * slopeY + 1.0);
+
+        if (!double.IsFinite(originX) ||
+            !double.IsFinite(originY) ||
+            !double.IsFinite(length) ||
+            length <= 0.0)
+        {
+            return pcaAxis;
+        }
+
+        return new CenterlineResult
+        {
+            OriginX = originX,
+            OriginY = originY,
+            OriginZ = originZ,
+            DirectionX = slopeX / length,
+            DirectionY = slopeY / length,
+            DirectionZ = 1.0 / length
+        };
+    }
+
+    /// <summary>
+    /// Least-squares (algebraic) circle fit of one cross-section. Returns false
+    /// when the fit is degenerate so the caller can keep the centroid.
+    /// </summary>
+    private static bool TryFitCircleCenter(
+        List<Point3D> points,
+        double meanX,
+        double meanY,
+        out double centerX,
+        out double centerY)
+    {
+        centerX = meanX;
+        centerY = meanY;
+
+        int n = points.Count;
+        if (n < 6)
+            return false;
+
+        double suu = 0.0, suv = 0.0, svv = 0.0;
+        double su = 0.0, sv = 0.0;
+        double suz = 0.0, svz = 0.0, sz = 0.0;
+
+        foreach (Point3D p in points)
+        {
+            double u = p.X - meanX;
+            double v = p.Y - meanY;
+            double z = u * u + v * v;
+
+            suu += u * u;
+            suv += u * v;
+            svv += v * v;
+            su += u;
+            sv += v;
+            suz += u * z;
+            svz += v * z;
+            sz += z;
+        }
+
+        // Solve   | suu suv su | |A|   | suz |
+        //         | suv svv sv | |B| = | svz |     centre = mean + (A/2, B/2)
+        //         | su  sv  n  | |C|   | sz  |
+        double det =
+            suu * (svv * n - sv * sv) -
+            suv * (suv * n - sv * su) +
+            su * (suv * sv - svv * su);
+
+        double scale = Math.Max(1.0, suu + svv);
+        if (!double.IsFinite(det) || Math.Abs(det) < 1e-9 * scale * scale)
+            return false;
+
+        double detA =
+            suz * (svv * n - sv * sv) -
+            suv * (svz * n - sv * sz) +
+            su * (svz * sv - svv * sz);
+
+        double detB =
+            suu * (svz * n - sv * sz) -
+            suz * (suv * n - sv * su) +
+            su * (suv * sz - svz * su);
+
+        double fittedX = meanX + 0.5 * detA / det;
+        double fittedY = meanY + 0.5 * detB / det;
+
+        if (!double.IsFinite(fittedX) || !double.IsFinite(fittedY))
+            return false;
+
+        // A centre further from the centroid than the mean radius is not a
+        // believable fit for a log cross-section.
+        double meanRadius = Math.Sqrt(sz / n);
+        double shift = Math.Sqrt(
+            (fittedX - meanX) * (fittedX - meanX) +
+            (fittedY - meanY) * (fittedY - meanY));
+
+        if (shift > meanRadius)
+            return false;
+
+        centerX = fittedX;
+        centerY = fittedY;
+        return true;
+    }
+
     public static List<LocalCenterlineSlice> FitLocalCenterlines(
 List<Point3D> points,
 double sliceThicknessMM,
@@ -148,6 +301,20 @@ int minPointsPerSlice)
             double centerX = slicePoints.Average(p => p.X);
             double centerY = slicePoints.Average(p => p.Y);
             double centerZ = slicePoints.Average(p => p.Z);
+
+            // The plain average of surface points is pulled toward whichever side
+            // of the log has more samples (dropped frames, uneven coverage). A
+            // least-squares circle fit locates the centre from the shape instead.
+            if (TryFitCircleCenter(
+                    slicePoints,
+                    centerX,
+                    centerY,
+                    out double fittedX,
+                    out double fittedY))
+            {
+                centerX = fittedX;
+                centerY = fittedY;
+            }
 
             double meanRadius = slicePoints
                 .Select(p =>

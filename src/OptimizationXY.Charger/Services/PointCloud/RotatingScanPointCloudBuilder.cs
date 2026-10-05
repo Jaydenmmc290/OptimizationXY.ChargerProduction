@@ -110,7 +110,15 @@ public static class RotatingScanPointCloudBuilder
 
         // ------------------------------------------------------------
         // 2. Convert completed radius grid into 3D points.
+        //
+        // Every later stage treats Z = 0 as the TAIL end and maximum Z as
+        // the HEAD end. Image X runs left to right, so when the head camera
+        // is placed on the left of the concatenated image the axial
+        // coordinate must be measured from the right-hand edge.
         // ------------------------------------------------------------
+        bool headOnImageLeft =
+            settings.Acquisition.Concatenation.HeadOnLeft;
+
         var points = new List<Point3D>();
 
         for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
@@ -128,7 +136,9 @@ public static class RotatingScanPointCloudBuilder
                 if (!IsValidRadius(radius))
                     continue;
 
-                double z = (xColumns[xIndex] - globalMinX) / lengthPixelsPerMM;
+                double z = headOnImageLeft
+                    ? (globalMaxX - xColumns[xIndex]) / lengthPixelsPerMM
+                    : (xColumns[xIndex] - globalMinX) / lengthPixelsPerMM;
 
                 double x = radius * cos;
                 double y = radius * sin;
