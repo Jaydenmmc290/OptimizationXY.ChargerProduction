@@ -116,6 +116,78 @@ public static class CenterlineMathService
     /// <param name="minPointsPerSlice">The minimum number of valid points required per slice.</param>
     /// <returns>A list of LocalCenterlineSlice objects representing the fitted local centerline slices.</returns>
     /// <summary>
+    /// Refines the global PCA axis so that it passes through the fitted centres
+    /// of the cross-sections.
+    ///
+    /// The PCA origin is the plain average of every surface point, which is
+    /// pulled toward whichever side of the block has more samples. A straight
+    /// line fitted through the per-slice circle centres is not affected by that,
+    /// so the shape analysis built on the centreline (radius field, ovality,
+    /// low-wood map, diameters) is measured from the true middle of the block.
+    /// The PCA result is returned unchanged when there are too few slices.
+    /// </summary>
+    public static CenterlineResult RefineAxisThroughSliceCenters(
+        CenterlineResult pcaAxis,
+        List<LocalCenterlineSlice> slices,
+        int minimumSlices = 10)
+    {
+        ArgumentNullException.ThrowIfNull(pcaAxis);
+
+        if (slices == null || slices.Count < minimumSlices)
+            return pcaAxis;
+
+        double meanZ = slices.Average(s => s.ZMM);
+        double meanX = slices.Average(s => s.CenterXMM);
+        double meanY = slices.Average(s => s.CenterYMM);
+
+        double sumZZ = 0.0;
+        double sumZX = 0.0;
+        double sumZY = 0.0;
+
+        foreach (LocalCenterlineSlice slice in slices)
+        {
+            double dz = slice.ZMM - meanZ;
+            sumZZ += dz * dz;
+            sumZX += dz * (slice.CenterXMM - meanX);
+            sumZY += dz * (slice.CenterYMM - meanY);
+        }
+
+        if (!double.IsFinite(sumZZ) || sumZZ < 1.0)
+            return pcaAxis;
+
+        // X and Y of the centreline change by this much per millimetre of Z.
+        double slopeX = sumZX / sumZZ;
+        double slopeY = sumZY / sumZZ;
+
+        double originZ = double.IsFinite(pcaAxis.OriginZ)
+            ? pcaAxis.OriginZ
+            : meanZ;
+
+        double originX = meanX + slopeX * (originZ - meanZ);
+        double originY = meanY + slopeY * (originZ - meanZ);
+
+        double length = Math.Sqrt(slopeX * slopeX + slopeY * slopeY + 1.0);
+
+        if (!double.IsFinite(originX) ||
+            !double.IsFinite(originY) ||
+            !double.IsFinite(length) ||
+            length <= 0.0)
+        {
+            return pcaAxis;
+        }
+
+        return new CenterlineResult
+        {
+            OriginX = originX,
+            OriginY = originY,
+            OriginZ = originZ,
+            DirectionX = slopeX / length,
+            DirectionY = slopeY / length,
+            DirectionZ = 1.0 / length
+        };
+    }
+
+    /// <summary>
     /// Least-squares (algebraic) circle fit of one cross-section. Returns false
     /// when the fit is degenerate so the caller can keep the centroid.
     /// </summary>

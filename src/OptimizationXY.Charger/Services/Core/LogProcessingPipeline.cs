@@ -585,8 +585,20 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             CenterlineSweepAnalyzer.Analyze(  // Analyze the centerline sweep using the trimmed local centerline slices to
                 sweepSlices, settings.Sweep);                              // determine tail-head changes, bow, and other sweep characteristics
 
+        // The PCA axis is refined to pass through the fitted slice centres. All
+        // shape analysis is built on this centreline. Spindle moves are NOT
+        // measured from it: they are offsets from the machine origin (the
+        // current spindle axis at X = 0, Y = 0) to the selected axis.
+        var rawPcaAxis = _state.Centerline;
+
+        _state.Centerline =
+            CenterlineMathService.RefineAxisThroughSliceCenters(
+                rawPcaAxis,
+                sweepSlices);
+
         _state.DiagnosticsReport +=
             $"\r\nCENTERLINE ANALYSIS\r\n" +
+            $"Raw PCA Origin (point average): ({Inches(rawPcaAxis.OriginX):F3}, {Inches(rawPcaAxis.OriginY):F3}, {Inches(rawPcaAxis.OriginZ):F3}) in\r\n" +
             $"Global PCA Origin: ({Inches(_state.Centerline.OriginX):F3}, {Inches(_state.Centerline.OriginY):F3}, {Inches(_state.Centerline.OriginZ):F3}) in\r\n" +
             $"Global PCA Direction: ({_state.Centerline.DirectionX:F4}, {_state.Centerline.DirectionY:F4}, {_state.Centerline.DirectionZ:F4})\r\n" +
             $"Local Centerline Slices: {_state.LocalCenterlines.Count}\r\n" +
@@ -603,6 +615,24 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Local Z Range: {FormatLengthRange(minZ, maxZ)}\r\n" +
             $"Sweep Z Range After Trim: {FormatLengthRange(sweepMinZ, sweepMaxZ)}\r\n" +
             $"Local Avg Radius: {FormatLength(avgRadius)}\r\n";
+
+        // Where the block centreline sits relative to the machine origin
+        // (current spindle axis = 0, 0) at each end of the scanned length.
+        double centerlineDirectionZ =
+            Math.Abs(_state.Centerline.DirectionZ) > 1e-9
+                ? _state.Centerline.DirectionZ
+                : 1.0;
+        double centerlineSlopeX = _state.Centerline.DirectionX / centerlineDirectionZ;
+        double centerlineSlopeY = _state.Centerline.DirectionY / centerlineDirectionZ;
+        double centerlineTailX = _state.Centerline.OriginX + centerlineSlopeX * (minZ - _state.Centerline.OriginZ);
+        double centerlineTailY = _state.Centerline.OriginY + centerlineSlopeY * (minZ - _state.Centerline.OriginZ);
+        double centerlineHeadX = _state.Centerline.OriginX + centerlineSlopeX * (maxZ - _state.Centerline.OriginZ);
+        double centerlineHeadY = _state.Centerline.OriginY + centerlineSlopeY * (maxZ - _state.Centerline.OriginZ);
+
+        _state.DiagnosticsReport +=
+            "Block Centerline Relative To Machine Origin (spindle axis = 0, 0):\r\n" +
+            $"- Tail End X / Y: {FormatLength(centerlineTailX)} / {FormatLength(centerlineTailY)}\r\n" +
+            $"- Head End X / Y: {FormatLength(centerlineHeadX)} / {FormatLength(centerlineHeadY)}\r\n";
 
         _state.DiagnosticsReport +=
             $"\r\nCENTERLINE END-TO-END SWEEP\r\n" +
@@ -790,7 +820,9 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         if (_state.BinnedRadiusField == null || _state.BinnedRadiusField.Count == 0)
             throw new InvalidOperationException("Bin radius field first.");
 
-        int frameCount = _state.ScanFrames?.Count ?? 0;
+        // Only frames used for geometry count. Resting frames excluded from the
+        // revolution do not add angular coverage.
+        int frameCount = _state.ScanFrames?.Count(f => f.IsValid) ?? 0;
 
         int minAngleBins =
             frameCount >= 30 ? 30 :  // If there are 30 or more frames, require at least 30 angle bins per slice for ovality analysis
@@ -799,10 +831,40 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
             frameCount >= 8 ? 6 :  // If there are 8 or more frames, require at least 6 angle bins per slice for ovality analysis
             4;  // If there are fewer than 8 frames, require at least 4 angle bins per slice for ovality analysis
 
-        _state.Model.OvalityAnalysis =  // Analyze the binned radius field for ovality patterns using the specified minimum angle bins per slice
-            OvalityAnalyzer.Analyze(  // Call the OvalityAnalyzer to analyze the binned radius field for ovality patterns
-                _state.BinnedRadiusField,
-                minAngleBinsPerSlice: minAngleBins);  // Use the calculated minimum angle bins per slice based on the number of scan frames for ovality analysis
+        // Never demand more angular coverage for this report than the operator
+        // scan-quality gate demands for a usable scan.
+        double angleBinSizeDeg = _state.Settings.Geometry.RadiusFieldAngleBinSizeDeg;
+        if (angleBinSizeDeg > 0)
+        {
+            int expectedAngleBins = Math.Max(1, (int)Math.Round(360.0 / angleBinSizeDeg));
+            int operatorMinimumBins = Math.Max(
+                3,
+                (int)Math.Ceiling(
+                    expectedAngleBins *
+                    _state.Settings.OperatorView.MinimumAngularCoveragePercentPerSlice / 100.0));
+
+            minAngleBins = Math.Min(minAngleBins, operatorMinimumBins);
+        }
+
+        // Roundness is a report, not a positioning input. If no slice reaches
+        // the preferred coverage, analyse with what is available instead of
+        // failing the whole scan.
+        try
+        {
+            _state.Model.OvalityAnalysis =
+                OvalityAnalyzer.Analyze(
+                    _state.BinnedRadiusField,
+                    minAngleBinsPerSlice: minAngleBins);
+        }
+        catch (InvalidOperationException) when (minAngleBins > 6)
+        {
+            minAngleBins = Math.Max(6, minAngleBins / 2);
+
+            _state.Model.OvalityAnalysis =
+                OvalityAnalyzer.Analyze(
+                    _state.BinnedRadiusField,
+                    minAngleBinsPerSlice: minAngleBins);
+        }
 
         var o = _state.Model.OvalityAnalysis;  // Store the result of the ovality analysis in a local variable for easier access
 

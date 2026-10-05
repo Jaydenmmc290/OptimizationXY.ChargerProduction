@@ -46,6 +46,15 @@ All have defaults, so an existing `appsettings.json` keeps working unchanged.
   surface points.
 - Inscribed-geometry samples are placed at the centre of each angular bin.
 
+## Centreline and the machine origin
+
+- **Shape analysis** (radius field, roundness, low-wood map, diameters) is measured from the
+  block centreline: the PCA axis, refined so it passes through the circle-fit centre of each
+  slice. The report prints both the raw PCA origin and the refined one.
+- **Spindle moves** are measured from the machine origin, the current spindle axis at
+  X = 0, Y = 0. The report prints where the block centreline sits relative to that origin at
+  the tail and head ends, and the selected axis as an offset from the same origin.
+
 ## Repeatable positions (`InscribedGeometry.CenterlinePullWeight`)
 
 The largest inscribed cylinder is set by a few contact points, so many axes give almost

@@ -128,11 +128,19 @@ public static class InscribedGeometryOptimizer
 
         if (reference is not null)
         {
+            // Start the search inside the commissioned travel so a block that
+            // sits further off-axis than the spindles can move still produces
+            // the best reachable position instead of no candidates at all.
+            double startTailX = Math.Clamp(reference.TailXMM, -machineLimits.MaxTailMoveXMM, machineLimits.MaxTailMoveXMM);
+            double startTailY = Math.Clamp(reference.TailYMM, -machineLimits.MaxTailMoveYMM, machineLimits.MaxTailMoveYMM);
+            double startHeadX = Math.Clamp(reference.HeadXMM, -machineLimits.MaxHeadMoveXMM, machineLimits.MaxHeadMoveXMM);
+            double startHeadY = Math.Clamp(reference.HeadYMM, -machineLimits.MaxHeadMoveYMM, machineLimits.MaxHeadMoveYMM);
+
             // Tail = offset + sweep / 2, Head = offset - sweep / 2.
-            startOffsetXMM = (reference.TailXMM + reference.HeadXMM) / 2.0;
-            startOffsetYMM = (reference.TailYMM + reference.HeadYMM) / 2.0;
-            startSweepXMM = reference.TailXMM - reference.HeadXMM;
-            startSweepYMM = reference.TailYMM - reference.HeadYMM;
+            startOffsetXMM = (startTailX + startHeadX) / 2.0;
+            startOffsetYMM = (startTailY + startHeadY) / 2.0;
+            startSweepXMM = startTailX - startHeadX;
+            startSweepYMM = startTailY - startHeadY;
         }
 
         SearchPassResult coarse = Search(
