@@ -548,7 +548,7 @@ public partial class MainForm : Form
 
             AppendDiagnostics($"Tail camera connected: {tailSettings.ServerName} [{tailSettings.DeviceIndex}]");
 
-            
+
 
 
             _headCameraService.StartLive();
@@ -916,8 +916,8 @@ public partial class MainForm : Form
                     exposureAdjusted.Dispose();
                 }
             }
-           
-           
+
+
 
             lock (_livePreviewLock)
             {
@@ -1264,7 +1264,7 @@ public partial class MainForm : Form
     /// Creates a display-only normalized image.
     /// Never pass this Mat into the processing pipeline.
     /// </summary>
-     private static Mat CreateNormalizedDisplayFrame(Mat source)
+    private static Mat CreateNormalizedDisplayFrame(Mat source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -1379,7 +1379,7 @@ public partial class MainForm : Form
         tail.ServerName = discoveredTail.ServerName;
         tail.DeviceIndex = discoveredTail.DeviceIndex;
 
-       
+
     }
     /// <summary>
     /// Handles a camera frame event for the specified camera position. It checks if the application is disposing
@@ -1659,7 +1659,7 @@ string message)
         () => SaperaCameraDiscoveryService.Discover(),
 
                 ReconnectCamerasAsync = ReconnectCamerasForSetupAsync,
-               
+
                 CaptureCalibrationFramesAsync = CaptureCalibrationFramesAsync,
                 ShowHeadPreview = ShowHeadPreviewForSetup,
                 ShowTailPreview = ShowTailPreviewForSetup,
@@ -2126,35 +2126,20 @@ string message)
 
                 AppendDiagnostics("Saving results...");
 
-                // PERFORMANCE OPTIMIZATION: Run save and production readiness check in parallel to hide I/O latency.
-                // 
-                // Previous implementation (blocking):
-                //   1. Wait for SaveResults() to complete (file I/O, JSON serialization, image encoding) ~3.6s
-                //   2. Then perform production readiness checks (CPU-bound) ~0.1s
-                //   Total: ~3.7s sequential
-                //
-                // Optimized implementation (parallel):
-                //   1. Fire off SaveResultsAsync() on background thread
-                //   2. Simultaneously run production readiness checks on UI thread
-                //   3. Wait for both to complete
-                //   Total: ~max(3.6s I/O, 0.1s readiness) ≈ 3.6s (saves ~3.6s per scan)
-                //
-                // This is safe because:
-                // - Readiness checks read from PipelineState (completed before save starts)
-                // - Save doesn't modify shared state used by readiness checks
-                // - Exception handling is preserved (save failure still blocks PLC in production mode)
-
-                Task<string> saveTask = _processingCoordinator.SaveResultsAsync();
-
-                // Prepare production readiness checks while save I/O is happening in the background
-                ProductionReadinessReport readiness =
-                    _processingCoordinator.PrepareProductionCommand(
-                        _plcService?.IsConnected == true);
-
-                // Wait for the save to complete before allowing further operations
+                // Production readiness validates the saved run folder and its
+                // operator-quality, calibration, and camera-configuration
+                // snapshots. Saving and readiness therefore have a strict
+                // dependency and must not run in parallel.
                 try
                 {
-                    string savePath = await saveTask;
+                    string savePath =
+                        await _processingCoordinator.SaveResultsAsync();
+
+                    // Make the completed record explicit for the readiness
+                    // evaluator. This assignment is harmless if the save
+                    // service already stored the same folder.
+                    PipelineState.Instance.LastSavedRunFolder = savePath;
+
                     AppendDiagnostics($"Results saved: {savePath}");
                 }
                 catch (Exception saveEx)
@@ -2168,6 +2153,13 @@ string message)
                             saveEx);
                     }
                 }
+
+                // Build the payload and evaluate readiness only after the save
+                // has completed and LastSavedRunFolder points to the finished
+                // production record. This prevents stale pre-save BLOCK results.
+                ProductionReadinessReport readiness =
+                    _processingCoordinator.PrepareProductionCommand(
+                        _plcService?.IsConnected == true);
 
                 if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
                 {

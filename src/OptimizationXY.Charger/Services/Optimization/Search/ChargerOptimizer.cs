@@ -14,8 +14,8 @@ namespace OptimizationXY.Charger.Services.Optimization.Search;
 /// /// It evaluates candidate setups based on wane scores, defect penalties, and spindle movement, applying scoring settings to determine the best configuration.
 public static class ChargerOptimizer
 {
-    
- 
+
+
     public static ChargerOptimizationResult FindBestSetupCoarseToFine(
         List<BinnedRadiusFieldPoint> binnedRadiusField,
         List<RadiusDefectPatch> patches,
@@ -537,8 +537,26 @@ UsableRadiusSettings usableRadiusSettings)
         if (step <= 0)
             throw new InvalidOperationException("Range step must be greater than zero.");
 
-        for (double v = center - radius; v <= center + radius + 0.0001; v += step)
-            yield return Math.Round(v, 4);
+        radius = Math.Max(0.0, radius);
+
+        // Always retain the previous pass winner and search symmetrically
+        // around it. The lower-bound loop could omit the center during a fine
+        // pass when radius was not exactly divisible by step.
+        var values = new SortedSet<double>
+        {
+            Math.Round(center - radius, 4),
+            Math.Round(center, 4),
+            Math.Round(center + radius, 4)
+        };
+
+        for (double delta = step; delta < radius - 0.0001; delta += step)
+        {
+            values.Add(Math.Round(center - delta, 4));
+            values.Add(Math.Round(center + delta, 4));
+        }
+
+        foreach (double value in values)
+            yield return value;
     }
 
     private static void ValidateInputs(

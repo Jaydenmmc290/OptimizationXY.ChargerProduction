@@ -48,13 +48,19 @@ public static class SpindleAxisWaneOptimizer
                 {
                     double angleRad = p.AngleBinDeg * Math.PI / 180.0;
 
-                    double radialX = Math.Cos(angleRad);
-                    double radialY = Math.Sin(angleRad);
+                    // Reconstruct the measured surface point in the field's
+                    // coordinate frame, then measure its exact Euclidean
+                    // distance from the candidate spindle axis. The prior
+                    // r - axis dot u formula was only a first-order estimate.
+                    double surfaceX =
+                        p.MeanRadiusMM * Math.Cos(angleRad);
+                    double surfaceY =
+                        p.MeanRadiusMM * Math.Sin(angleRad);
 
-                    double spindleShiftAlongRadius =
-                        axisX * radialX + axisY * radialY;
+                    double dx = surfaceX - axisX;
+                    double dy = surfaceY - axisY;
 
-                    return p.MeanRadiusMM - spindleShiftAlongRadius;
+                    return Math.Sqrt(dx * dx + dy * dy);
                 })
                 .ToList();
 

@@ -188,11 +188,12 @@ public static class InscribedGeometryOptimizer
         Candidate? best = null;
         object lockObj = new();
         long tested = 0;
+        int maximumValidAngularBinsObserved = 0;
 
         List<double> offsetXValues = new(Range(centerOffsetXMM, radiusMM, stepMM));
 
-        Parallel.ForEach(offsetXValues, new ParallelOptions 
-        { 
+        Parallel.ForEach(offsetXValues, new ParallelOptions
+        {
             CancellationToken = token,
             MaxDegreeOfParallelism = Environment.ProcessorCount
         },
@@ -214,7 +215,12 @@ public static class InscribedGeometryOptimizer
                             offsetX,
                             offsetY,
                             sweepX,
-                            sweepY);
+                            sweepY,
+                            out int validAngularBins);
+
+                        UpdateMaximum(
+                            ref maximumValidAngularBinsObserved,
+                            validAngularBins);
 
                         System.Threading.Interlocked.Increment(ref tested);
 
@@ -234,7 +240,11 @@ public static class InscribedGeometryOptimizer
         if (best is null)
         {
             throw new InvalidOperationException(
-                $"No valid {kind} candidate had sufficient angular coverage.");
+                $"No valid {kind} candidate had sufficient angular coverage. " +
+                $"Required {settings.MinimumValidAngularBins} of " +
+                $"{settings.AngularBins} angular bins; best candidate had " +
+                $"{maximumValidAngularBinsObserved}. " +
+                $"Surface samples: {samples.Length}; candidates tested: {tested}.");
         }
 
         return new SearchPassResult
@@ -269,8 +279,11 @@ public static class InscribedGeometryOptimizer
         double offsetXMM,
         double offsetYMM,
         double sweepXMM,
-        double sweepYMM)
+        double sweepYMM,
+        out int validAngularBins)
     {
+        validAngularBins = 0;
+
         OptimizedSpindleMovement movement =
             SpindleMovementBuilder.BuildFromSweep(
                 offsetXMM,
@@ -287,7 +300,7 @@ public static class InscribedGeometryOptimizer
             samples,
             movement,
             settings.AngularBins,
-            out int validAngularBins);
+            out validAngularBins);
 
         if (validAngularBins < settings.MinimumValidAngularBins)
             return null;
@@ -325,6 +338,30 @@ public static class InscribedGeometryOptimizer
             SweepYMM = sweepYMM,
             Geometry = geometry
         };
+    }
+
+    /// <summary>
+    /// Atomically records the highest observed integer value during a
+    /// parallel search pass.
+    /// </summary>
+    private static void UpdateMaximum(
+        ref int target,
+        int candidate)
+    {
+        int current = System.Threading.Volatile.Read(ref target);
+
+        while (candidate > current)
+        {
+            int observed = System.Threading.Interlocked.CompareExchange(
+                ref target,
+                candidate,
+                current);
+
+            if (observed == current)
+                return;
+
+            current = observed;
+        }
     }
 
     /// <summary>
@@ -699,8 +736,27 @@ public static class InscribedGeometryOptimizer
             }
         }
 
-        return left.MaxSpindleMovementMM <
-               right.MaxSpindleMovementMM;
+        double movementDifference =
+            left.MaxSpindleMovementMM - right.MaxSpindleMovementMM;
+
+        if (Math.Abs(movementDifference) > 0.000001)
+            return movementDifference < 0.0;
+
+        // Parallel evaluation can discover exact ties in different orders.
+        // Apply a stable final order so the same input is repeatable.
+        int comparison = candidate.OffsetXMM.CompareTo(current.OffsetXMM);
+        if (comparison != 0)
+            return comparison < 0;
+
+        comparison = candidate.OffsetYMM.CompareTo(current.OffsetYMM);
+        if (comparison != 0)
+            return comparison < 0;
+
+        comparison = candidate.SweepXMM.CompareTo(current.SweepXMM);
+        if (comparison != 0)
+            return comparison < 0;
+
+        return candidate.SweepYMM < current.SweepYMM;
     }
 
     /// <summary>
@@ -752,12 +808,31 @@ public static class InscribedGeometryOptimizer
         double radius,
         double step)
     {
-        for (double value = center - radius;
-             value <= center + radius + 0.0001;
-             value += step)
+        if (step <= 0.0)
         {
-            yield return Math.Round(value, 4);
+            throw new InvalidOperationException(
+                "Geometry optimizer range step must be greater than zero.");
         }
+
+        radius = Math.Max(0.0, radius);
+
+        // Preserve the prior pass winner and search equal distances on both
+        // sides, even when radius is not an exact multiple of step.
+        var values = new SortedSet<double>
+        {
+            Math.Round(center - radius, 4),
+            Math.Round(center, 4),
+            Math.Round(center + radius, 4)
+        };
+
+        for (double delta = step; delta < radius - 0.0001; delta += step)
+        {
+            values.Add(Math.Round(center - delta, 4));
+            values.Add(Math.Round(center + delta, 4));
+        }
+
+        foreach (double value in values)
+            yield return value;
     }
 
     /// <summary>
@@ -848,6 +923,9 @@ public static class InscribedGeometryOptimizer
     /// <summary>
     /// Represents a candidate inscribed geometry configuration, including its offsets, sweeps, and the resulting geometry evaluation.
     /// </summary>
+
+
+
     private sealed class Candidate
     {
         public double OffsetXMM { get; init; }

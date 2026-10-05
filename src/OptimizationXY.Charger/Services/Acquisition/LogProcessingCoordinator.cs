@@ -158,7 +158,7 @@ public sealed class LogProcessingCoordinator
     }
 
 
-   
+
     private static void VerifyCaptureMatchesCalibration(
       ScannerLookupTable calibration,
       byte[]? headConfiguration,
@@ -169,7 +169,7 @@ public sealed class LogProcessingCoordinator
         ArgumentNullException.ThrowIfNull(acquisitionSettings);
         ArgumentNullException.ThrowIfNull(frames);
 
-       
+
 
         if (headConfiguration is not { Length: > 0 } ||
             tailConfiguration is not { Length: > 0 })
@@ -179,7 +179,7 @@ public sealed class LogProcessingCoordinator
                 "required to verify scanner calibration compatibility.");
         }
 
-      
+
 
         string currentGeometryHash =
             ScannerCalibrationCompatibility.ComputeAcquisitionGeometrySha256(
@@ -406,15 +406,12 @@ public sealed class LogProcessingCoordinator
     }
 
     /// <summary>
-    /// Asynchronously saves the current processing results on a background thread.
-    /// This allows production readiness checks and PLC operations to proceed in parallel with I/O operations.
-    /// 
-    /// PERFORMANCE OPTIMIZATION: This method enables a ~3.6s latency reduction by hiding file I/O 
-    /// (frame copying, JSON serialization, CSV writing, image encoding) behind the production readiness 
-    /// check phase. Since production readiness checks and save operations have no direct dependencies,
-    /// they can execute in parallel without affecting correctness.
-    /// 
-    /// The caller is responsible for awaiting this task before allowing the next scan cycle to proceed.
+    /// Asynchronously saves the current processing results on a background
+    /// thread so file I/O does not block the UI thread.
+    ///
+    /// The caller must await this task before evaluating production readiness
+    /// or sending a PLC payload. Readiness verifies LastSavedRunFolder and the
+    /// audit files written by this operation.
     /// </summary>
     /// <returns>A task that completes when the save operation finishes, returning the save folder path.</returns>
     public async Task<string> SaveResultsAsync()

@@ -92,8 +92,16 @@ namespace OptimizationXY.Charger.Services.Core
         public CenterlineSweepResult? CenterlineSweep { get; set; }
 
         // Radius field
+        // PCA-centerline-relative field used for shape diagnostics such as
+        // ovality and surface-defect analysis.
         public List<RadiusFieldPoint> RadiusField { get; set; } = new();
         public List<BinnedRadiusFieldPoint> BinnedRadiusField { get; set; } = new();
+
+        // Current-spindle-relative field used for every calculation that
+        // evaluates or selects a machine spindle position. In this frame the
+        // existing spindle axis is (0,0), matching PointCloud and peel math.
+        public List<RadiusFieldPoint> OptimizationRadiusField { get; set; } = new();
+        public List<BinnedRadiusFieldPoint> OptimizationBinnedRadiusField { get; set; } = new();
 
         // Defects
         public RadiusDefectMap? RadiusDefectMap { get; set; }
@@ -101,10 +109,10 @@ namespace OptimizationXY.Charger.Services.Core
         public DefectPatchAnalysis? DefectPatchAnalysis { get; set; }
 
         // Optimization
-      
+
         public AdaptiveScoringProfile? AdaptiveScoringProfile { get; set; }
 
-        
+
 
         public InscribedGeometryResult? LargestInscribedCylinder { get; set; }
         public InscribedGeometryResult? LargestInscribedOval { get; set; }
@@ -176,7 +184,7 @@ namespace OptimizationXY.Charger.Services.Core
             RadiusDefectMap = null;
             DefectPatchAnalysis = null;
             AdaptiveScoringProfile = null;
-            
+
             LargestInscribedCylinder = null;
             LargestInscribedOval = null;
             GeometryPeelComparison = null;
@@ -199,6 +207,8 @@ namespace OptimizationXY.Charger.Services.Core
             DisplayPointCloud.Clear();
             RadiusField.Clear();
             BinnedRadiusField.Clear();
+            OptimizationRadiusField.Clear();
+            OptimizationBinnedRadiusField.Clear();
             RadiusDefectPatches.Clear();
 
             Model = new LogGeometryModel();
