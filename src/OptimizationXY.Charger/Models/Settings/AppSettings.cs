@@ -213,6 +213,13 @@ public sealed class RotatingScanSettings
     public bool UseMeasuredRevolutionAngles { get; set; } = true;
 
     /// <summary>
+    /// Frames per camera still accepted after the PLC reports ScanComplete. The block finishes
+    /// its turn right around that signal, so the frame that closes the revolution can arrive just
+    /// after it. Anything beyond this allowance is the stationary block and is not captured.
+    /// </summary>
+    public int FramesAcceptedAfterScanComplete { get; set; } = 8;
+
+    /// <summary>
     /// How many laser pixels past the LARGEST measured calibration reference a radius may be
     /// extrapolated, by continuing the straight line through the two nearest references. Lets
     /// blocks slightly larger than the biggest reference be scanned without altering the

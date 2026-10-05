@@ -22,7 +22,8 @@ If the return to the starting profile cannot be found, the frames between rotati
 and rotation stop are divided evenly over 360 degrees and the readiness report shows a
 `Rotation coverage` warning.
 
-Frame intake also stops the moment the PLC reports ScanComplete.
+After the PLC reports ScanComplete only a few more frames per camera are accepted
+(`FramesAcceptedAfterScanComplete`); the rest are the stationary block and are not captured.
 
 ## Settings (`RotatingScan`)
 
@@ -35,6 +36,7 @@ All have defaults, so an existing `appsettings.json` keeps working unchanged.
 | `RevolutionClosureToleranceMM` | `1.5` | RMS match needed to accept the 360 degree frame |
 | `MinimumFramesPerRevolution` | `20` | Shortest revolution accepted |
 | `MaximumCalibrationExtrapolationPixels` | `15` | Laser pixels a radius may be extrapolated past the largest measured reference; `0` disables |
+| `FramesAcceptedAfterScanComplete` | `8` | Frames per camera still accepted after ScanComplete, so the frame that closes the revolution is not cut off |
 | `ReverseRotationDirection` | `false` | Set after the off-centre reference test if Y is mirrored |
 | `LaserAngleOffsetDeg` | `0` | Machine angle at which the laser strikes the log |
 

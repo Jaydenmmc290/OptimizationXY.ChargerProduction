@@ -631,8 +631,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
 
         _state.DiagnosticsReport +=
             "Block Centerline Relative To Machine Origin (spindle axis = 0, 0):\r\n" +
-            $"- Tail End X / Y: {FormatLength(centerlineTailX)} / {FormatLength(centerlineTailY)}\r\n" +
-            $"- Head End X / Y: {FormatLength(centerlineHeadX)} / {FormatLength(centerlineHeadY)}\r\n";
+            $"- Tail End X: {FormatLength(centerlineTailX)}\r\n" +
+            $"- Tail End Y: {FormatLength(centerlineTailY)}\r\n" +
+            $"- Head End X: {FormatLength(centerlineHeadX)}\r\n" +
+            $"- Head End Y: {FormatLength(centerlineHeadY)}\r\n";
 
         _state.DiagnosticsReport +=
             $"\r\nCENTERLINE END-TO-END SWEEP\r\n" +
@@ -2422,8 +2424,10 @@ BuildFinalSpindleRecommendation(
 
         string centerlineLines =
             geometry.CenterlineAnchorUsed
-                ? $"Fitted Centerline Tail X/Y: {FormatLength(geometry.CenterlineTailXMM)} / {FormatLength(geometry.CenterlineTailYMM)}\r\n" +
-                  $"Fitted Centerline Head X/Y: {FormatLength(geometry.CenterlineHeadXMM)} / {FormatLength(geometry.CenterlineHeadYMM)}\r\n" +
+                ? $"Fitted Centerline Tail X: {FormatLength(geometry.CenterlineTailXMM)}\r\n" +
+                  $"Fitted Centerline Tail Y: {FormatLength(geometry.CenterlineTailYMM)}\r\n" +
+                  $"Fitted Centerline Head X: {FormatLength(geometry.CenterlineHeadXMM)}\r\n" +
+                  $"Fitted Centerline Head Y: {FormatLength(geometry.CenterlineHeadYMM)}\r\n" +
                   $"Axis Distance From Fitted Centerline: {FormatLength(geometry.CenterlineDeviationMM)}\r\n"
                 : "Fitted Centerline Anchor: Not used\r\n";
 
@@ -3338,7 +3342,8 @@ double maxSpindleMovementMM)
         foreach (var entry in entries)
         {
             // Check if this is a per-frame timing entry (format: "Frame N - OpName")
-            if (entry.StepName.StartsWith("Frame ", StringComparison.OrdinalIgnoreCase))
+            // or, for frames loaded from a folder, "Frame_0001.png - OpName".
+            if (entry.StepName.StartsWith("Frame", StringComparison.OrdinalIgnoreCase))
             {
                 // Extract the operation name (everything after "Frame N - ")
                 int dashIndex = entry.StepName.IndexOf(" - ", StringComparison.Ordinal);

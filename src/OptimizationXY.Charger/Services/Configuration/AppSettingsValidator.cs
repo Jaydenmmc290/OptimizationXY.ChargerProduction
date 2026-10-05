@@ -219,6 +219,10 @@ public static class AppSettingsValidator
             settings.RotatingScan.MaximumCalibrationExtrapolationPixels > 40)
             throw new InvalidOperationException("MaximumCalibrationExtrapolationPixels must be between 0 and 40.");
 
+        if (settings.RotatingScan.FramesAcceptedAfterScanComplete < 0 ||
+            settings.RotatingScan.FramesAcceptedAfterScanComplete > 60)
+            throw new InvalidOperationException("FramesAcceptedAfterScanComplete must be between 0 and 60.");
+
         if (!double.IsFinite(settings.RotatingScan.LaserAngleOffsetDeg))
             throw new InvalidOperationException("LaserAngleOffsetDeg must be a finite number.");
     }
