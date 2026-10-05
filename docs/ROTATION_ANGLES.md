@@ -108,3 +108,22 @@ application log, but only these can stop a PLC write:
 Any other check that fails is shown as `[WARNING] ... NOT ENFORCED (would have blocked)` and
 logged as `ERROR (not enforced)` before the write. A failed result save is also logged and
 no longer stops the write. Set the setting to `false` to make every check blocking again.
+
+## Offline replay of a saved scan (development computer)
+
+The processing can be re-run on saved frames without cameras or a PLC:
+
+```
+OptimizationXY.Charger.exe --replay
+OptimizationXY.Charger.exe --replay "C:\path\to\Scan_0001"
+```
+
+In Visual Studio: project Properties, Debug, "Command line arguments": `--replay`.
+
+Pick a saved scan folder (it contains `Frames` and `scanner-calibration.json`) or any folder
+of frame images; if no calibration file is found beside the frames you are asked for
+`scanner-lookup-table.json`. The report is written into the chosen folder as
+`ReplayDiagnosticsReport_<time>.txt` and opened. Nothing is sent to the PLC or written to
+SQL. The `appsettings.json` on the computer running the replay is used, so copy the
+production file to `C:\ProgramData\OptimizationXY\Charger\Config` first when the result has
+to match production.
