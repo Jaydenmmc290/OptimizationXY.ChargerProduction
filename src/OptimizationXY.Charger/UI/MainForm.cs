@@ -658,7 +658,8 @@ public partial class MainForm : Form
         {
             // Stop taking frames immediately. Finishing the capture is asynchronous and
             // the cameras keep delivering frames of the now-stationary log until it completes.
-            _captureManager.StopFrameIntake();
+            _captureManager.StopFrameIntake(
+                PipelineState.Instance.Settings.RotatingScan.FramesAcceptedAfterScanComplete);
 
             AppendDiagnosticsThreadSafe(
                 $"[PLC] ScanComplete detected. Finishing capture with {_captureManager.HeadFrameCount} head and " +

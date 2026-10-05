@@ -20,6 +20,7 @@ public sealed class RotatingLogCaptureManager
 
     private bool _isCapturingActive;
     private bool _frameIntakeStopped;
+    private int _frameIntakeLimitPerCamera = int.MaxValue;
     private DateTime _captureStartTime;
     private int _droppedFrameCount;
     private string _currentLogId;
@@ -124,6 +125,7 @@ public sealed class RotatingLogCaptureManager
             _captureStartTime = DateTime.UtcNow;
             _isCapturingActive = true;
             _frameIntakeStopped = false;
+            _frameIntakeLimitPerCamera = int.MaxValue;
             _currentLogId = GenerateLogId();
             _headCameraConfigurationSnapshot =
                 headCameraConfigurationSnapshot.ToArray();
@@ -166,12 +168,15 @@ public sealed class RotatingLogCaptureManager
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <summary>
-    /// Stops accepting frames for the active capture without finishing it.
-    /// Called the moment the PLC reports ScanComplete so frames that arrive while
-    /// the capture is being finalized (the log is no longer turning) are not
-    /// added to the scan. These frames are not counted as dropped source frames.
+    /// Limits how many more frames the active capture accepts, without finishing it.
+    /// Called the moment the PLC reports ScanComplete. The block finishes its turn
+    /// right around that signal, so a few more frames per camera are still accepted
+    /// (they can contain the frame that closes the revolution); everything after
+    /// that is the stationary block and is not added to the scan. Frames turned
+    /// away here are not counted as dropped source frames.
     /// </summary>
-    public void StopFrameIntake()
+    /// <param name="additionalFramesPerCamera">Frames per camera still accepted after this call.</param>
+    public void StopFrameIntake(int additionalFramesPerCamera = 0)
     {
         lock (_captureLock)
         {
@@ -180,9 +185,17 @@ public sealed class RotatingLogCaptureManager
 
             _frameIntakeStopped = true;
 
+            int grace = Math.Max(0, additionalFramesPerCamera);
+            int currentFrames = Math.Max(_headFrames.Count, _tailFrames.Count);
+
+            _frameIntakeLimitPerCamera =
+                grace >= int.MaxValue - currentFrames
+                    ? int.MaxValue
+                    : currentFrames + grace;
+
             LogDiagnostics(
-                $"Frame intake stopped at ScanComplete with " +
-                $"{_headFrames.Count} head and {_tailFrames.Count} tail frames.");
+                $"ScanComplete received with {_headFrames.Count} head and {_tailFrames.Count} tail frames. " +
+                $"Accepting up to {grace} more frame(s) per camera.");
         }
     }
 
@@ -213,9 +226,17 @@ public sealed class RotatingLogCaptureManager
 
             if (_frameIntakeStopped)
             {
-                // ScanComplete has been received; later frames are not part of the scan.
-                frameArgs.Frame.Dispose();
-                return false;
+                int framesForThisCamera = position == CameraPosition.Head
+                    ? _headFrames.Count
+                    : _tailFrames.Count;
+
+                if (framesForThisCamera >= _frameIntakeLimitPerCamera)
+                {
+                    // ScanComplete has been received and the allowance is used;
+                    // later frames are not part of the scan.
+                    frameArgs.Frame.Dispose();
+                    return false;
+                }
             }
 
             // Check capture timeout
