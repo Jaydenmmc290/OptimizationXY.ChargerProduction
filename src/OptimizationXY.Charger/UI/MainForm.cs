@@ -2422,9 +2422,9 @@ string message)
             }
             AppendDiagnostics("============================================");
 
-            // Display the log overlay: the single side view of the block. The
+            // Display the log overlay: one view of the block from the head end. The
             // four-panel cross-section picture is still saved with the scan.
-            Mat? overlayForDisplay = state.LogSideViewOverlay ?? state.PointCloudOverlay;
+            Mat? overlayForDisplay = state.LogHeadEndViewOverlay ?? state.PointCloudOverlay;
 
             if (overlayForDisplay != null)
             {

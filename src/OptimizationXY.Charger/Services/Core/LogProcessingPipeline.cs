@@ -756,20 +756,20 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     _state.BinnedRadiusField,
     centerline: _state.Centerline);
 
-        // Single side view for the overlay box on the main form. Drawing must
+        // Single head-end view for the overlay box on the main form. Drawing must
         // never fail a scan, so a problem here only loses the picture.
-        _state.LogSideViewOverlay?.Dispose();
-        _state.LogSideViewOverlay = null;
+        _state.LogHeadEndViewOverlay?.Dispose();
+        _state.LogHeadEndViewOverlay = null;
 
         try
         {
-            _state.LogSideViewOverlay = LogSideViewOverlayBuilder.Build(
+            _state.LogHeadEndViewOverlay = LogHeadEndViewOverlayBuilder.Build(
                 _state.BinnedRadiusField,
                 _state.Centerline);
         }
         catch (Exception)
         {
-            _state.LogSideViewOverlay = null;
+            _state.LogHeadEndViewOverlay = null;
         }
 
         if (_state.BinnedRadiusField.Count == 0)
