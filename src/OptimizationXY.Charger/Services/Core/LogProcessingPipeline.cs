@@ -753,7 +753,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         _state.PointCloudOverlay?.Dispose();
         _state.PointCloudOverlay =
 RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Build a visual overlay of the tail, middle, and head sections of the log from the binned radius field
-    _state.BinnedRadiusField);
+    _state.BinnedRadiusField,
+    centerline: _state.Centerline);
 
         if (_state.BinnedRadiusField.Count == 0)
             throw new InvalidOperationException("Binned radius field returned no points.");
