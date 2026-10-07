@@ -818,6 +818,19 @@ public sealed class PlcIntegrationSettings
     public bool Enabled { get; set; } = true;
     public bool AutoStartCaptureOnScanStart { get; set; } = true;
     public bool AutoSendResultsAfterSave { get; set; } = true;
+
+    /// <summary>
+    /// When true, the result is written to the PLC as soon as it has been
+    /// calculated and checked, and the scan files and SQL record are saved
+    /// straight afterwards. The PLC write then no longer waits for the save.
+    /// The save still always happens, and the next scan is not processed until
+    /// it has finished. Set false to save first and send second.
+    ///
+    /// Ignored (save first) when Production.EnforceOnlyEssentialReadinessChecks
+    /// is false, because the full checks require the saved record before the
+    /// PLC write and a failed save must then stop it.
+    /// </summary>
+    public bool SendResultsBeforeSave { get; set; } = true;
     public bool RequireReadbackVerification { get; set; } = true;
     public bool RequireGoodQuality { get; set; } = true;
     public int ReadbackTimeoutMilliseconds { get; set; } = 5000;

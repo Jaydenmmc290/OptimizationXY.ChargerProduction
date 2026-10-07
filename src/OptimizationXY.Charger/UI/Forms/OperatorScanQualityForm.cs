@@ -16,6 +16,10 @@ public partial class OperatorScanQualityForm : Form
         ShowWaiting(new OperatorRuntimeStatus());
     }
 
+    // True while the screen still shows the result (or failure) of the block
+    // scanned before. Only touched on the UI thread.
+    private bool _previousBlockOnScreen;
+
     public void ShowWaiting(OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -35,6 +39,19 @@ public partial class OperatorScanQualityForm : Form
                 ScanQualityStatus.Capturing,
                 "SCANNING BLOCK",
                 $"Capturing rotating profile: {runtime.CapturedPairs} / {runtime.ExpectedPairs} frame pairs.");
+
+            // A new block is being scanned: clear the previous block's numbers
+            // and profile picture so the screen is empty until the new one is ready.
+            // This method is called for every frame during a capture, so the
+            // clearing is done once, on the first call after a result was shown.
+            if (_previousBlockOnScreen)
+            {
+                _previousBlockOnScreen = false;
+                ClearResultValues();
+                logProfileControl.SetProfile(null);
+                lblDetail.Text = "Scanning. The new log profile will appear when processing is complete.";
+            }
+
             lblFramesValue.Text = $"{runtime.CapturedPairs} / {runtime.ExpectedPairs}";
             UpdateRuntime(runtime);
         });
@@ -93,6 +110,7 @@ public partial class OperatorScanQualityForm : Form
                 ? $"Profile processing: {result.ProcessingSeconds:F2} s"
                 : "Profile processing complete";
             logProfileControl.SetProfile(result.ProfilePoints);
+            _previousBlockOnScreen = true;
             UpdateRuntime(runtime);
         });
     }
@@ -108,6 +126,7 @@ public partial class OperatorScanQualityForm : Form
                     ? "The scan could not be processed. Rescan the block."
                     : message);
             lblDetail.Text = "Do not use the current optimization result until a complete scan is obtained.";
+            _previousBlockOnScreen = true;
             UpdateRuntime(runtime);
         });
     }

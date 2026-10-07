@@ -50,55 +50,12 @@ public static class LookupTableInterpolator
                 $"Laser Y must be finite and between 0 and {table.ImageHeight - 1} for the active calibration.");
         }
 
-        List<LookupPoint> nearbyByX = [.. table.Points
-            .Where(point => Math.Abs(point.X - x) <= NearbyXWindowPixels)
-            .OrderBy(point => Math.Abs(point.X - x))
-            .Take(MaximumNearbyPoints)];
+        // The calibration bands for a column depend only on the calibration
+        // table, never on the frame, so they are worked out once per loaded
+        // table and reused for every frame of the scan.
+        CalibrationBand[] bands = GetColumnBands(table, x);
 
-        if (nearbyByX.Count < 2)
-        {
-            // Fallback: Get points from different bands, prioritizing band diversity over proximity
-            var pointsByBand = table.Points
-                .GroupBy(point => point.RadiusBandId > 0
-                    ? point.RadiusBandId
-                    : StableLegacyBandId(point.RadiusMM))
-                .ToList();
-
-            if (pointsByBand.Count < 2)
-            {
-                // Not enough bands in the entire table; use all closest points
-                List<LookupPoint> value = [.. table.Points
-                    .OrderBy(point => Math.Abs(point.X - x))
-                    .Take(MaximumNearbyPoints)];
-                nearbyByX = value;
-            }
-            else
-            {
-                // Get closest points from each band to ensure we have multiple bands
-                var pointsFromEachBand = pointsByBand
-                    .SelectMany(band => band
-                        .OrderBy(point => Math.Abs(point.X - x))
-                        .Take(MaximumNearbyPoints / pointsByBand.Count))
-                    .ToList();
-
-                nearbyByX = pointsFromEachBand.Count >= 2 
-                    ? pointsFromEachBand 
-                    : [.. table.Points
-                        .OrderBy(point => Math.Abs(point.X - x))
-                        .Take(MaximumNearbyPoints)];
-            }
-        }
-
-        List<CalibrationBand> bands = [.. nearbyByX
-            .GroupBy(point => point.RadiusBandId > 0
-                ? point.RadiusBandId
-                : StableLegacyBandId(point.RadiusMM))
-            .Select(group => new CalibrationBand(
-                LaserY: Median(group.Select(point => point.LaserY)),
-                RadiusMM: group.Average(point => point.RadiusMM)))
-            .OrderBy(band => band.LaserY)];
-
-        if (bands.Count < 2)
+        if (bands.Length < 2)
         {
             throw new InvalidOperationException(
                 "Lookup table needs at least two physical radius bands near the requested image column.");
@@ -177,7 +134,7 @@ public static class LookupTableInterpolator
         CalibrationBand lower = bands[0];
         CalibrationBand upper = bands[^1];
 
-        for (int index = 1; index < bands.Count; index++)
+        for (int index = 1; index < bands.Length; index++)
         {
             if (bands[index].LaserY >= clampedLaserY)
             {
@@ -200,6 +157,162 @@ public static class LookupTableInterpolator
                interpolation * (upper.RadiusMM - lower.RadiusMM);
     }
 
+
+    // ------------------------------------------------------------
+    // Per-column calibration bands (worked out once per loaded table)
+    // ------------------------------------------------------------
+
+    /// <summary>
+    /// Calibration bands of every image column of one calibration table. They
+    /// are all worked out together, once, the first time the table is used.
+    /// </summary>
+    private sealed class ColumnBandCache
+    {
+        public ColumnBandCache(ScannerLookupTable table)
+        {
+            Points = table.Points;
+            PointCount = table.Points.Count;
+            ImageWidth = table.ImageWidth;
+
+            // ExecutionAndPublication: when several frames ask at the same time,
+            // one of them builds the bands and the others wait for that result.
+            AllColumns = new Lazy<CalibrationBand[][]>(
+                () => BuildAllColumnBands(table),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+        }
+
+        public List<LookupPoint> Points { get; }
+        public int PointCount { get; }
+        public int ImageWidth { get; }
+        public Lazy<CalibrationBand[][]> AllColumns { get; }
+    }
+
+    // Keyed on the table object itself. The calibration file is read into a new
+    // table object for every scan, so every scan starts from an empty cache and
+    // can never use bands from a different or older calibration. A table that is
+    // no longer used is released together with its cache.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ScannerLookupTable, ColumnBandCache> BandCaches = new();
+
+    /// <summary>
+    /// Returns the calibration bands for one image column, ordered by laser Y.
+    /// The result is exactly what <see cref="BuildColumnBands"/> returns; it is
+    /// only remembered so the same table search is not repeated for every frame.
+    /// Safe to call from several threads at once.
+    /// </summary>
+    private static CalibrationBand[] GetColumnBands(
+        ScannerLookupTable table,
+        int x)
+    {
+        ColumnBandCache cache = BandCaches.GetValue(
+            table,
+            static key => new ColumnBandCache(key));
+
+        // If the table was given a different point list or size after the cache
+        // was created, the remembered bands no longer describe it. Start again.
+        if (!ReferenceEquals(cache.Points, table.Points) ||
+            cache.PointCount != table.Points.Count ||
+            cache.ImageWidth != table.ImageWidth)
+        {
+            cache = new ColumnBandCache(table);
+            BandCaches.AddOrUpdate(table, cache);
+        }
+
+        CalibrationBand[][] allColumns = cache.AllColumns.Value;
+
+        if (x >= 0 && x < allColumns.Length)
+        {
+            CalibrationBand[] bands = allColumns[x];
+
+            if (bands is not null)
+                return bands;
+        }
+
+        // Column not prepared (it could not be built ahead of time): work it out
+        // directly, exactly as before, so any error is raised here as it always was.
+        return BuildColumnBands(table, x);
+    }
+
+    /// <summary>
+    /// Works out the bands of every image column of a table. Columns are
+    /// independent, so they are built in parallel. A column that cannot be built
+    /// is left empty and is worked out directly when it is asked for.
+    /// </summary>
+    private static CalibrationBand[][] BuildAllColumnBands(ScannerLookupTable table)
+    {
+        int width = Math.Max(0, table.ImageWidth);
+        CalibrationBand[][] allColumns = new CalibrationBand[width][];
+
+        Parallel.For(0, width, x =>
+        {
+            try
+            {
+                allColumns[x] = BuildColumnBands(table, x);
+            }
+            catch (Exception)
+            {
+                // Left empty on purpose; see GetColumnBands.
+            }
+        });
+
+        return allColumns;
+    }
+
+    /// <summary>
+    /// Works out the calibration bands near one image column from the full
+    /// calibration table. This is the original, unchanged calculation.
+    /// </summary>
+    private static CalibrationBand[] BuildColumnBands(
+        ScannerLookupTable table,
+        int x)
+    {
+        List<LookupPoint> nearbyByX = [.. table.Points
+            .Where(point => Math.Abs(point.X - x) <= NearbyXWindowPixels)
+            .OrderBy(point => Math.Abs(point.X - x))
+            .Take(MaximumNearbyPoints)];
+
+        if (nearbyByX.Count < 2)
+        {
+            // Fallback: Get points from different bands, prioritizing band diversity over proximity
+            var pointsByBand = table.Points
+                .GroupBy(point => point.RadiusBandId > 0
+                    ? point.RadiusBandId
+                    : StableLegacyBandId(point.RadiusMM))
+                .ToList();
+
+            if (pointsByBand.Count < 2)
+            {
+                // Not enough bands in the entire table; use all closest points
+                List<LookupPoint> value = [.. table.Points
+                    .OrderBy(point => Math.Abs(point.X - x))
+                    .Take(MaximumNearbyPoints)];
+                nearbyByX = value;
+            }
+            else
+            {
+                // Get closest points from each band to ensure we have multiple bands
+                var pointsFromEachBand = pointsByBand
+                    .SelectMany(band => band
+                        .OrderBy(point => Math.Abs(point.X - x))
+                        .Take(MaximumNearbyPoints / pointsByBand.Count))
+                    .ToList();
+
+                nearbyByX = pointsFromEachBand.Count >= 2 
+                    ? pointsFromEachBand 
+                    : [.. table.Points
+                        .OrderBy(point => Math.Abs(point.X - x))
+                        .Take(MaximumNearbyPoints)];
+            }
+        }
+
+        return [.. nearbyByX
+            .GroupBy(point => point.RadiusBandId > 0
+                ? point.RadiusBandId
+                : StableLegacyBandId(point.RadiusMM))
+            .Select(group => new CalibrationBand(
+                LaserY: Median(group.Select(point => point.LaserY)),
+                RadiusMM: group.Average(point => point.RadiusMM)))
+            .OrderBy(band => band.LaserY)];
+    }
 
     /// <summary>
     /// Calculates a stable legacy band ID from a radius in millimeters.

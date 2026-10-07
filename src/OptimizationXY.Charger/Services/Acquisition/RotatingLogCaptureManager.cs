@@ -29,6 +29,14 @@ public sealed class RotatingLogCaptureManager
 
     public event EventHandler<string>? DiagnosticsMessage;
 
+    /// <summary>
+    /// Raised once when a capture is stopped by the capture manager itself
+    /// instead of by ScanComplete: it ran past the capture timeout or reached
+    /// the frame limit. The argument says what happened.
+    /// Handlers must not block: it is raised while the capture lock is held.
+    /// </summary>
+    public event EventHandler<string>? CaptureAborted;
+
     public RotatingLogCaptureManager(
         CameraAcquisitionSettings settings,
         DiagnosticsCollector diagnostics)
@@ -252,6 +260,10 @@ public sealed class RotatingLogCaptureManager
                     $"Forcibly stopping capture after {elapsedSeconds:F2}s. " +
                     $"Current frame counts: Head {_headFrames.Count}, Tail {_tailFrames.Count}. " +
                     $"This may indicate a missed or delayed ScanComplete signal.");
+                CaptureAborted?.Invoke(
+                    this,
+                    $"No PLC ScanComplete was received within the {_settings.CaptureTimeoutSeconds:F1} s capture timeout " +
+                    $"(head {_headFrames.Count} frames, tail {_tailFrames.Count} frames captured).");
                 return false;
             }
 
@@ -276,6 +288,10 @@ public sealed class RotatingLogCaptureManager
                     $"Frame count limit ({_settings.MaxFramesPerCamera}) reached for {position} camera. " +
                     $"Forcibly stopping capture. Current frame counts: Head {_headFrames.Count}, " +
                     $"Tail {_tailFrames.Count}. This may indicate stale buffered frames or missed ScanComplete signal.");
+                CaptureAborted?.Invoke(
+                    this,
+                    $"The {position} camera reached the frame limit ({_settings.MaxFramesPerCamera}) before a PLC ScanComplete was received " +
+                    $"(head {_headFrames.Count} frames, tail {_tailFrames.Count} frames captured).");
                 return false;
             }
 
@@ -485,6 +501,11 @@ public sealed class RotatingLogCaptureManager
                 $"Forcibly stopping capture. " +
                 $"Current frame counts: Head {_headFrames.Count}, Tail {_tailFrames.Count}. " +
                 $"This indicates a delayed or missed ScanComplete signal.");
+
+            CaptureAborted?.Invoke(
+                this,
+                $"No PLC ScanComplete was received within the {_settings.CaptureTimeoutSeconds:F1} s capture timeout " +
+                $"(head {_headFrames.Count} frames, tail {_tailFrames.Count} frames captured).");
         }
     }
 

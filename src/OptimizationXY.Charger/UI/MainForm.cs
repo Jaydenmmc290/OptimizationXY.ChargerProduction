@@ -422,10 +422,29 @@ public partial class MainForm : Form
             DisposePlcIntegration();
             _captureManager?.DiagnosticsMessage -=
                     CaptureManager_DiagnosticsMessage;
+            _captureManager?.CaptureAborted -=
+                    CaptureManager_CaptureAborted;
             _captureManager = null;
 
             _processingCoordinator?.DiagnosticsMessage -=
                     ProcessingCoordinator_DiagnosticsMessage;
+
+            // If a finished scan is still waiting for its PLC write, its save has
+            // not been started yet. Start it now so the scan record is not lost.
+            if (_processingCoordinator is not null &&
+                PipelineState.Instance.ResultSaveDeferredUntilAfterPlcWrite &&
+                !PipelineState.Instance.ResultSaveStarted)
+            {
+                _ = _processingCoordinator.SaveResultsAfterPlcWriteAsync();
+            }
+
+            // A block may still be saving (the save follows the PLC write). Give
+            // it time to finish so the last scan record is not cut short.
+            if (_processingCoordinator?.WaitForPendingSave(TimeSpan.FromSeconds(20)) == false)
+            {
+                Logger.Warn("The application closed before the last scan record finished saving.");
+            }
+
             _processingCoordinator = null;
 
             DisposePreviewForm(ref _headCameraForm);
@@ -478,6 +497,8 @@ public partial class MainForm : Form
 
         _captureManager.DiagnosticsMessage +=
             CaptureManager_DiagnosticsMessage;
+        _captureManager.CaptureAborted +=
+            CaptureManager_CaptureAborted;
 
         _processingCoordinator =
             new LogProcessingCoordinator();
@@ -700,7 +721,8 @@ public partial class MainForm : Form
             if (_currentState is not (
                 ApplicationState.CameraReady or
                 ApplicationState.Completed or
-                ApplicationState.Cancelled))
+                ApplicationState.Cancelled or
+                ApplicationState.ScanFailed))
             {
                 AppendDiagnostics(
                     $"[PLC] ScanStart ignored because application state is {_currentState}.");
@@ -1982,8 +2004,11 @@ string message)
                 _ => "The scan did not start. Check camera connections and PLC status before retrying."
             };
 
-            _operatorScanQualityForm?.ShowFailure(userFriendlyMessage, GetOperatorRuntimeStatus());
-            SetUIState(ApplicationState.Faulted);
+            FailScanAndGetReady(
+                "Starting the capture",
+                detailedError,
+                userFriendlyMessage,
+                ex);
         }
     }
 
@@ -2016,8 +2041,11 @@ string message)
         }
         catch (Exception ex)
         {
-            AppendDiagnostics($"Error stopping capture: {ex.Message}");
-            SetUIState(ApplicationState.Faulted);
+            FailScanAndGetReady(
+                "Stopping the capture",
+                $"Error stopping capture: {ex.Message}",
+                "The scan could not be stopped cleanly. Rescan the block.",
+                ex);
         }
     }
 
@@ -2037,10 +2065,31 @@ string message)
         if (_captureManager == null || _processingCoordinator == null)
             return;
 
+        // What this scan is doing right now, so a failure can say where it happened.
+        string stage = "Finishing the capture";
+
+        // True until this scan's frames have been taken out of the capture
+        // manager. After that, an active capture belongs to a NEWER scan and must
+        // not be cancelled by a failure of this one.
+        bool captureBelongsToThisScan = true;
+
         try
         {
             if (!_captureManager.IsCapturingActive)
+            {
+                // The capture manager already stopped this capture by itself
+                // (timeout or frame limit) but the screen still says Capturing:
+                // nobody has reported the failure yet, so do it here.
+                if (_currentState == ApplicationState.Capturing)
+                {
+                    FailScanAndGetReady(
+                        stage,
+                        "The capture had already been stopped (capture timeout or frame limit) when it was asked to finish.",
+                        "The scan was stopped before it completed. Rescan the block.");
+                }
+
                 return;
+            }
 
             bool productionMode =
                 PipelineState.Instance.Settings.Production.OperatingMode ==
@@ -2062,6 +2111,7 @@ string message)
                 int tailCount = _captureManager.TailFrameCount;
                 int pairCount = Math.Min(headCount, tailCount);
 
+                stage = "Waiting for the PLC ScanComplete signal";
                 lblBlock.Text = $"Block: {pairCount} pairs captured | Waiting for PLC ScanComplete";
                 _operatorScanQualityForm?.ShowWaitingForScanComplete(GetOperatorRuntimeStatus());
                 AppendDiagnostics(
@@ -2075,7 +2125,9 @@ string message)
 
             SetUIState(ApplicationState.CaptureComplete);
 
+            stage = "Collecting the captured frames";
             var completedCapture = _captureManager.FinishCapture();
+            captureBelongsToThisScan = false;
 
             // Keep managed frames enabled for the idle live preview.
             // FinishCapture removes the current capture from the active capture manager;
@@ -2102,6 +2154,7 @@ string message)
 
             try
             {
+                stage = "Processing the scan";
                 string diagnosticsReport = await _processingCoordinator.ProcessCompletedCaptureAsync(
                     completedCapture,
                     processingCancellation.Token);
@@ -2118,6 +2171,7 @@ string message)
 
                 _latestResult = PipelineState.Instance.FinalSpindleRecommendation;
 
+                stage = "Showing the results";
                 DisplayFinalResults();
 
                 OperatorScanQualityResult operatorResult =
@@ -2129,123 +2183,192 @@ string message)
 
                 SetUIState(ApplicationState.Completed);
 
-                AppendDiagnostics("Saving results...");
+                // Order of the last two steps. Sending first takes the save (files
+                // and SQL record) off the time the PLC waits for its positions.
+                // Saving first is kept whenever the full readiness checks are
+                // enforced, because a failed save must then stop the PLC write.
+                LogProcessingCoordinator saveCoordinator = _processingCoordinator;
+                AppSettings runSettings = PipelineState.Instance.Settings;
+                bool sendBeforeSave =
+                    runSettings.Plc.SendResultsBeforeSave &&
+                    runSettings.Production.EnforceOnlyEssentialReadinessChecks;
 
-                // Production readiness validates the saved run folder and its
-                // operator-quality, calibration, and camera-configuration
-                // snapshots. Saving and readiness therefore have a strict
-                // dependency and must not run in parallel.
-                try
+                PipelineState.Instance.ResultSaveDeferredUntilAfterPlcWrite = sendBeforeSave;
+
+                if (!sendBeforeSave)
                 {
-                    string savePath =
-                        await _processingCoordinator.SaveResultsAsync();
+                    stage = "Saving the results";
+                    AppendDiagnostics("Saving results...");
 
-                    // Make the completed record explicit for the readiness
-                    // evaluator. This assignment is harmless if the save
-                    // service already stored the same folder.
-                    PipelineState.Instance.LastSavedRunFolder = savePath;
-
-                    AppendDiagnostics($"Results saved: {savePath}");
-                }
-                catch (Exception saveEx)
-                {
-                    AppendDiagnostics($"Save failed: {saveEx.Message}");
-
-                    // With essential-only enforcement a failed save is logged and
-                    // reported, but it does not stop the PLC write.
-                    bool saveFailureBlocksPlc =
-                        productionMode &&
-                        !PipelineState.Instance.Settings.Production.EnforceOnlyEssentialReadinessChecks;
-
-                    if (!saveFailureBlocksPlc && productionMode)
+                    // Production readiness validates the saved run folder and its
+                    // operator-quality, calibration, and camera-configuration
+                    // snapshots. Saving and readiness therefore have a strict
+                    // dependency and must not run in parallel.
+                    try
                     {
-                        AppendDiagnostics(
-                            "ERROR: Production result saving failed. The scan audit record was not preserved. " +
-                            "Continuing to the PLC write because only essential checks are enforced.");
+                        string savePath =
+                            await _processingCoordinator.SaveResultsAsync();
+
+                        // Make the completed record explicit for the readiness
+                        // evaluator. This assignment is harmless if the save
+                        // service already stored the same folder.
+                        PipelineState.Instance.LastSavedRunFolder = savePath;
+
+                        AppendDiagnostics($"Results saved: {savePath}");
                     }
-
-                    if (saveFailureBlocksPlc)
+                    catch (Exception saveEx)
                     {
-                        throw new InvalidOperationException(
-                            "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
-                            saveEx);
-                    }
-                }
+                        AppendDiagnostics($"Save failed: {saveEx.Message}");
 
-                // Build the payload and evaluate readiness only after the save
-                // has completed and LastSavedRunFolder points to the finished
-                // production record. This prevents stale pre-save BLOCK results.
-                ProductionReadinessReport readiness =
-                    _processingCoordinator.PrepareProductionCommand(
-                        _plcService?.IsConnected == true);
+                        // With essential-only enforcement a failed save is logged and
+                        // reported, but it does not stop the PLC write.
+                        bool saveFailureBlocksPlc =
+                            productionMode &&
+                            !PipelineState.Instance.Settings.Production.EnforceOnlyEssentialReadinessChecks;
 
-                if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
-                {
-                    if (readiness.CanSendToPlc &&
-                        PipelineState.Instance.PlcPayload is not null &&
-                        _plcService is not null)
-                    {
-                        // Report any warnings even if we're proceeding
-                        var warningChecks = readiness.Checks
-                            .Where(c => c.Status == ProductionCheckStatus.Warning)
-                            .ToList();
-
-                        if (warningChecks.Count > 0)
-                        {
-                            AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
-                            foreach (var check in warningChecks)
-                            {
-                                AppendDiagnostics(
-                                    check.NotEnforced
-                                        ? $"  ✗ ERROR (not enforced): {check.Name}: {check.Message}"
-                                        : $"  ⚠ WARNING: {check.Name}: {check.Message}");
-                            }
-                        }
-
-                        AppendDiagnostics(
-                            "[PLC] Production checks passed. Sending restricted XY payloads...");
-
-                        var transmission = await _plcService.SendPayloadAsync(
-                            PipelineState.Instance.PlcPayload,
-                            processingCancellation.Token);
-
-                        LogProcessingCoordinator.RecordPlcTransmission(transmission);
-
-                        AppendDiagnostics(
-                            transmission.Success
-                                ? "[PLC] Result accepted by verified tag readback."
-                                : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
-                                  $"Verify machine state, sensors, and PLC configuration before retrying.");
-
-                        if (!transmission.Success && productionMode)
+                        if (!saveFailureBlocksPlc && productionMode)
                         {
                             AppendDiagnostics(
-                                "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
-                            SetUIState(ApplicationState.Faulted);
+                                "ERROR: Production result saving failed. The scan audit record was not preserved. " +
+                                "Continuing to the PLC write because only essential checks are enforced.");
                         }
-                    }
-                    else
-                    {
-                        AppendDiagnostics(
-                            $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
 
-                        // Provide detailed blocking reasons
-                        var blockingChecks = readiness.Checks
-                            .Where(c => c.Status == ProductionCheckStatus.Block)
-                            .ToList();
-
-                        foreach (var check in blockingChecks)
+                        if (saveFailureBlocksPlc)
                         {
-                            AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
+                            throw new InvalidOperationException(
+                                "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
+                                saveEx);
                         }
-
-                        if (productionMode)
-                            SetUIState(ApplicationState.Faulted);
                     }
                 }
                 else
                 {
-                    AppendDiagnostics("[PLC] Automatic result sending is disabled.");
+                    AppendDiagnostics(
+                        "Results will be saved immediately after the PLC write.");
+                }
+
+                // Everything from here to the end of the PLC write runs inside a
+                // try/finally so that, when sending first, the save is ALWAYS
+                // started afterwards: whether the write succeeded, was blocked,
+                // is disabled, was cancelled, or threw.
+                try
+                {
+                    // Build the payload and evaluate readiness. When saving first,
+                    // the save has completed and LastSavedRunFolder points to the
+                    // finished production record. When sending first, the
+                    // saved-record checks report "deferred" and are brought up to
+                    // date by the save that follows.
+                    stage = "Checking the result before the PLC write";
+                    ProductionReadinessReport readiness =
+                        _processingCoordinator.PrepareProductionCommand(
+                            _plcService?.IsConnected == true);
+
+                    if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
+                    {
+                        if (readiness.CanSendToPlc &&
+                            PipelineState.Instance.PlcPayload is not null &&
+                            _plcService is not null)
+                        {
+                            // Report any warnings even if we're proceeding
+                            var warningChecks = readiness.Checks
+                                .Where(c => c.Status == ProductionCheckStatus.Warning)
+                                .ToList();
+
+                            if (warningChecks.Count > 0)
+                            {
+                                AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
+                                foreach (var check in warningChecks)
+                                {
+                                    AppendDiagnostics(
+                                        check.NotEnforced
+                                            ? $"  ✗ ERROR (not enforced): {check.Name}: {check.Message}"
+                                            : $"  ⚠ WARNING: {check.Name}: {check.Message}");
+                                }
+                            }
+
+                            AppendDiagnostics(
+                                "[PLC] Production checks passed. Sending restricted XY payloads...");
+
+                            stage = "Writing the result to the PLC";
+                            var transmission = await _plcService.SendPayloadAsync(
+                                PipelineState.Instance.PlcPayload,
+                                processingCancellation.Token);
+
+                            LogProcessingCoordinator.RecordPlcTransmission(transmission);
+
+                            AppendDiagnostics(
+                                transmission.Success
+                                    ? "[PLC] Result accepted by verified tag readback."
+                                    : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
+                                      $"Verify machine state, sensors, and PLC configuration before retrying.");
+
+                            if (!transmission.Success && productionMode)
+                            {
+                                AppendDiagnostics(
+                                    "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
+
+                                FailScanAndGetReady(
+                                    stage,
+                                    $"The PLC write was not accepted: {transmission.Message}",
+                                    "The lathe did not accept the result. Rescan the block.",
+                                    exception: null,
+                                    cancelActiveCapture: false);
+                            }
+                        }
+                        else
+                        {
+                            AppendDiagnostics(
+                                $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
+
+                            // Provide detailed blocking reasons
+                            var blockingChecks = readiness.Checks
+                                .Where(c => c.Status == ProductionCheckStatus.Block)
+                                .ToList();
+
+                            foreach (var check in blockingChecks)
+                            {
+                                AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
+                            }
+
+                            if (productionMode)
+                            {
+                                // When the scan-quality gate is what blocked the
+                                // send, the operator screen already shows its own
+                                // RESCAN result with the reason, so it is left alone.
+                                bool blockedByScanQuality = blockingChecks.Any(check =>
+                                    string.Equals(check.Name, "Operator scan-quality gate", StringComparison.Ordinal));
+
+                                string blockedBy = blockingChecks.Count > 0
+                                    ? string.Join("; ", blockingChecks.Select(check => $"{check.Name}: {check.Message}"))
+                                    : "the PLC is not connected or no payload could be built";
+
+                                FailScanAndGetReady(
+                                    stage,
+                                    $"The result was NOT sent to the PLC. Blocked by: {blockedBy}",
+                                    blockedByScanQuality
+                                        ? null
+                                        : blockingChecks.Count > 0
+                                            ? $"The result was not sent to the lathe ({blockingChecks[0].Name}). Rescan the block."
+                                            : "The result was not sent to the lathe. Rescan the block.",
+                                    exception: null,
+                                    cancelActiveCapture: false);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        AppendDiagnostics("[PLC] Automatic result sending is disabled.");
+                    }
+                }
+                finally
+                {
+                    if (sendBeforeSave)
+                    {
+                        // Not awaited here on purpose: the scan cycle is finished
+                        // as far as the PLC is concerned. The coordinator holds the
+                        // next scan's processing until this save has completed.
+                        _ = SaveResultsAfterPlcWriteAsync(saveCoordinator);
+                    }
                 }
 
                 UpdateUIForState(_currentState);
@@ -2258,9 +2381,6 @@ string message)
         }
         catch (Exception ex)
         {
-            if (_captureManager?.IsCapturingActive == true)
-                _captureManager.CancelCapture();
-
             // Provide detailed, categorized error messages
             string detailedError = ex switch
             {
@@ -2280,13 +2400,11 @@ string message)
                     $"PROFILE PROCESSING FAILED: {ioe.Message}. The laser profile could not be extracted from the image. " +
                     $"Check laser alignment and camera focus.",
 
-                _ => $"PROCESSING FAILED: {ex.Message}"
+                TimeoutException =>
+                    $"PLC SCANCOMPLETE TIMEOUT: {ex.Message}",
+
+                _ => $"SCAN FAILED: {ex.Message}"
             };
-
-            AppendDiagnostics(detailedError);
-
-            // Log the full exception details for technical support
-            AppendDiagnostics($"[TECHNICAL] {ex.GetType().Name}: {ex.StackTrace}");
 
             string userMessage = ex switch
             {
@@ -2302,11 +2420,20 @@ string message)
                 InvalidOperationException ioe when ioe.Message.Contains("profile") =>
                     "Laser profile detection failed. Check laser alignment and try rescan.",
 
+                TimeoutException =>
+                    "The PLC did not report ScanComplete in time. Rescan the block.",
+
                 _ => "The block scan could not be processed. Check diagnostics and rescan the block."
             };
 
-            _operatorScanQualityForm?.ShowFailure(userMessage, GetOperatorRuntimeStatus());
-            SetUIState(ApplicationState.Faulted);
+            // Stop everything that belongs to this scan, report what failed and
+            // where, and go back to ready so the block can be scanned again.
+            FailScanAndGetReady(
+                stage,
+                detailedError,
+                userMessage,
+                ex,
+                cancelActiveCapture: captureBelongsToThisScan);
         }
         finally
         {
@@ -2321,6 +2448,219 @@ string message)
             Interlocked.Exchange(
                 ref _captureFinishRequested,
                 0);
+        }
+    }
+
+    /// <summary>
+    /// Saves the scan (files, SQL record and production audit record) after the
+    /// PLC write and reports the outcome in the diagnostics log.
+    ///
+    /// The save itself runs on a background thread. Nothing can be blocked by a
+    /// failure here because the PLC write has already happened, so a failure is
+    /// reported as an error for the operator and the log.
+    /// </summary>
+    /// <param name="coordinator">The processing coordinator that owns the save.</param>
+    private async Task SaveResultsAfterPlcWriteAsync(LogProcessingCoordinator? coordinator)
+    {
+        if (coordinator is null)
+            return;
+
+        try
+        {
+            AppendDiagnostics("Saving results...");
+
+            string savePath = await coordinator.SaveResultsAfterPlcWriteAsync();
+
+            AppendDiagnostics($"Results saved: {savePath}");
+        }
+        catch (Exception saveEx)
+        {
+            AppendDiagnostics(
+                $"ERROR: Save failed after the PLC write: {saveEx.Message}. " +
+                "The scan audit record for this block was not preserved.");
+        }
+    }
+
+    // ================================================================
+    // FAILED SCAN HANDLING
+    // ================================================================
+
+    /// <summary>
+    /// The one place a failed scan ends. It stops whatever is left of the scan,
+    /// writes what failed and at which step to the diagnostics log, tells the
+    /// lathe operator, and puts the application back in a state that accepts the
+    /// next PLC ScanStart so the block can be scanned again.
+    ///
+    /// Nothing is written to the PLC here. The pipeline data is left alone so a
+    /// save that is running or about to run still has it.
+    /// </summary>
+    /// <param name="stage">The step the scan was in when it failed.</param>
+    /// <param name="whatHappened">What went wrong, for the diagnostics log.</param>
+    /// <param name="operatorMessage">
+    /// Message for the lathe operator screen, or null to leave that screen as it is.
+    /// </param>
+    /// <param name="exception">The error that caused the failure, if there was one.</param>
+    /// <param name="cancelActiveCapture">
+    /// True when a capture that is still running belongs to the failed scan and
+    /// must be stopped. False when the failed scan has already handed its frames
+    /// over, so a capture running now is a newer scan and must be left alone.
+    /// </param>
+    private void FailScanAndGetReady(
+        string stage,
+        string whatHappened,
+        string? operatorMessage,
+        Exception? exception = null,
+        bool cancelActiveCapture = true)
+    {
+        if (_isDisposing || IsDisposed)
+            return;
+
+        // A newer scan may already be capturing (only possible when the failed
+        // scan had finished its own capture). It is not touched.
+        bool newerScanCapturing =
+            !cancelActiveCapture &&
+            _captureManager?.IsCapturingActive == true;
+
+        // 1. Stop what is left of the failed scan.
+        if (cancelActiveCapture && _captureManager is not null)
+        {
+            try
+            {
+                if (_captureManager.IsCapturingActive ||
+                    _captureManager.HeadFrameCount > 0 ||
+                    _captureManager.TailFrameCount > 0)
+                {
+                    _captureManager.CancelCapture();
+                }
+            }
+            catch (Exception cancelException)
+            {
+                AppendDiagnostics(
+                    $"[SCAN FAILED] The capture could not be cancelled cleanly: {cancelException.Message}");
+            }
+        }
+
+        // 2 and 3. Report it. A problem while reporting must never stop step 4,
+        // or the application would be left in a state that ignores ScanStart.
+        try
+        {
+            // 2. Say what failed and where.
+            AppendDiagnostics("==================== SCAN FAILED ====================");
+            AppendDiagnostics($"[SCAN FAILED] Step: {stage}");
+            AppendDiagnostics($"[SCAN FAILED] What happened: {whatHappened}");
+
+            if (exception is not null)
+            {
+                AppendDiagnostics(
+                    $"[SCAN FAILED] [TECHNICAL] {exception.GetType().Name}: {exception.Message}");
+                AppendDiagnostics(
+                    $"[SCAN FAILED] [TECHNICAL] {exception.StackTrace}");
+            }
+
+            if (newerScanCapturing)
+            {
+                AppendDiagnostics(
+                    "[SCAN FAILED] A new scan is already being captured, so it is left running.");
+                AppendDiagnostics("=====================================================");
+                return;
+            }
+
+            // 3. Tell the lathe operator.
+            if (!string.IsNullOrWhiteSpace(operatorMessage))
+            {
+                _operatorScanQualityForm?.ShowFailure(
+                    operatorMessage,
+                    GetOperatorRuntimeStatus());
+            }
+        }
+        catch (Exception reportException)
+        {
+            Logger.Warn(reportException, "The failed scan could not be fully reported.");
+        }
+
+        // 4. Go back to ready, if the scanner can actually scan.
+        bool headConnected = _headCameraService?.IsConnected == true;
+        bool tailConnected = _tailCameraService?.IsConnected == true;
+
+        bool canScanAgain =
+            headConnected &&
+            tailConnected &&
+            _captureManager is not null &&
+            _processingCoordinator is not null;
+
+        if (canScanAgain)
+        {
+            SetUIState(ApplicationState.ScanFailed);
+            AppendDiagnostics(
+                "[SCAN FAILED] The failed scan was stopped. Ready to scan the block again on the next PLC ScanStart.");
+        }
+        else
+        {
+            SetUIState(ApplicationState.Faulted);
+            AppendDiagnostics(
+                "[SCAN FAILED] NOT ready to rescan: " +
+                $"head camera {(headConnected ? "connected" : "NOT CONNECTED")}, " +
+                $"tail camera {(tailConnected ? "connected" : "NOT CONNECTED")}. " +
+                "Reconnect the cameras in Production Setup before scanning again.");
+        }
+
+        AppendDiagnostics("=====================================================");
+    }
+
+    /// <summary>
+    /// Handles a capture that the capture manager stopped by itself because the
+    /// PLC ScanComplete signal never arrived (capture timeout or frame limit).
+    /// The scan is stopped and reported as failed, and the application goes back
+    /// to ready for the next ScanStart.
+    /// </summary>
+    /// <param name="sender">The capture manager.</param>
+    /// <param name="message">What happened.</param>
+    private void CaptureManager_CaptureAborted(
+        object? sender,
+        string message)
+    {
+        if (_isDisposing || IsDisposed)
+            return;
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(
+                    new Action<object?, string>(
+                        CaptureManager_CaptureAborted),
+                    sender,
+                    message);
+            }
+            catch (InvalidOperationException)
+            {
+                // The form handle is being destroyed.
+            }
+
+            return;
+        }
+
+        // If the scan is already being finished (ScanComplete arrived at the last
+        // moment), that path owns it and reports any failure itself.
+        if (Interlocked.CompareExchange(ref _captureFinishRequested, 1, 0) != 0)
+            return;
+
+        if (_currentState != ApplicationState.Capturing)
+        {
+            Interlocked.Exchange(ref _captureFinishRequested, 0);
+            return;
+        }
+
+        try
+        {
+            FailScanAndGetReady(
+                "Capturing frames",
+                message,
+                "The scan was stopped before the lathe reported ScanComplete. Rescan the block.");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _captureFinishRequested, 0);
         }
     }
 
@@ -2544,6 +2884,14 @@ string message)
                 BtnStopCapture.Enabled = false;
                 break;
 
+            case ApplicationState.ScanFailed:
+                lblMode.Text = "Mode: Scan Failed - Ready to Rescan";
+                lblBlock.Text = "Block: Rescan needed";
+
+                BtnStartCapture.Enabled = ManualCaptureAllowed();
+                BtnStopCapture.Enabled = false;
+                break;
+
             case ApplicationState.Cancelled:
                 lblMode.Text = "Mode: Cancelled";
                 lblBlock.Text = "Block: Cancelled";
@@ -2559,7 +2907,8 @@ string message)
             state is ApplicationState.Idle or
                      ApplicationState.CameraReady or
                      ApplicationState.Completed or
-                     ApplicationState.Cancelled;
+                     ApplicationState.Cancelled or
+                     ApplicationState.ScanFailed;
     }
 
 
