@@ -64,6 +64,8 @@ public sealed class OperatorScanQualityAnalyzer
                 group => new SliceSummary(
                     ZMM: group.Average(cell => cell.ZBinMM),
                     RadiusMM: Median(group.Select(cell => cell.MedianRadiusMM)),
+                    MinRadiusMM: group.Min(cell => cell.MedianRadiusMM),
+                    MaxRadiusMM: group.Max(cell => cell.MedianRadiusMM),
                     AngularBinCount: group
                         .Select(cell => (int)Math.Round(cell.AngleBinDeg / angleBinDeg))
                         .Distinct()
@@ -107,10 +109,34 @@ public sealed class OperatorScanQualityAnalyzer
                 currentGapBins++;
             }
 
+            // Extra detail for the log profile picture: the narrowest and widest
+            // radius around the slice, and where the fitted block centreline sits
+            // relative to the spindle axis at this slice.
+            double minRadiusMM = hasSlice ? slice.MinRadiusMM : 0.0;
+            double maxRadiusMM = hasSlice ? slice.MaxRadiusMM : 0.0;
+
+            bool hasCenter = false;
+            double centerXMM = 0.0;
+            double centerYMM = 0.0;
+
+            var centerline = state.Centerline;
+            if (centerline is not null && Math.Abs(centerline.DirectionZ) > 1e-9)
+            {
+                double along = (zMM - centerline.OriginZ) / centerline.DirectionZ;
+                centerXMM = centerline.OriginX + centerline.DirectionX * along;
+                centerYMM = centerline.OriginY + centerline.DirectionY * along;
+                hasCenter = double.IsFinite(centerXMM) && double.IsFinite(centerYMM);
+            }
+
             profile.Add(new LogProfilePoint(
                 PositionInches: (zMM - minimumIndex * zBinMM) / 25.4,
                 RadiusInches: radiusMM / 25.4,
-                IsValid: isValid));
+                IsValid: isValid,
+                MinRadiusInches: minRadiusMM / 25.4,
+                MaxRadiusInches: maxRadiusMM / 25.4,
+                CenterXInches: hasCenter ? centerXMM / 25.4 : 0.0,
+                CenterYInches: hasCenter ? centerYMM / 25.4 : 0.0,
+                HasCenter: hasCenter));
         }
 
         largestGapBins = Math.Max(largestGapBins, currentGapBins);
@@ -273,5 +299,7 @@ public sealed class OperatorScanQualityAnalyzer
     private readonly record struct SliceSummary(
         double ZMM,
         double RadiusMM,
+        double MinRadiusMM,
+        double MaxRadiusMM,
         int AngularBinCount);
 }

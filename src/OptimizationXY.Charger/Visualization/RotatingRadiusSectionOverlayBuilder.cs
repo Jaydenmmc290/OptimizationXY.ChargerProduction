@@ -7,23 +7,53 @@ using OptimizationXY.Charger.Models.Geometry;
 namespace OptimizationXY.Charger.Visualization;
 
 /// <summary>
-/// Builds a visual overlay of the rotating radius section from binned field data.
+/// Builds the tail / middle / head cross-section picture of a scanned block.
+///
+/// The picture has four panels: one detailed cross-section each for the TAIL,
+/// MIDDLE and HEAD of the block, and one panel that overlays all three with a
+/// summary. Every cross-section is drawn as seen from the tail end of the block:
+/// right is toward the V's (+X), left is toward the lathe (-X), down is +Y and
+/// up is -Y. The centre of each panel is the fitted centreline of the block.
+///
+/// This is drawing only. It reads the binned radius field that the pipeline has
+/// already produced and adds no measurement work of its own.
 /// </summary>
 public static class RotatingRadiusSectionOverlayBuilder
 {
+    private const double MillimetersPerInch = 25.4;
+
+    private static readonly MCvScalar White = new(255, 255, 255);
+    private static readonly MCvScalar LightGray = new(185, 185, 185);
+    private static readonly MCvScalar MidGray = new(120, 120, 120);
+    private static readonly MCvScalar GridGray = new(55, 55, 55);
+    private static readonly MCvScalar PanelBorder = new(90, 90, 90);
+    private static readonly MCvScalar WidestColor = new(0, 215, 255);     // amber (BGR)
+    private static readonly MCvScalar NarrowestColor = new(255, 200, 120); // light blue (BGR)
+    private static readonly MCvScalar SpindleColor = new(0, 255, 255);    // yellow (BGR)
+
+    private static readonly MCvScalar TailColor = new(70, 70, 255);       // red (BGR)
+    private static readonly MCvScalar MiddleColor = new(70, 230, 70);     // green (BGR)
+    private static readonly MCvScalar HeadColor = new(255, 150, 60);      // blue (BGR)
 
     /// <summary>
-    /// Builds a visual overlay of the rotating radius section from binned field data.
+    /// Builds the four-panel tail / middle / head cross-section picture.
     /// </summary>
-    /// <param name="binnedField">The list of binned radius field points.</param>
-    /// <param name="width">The width of the resulting overlay image.</param>
-    /// <param name="height">The height of the resulting overlay image.</param>
-    /// <returns>A Mat object representing the visual overlay.</returns>
+    /// <param name="binnedField">Binned radius field measured from the fitted block centreline.</param>
+    /// <param name="width">Picture width in pixels.</param>
+    /// <param name="height">Picture height in pixels.</param>
+    /// <param name="centerline">
+    /// Fitted block centreline in the machine frame. When supplied, each panel also
+    /// marks where the spindle axis (machine origin) sits relative to the block centre.
+    /// </param>
     public static Mat BuildTailMiddleHeadFromBinnedField(
         List<BinnedRadiusFieldPoint> binnedField,
-        int width = 500,
-        int height = 500)
+        int width = 1000,
+        int height = 1000,
+        CenterlineResult? centerline = null)
     {
+        width = Math.Max(400, width);
+        height = Math.Max(400, height);
+
         Mat canvas = new(height, width, DepthType.Cv8U, 3);
         canvas.SetTo(new MCvScalar(0, 0, 0));
 
@@ -39,91 +69,87 @@ public static class RotatingRadiusSectionOverlayBuilder
         if (zBins.Count < 3)
             return canvas;
 
+        double minZ = zBins[0];
+        double maxZ = zBins[^1];
+
         double tailZ = zBins[(int)(zBins.Count * 0.15)];
         double midZ = zBins[(int)(zBins.Count * 0.50)];
         double headZ = zBins[(int)(zBins.Count * 0.85)];
 
-        double maxRadius = binnedField
-            .Where(p => p.MeanRadiusMM > 0)
-            .Max(p => p.MeanRadiusMM);
+        SectionData tail = BuildSection(binnedField, tailZ, minZ, "TAIL", "far from operator", TailColor, centerline);
+        SectionData middle = BuildSection(binnedField, midZ, minZ, "MIDDLE", "centre of block", MiddleColor, centerline);
+        SectionData head = BuildSection(binnedField, headZ, minZ, "HEAD", "operator side", HeadColor, centerline);
 
-        if (maxRadius <= 0)
+        double maxRadius = new[] { tail, middle, head }
+            .Select(section => section.MaxRadiusMM + section.SpindleOffsetMM)
+            .DefaultIfEmpty(1.0)
+            .Max();
+
+        if (!double.IsFinite(maxRadius) || maxRadius <= 0)
             maxRadius = 1.0;
 
-        int centerX = width / 2;
-        int centerY = height / 2;
+        int panelWidth = width / 2;
+        int panelHeight = height / 2;
 
-        double scale = Math.Min(width, height) * 0.40 / maxRadius;
+        // One scale for every panel so the three sections can be compared by eye.
+        double scale = Math.Min(panelWidth, panelHeight) * 0.30 / maxRadius;
 
-        DrawGrid(canvas, centerX, centerY, scale, maxRadius);
-
-        DrawSection(
+        DrawSectionPanel(canvas, new Rectangle(0, 0, panelWidth, panelHeight), tail, scale);
+        DrawSectionPanel(canvas, new Rectangle(panelWidth, 0, width - panelWidth, panelHeight), middle, scale);
+        DrawSectionPanel(canvas, new Rectangle(0, panelHeight, panelWidth, height - panelHeight), head, scale);
+        DrawSummaryPanel(
             canvas,
-            GetNearestSlice(binnedField, tailZ),
-            centerX,
-            centerY,
-            scale,
-            new MCvScalar(0, 0, 255),
-            "TAIL");
-
-        DrawSection(
-            canvas,
-            GetNearestSlice(binnedField, midZ),
-            centerX,
-            centerY,
-            scale,
-            new MCvScalar(0, 255, 0),
-            "MIDDLE");
-
-        DrawSection(
-            canvas,
-            GetNearestSlice(binnedField, headZ),
-            centerX,
-            centerY,
-            scale,
-            new MCvScalar(255, 0, 0),
-            "HEAD");
-
-        CvInvoke.Circle(
-            canvas,
-            new Point(centerX, centerY),
-            3,
-            new MCvScalar(255, 255, 255),
-            -1);
-
-        CvInvoke.PutText(
-            canvas,
-            "BINNED ROTATING SCAN CROSS-SECTIONS",
-            new Point(10, 20),
-            FontFace.HersheySimplex,
-            0.45,
-            new MCvScalar(255, 255, 255),
-            1);
-
-        CvInvoke.PutText(canvas, "TAIL", new Point(10, 45),
-            FontFace.HersheySimplex, 0.45,
-            new MCvScalar(0, 0, 255), 1);
-
-        CvInvoke.PutText(canvas, "MIDDLE", new Point(10, 65),
-            FontFace.HersheySimplex, 0.45,
-            new MCvScalar(0, 255, 0), 1);
-
-        CvInvoke.PutText(canvas, "HEAD", new Point(10, 85),
-            FontFace.HersheySimplex, 0.45,
-            new MCvScalar(255, 0, 0), 1);
+            new Rectangle(panelWidth, panelHeight, width - panelWidth, height - panelHeight),
+            binnedField,
+            zBins,
+            minZ,
+            maxZ,
+            tail,
+            middle,
+            head,
+            scale);
 
         return canvas;
     }
 
-    /// <summary>
-    /// Gets the nearest slice of binned radius field points for a given target Z value.
-    /// </summary>
-    /// <param name="field">The list of binned radius field points.</param>
-    /// <param name="targetZ">The target Z value to find the nearest slice for.</param>
-    /// <returns>A list of binned radius field points representing the nearest slice.</returns>
-    private static List<BinnedRadiusFieldPoint> GetNearestSlice(
+    // ------------------------------------------------------------
+    // Section data
+    // ------------------------------------------------------------
+
+    private sealed class SectionData
+    {
+        public string Name { get; init; } = string.Empty;
+        public string Note { get; init; } = string.Empty;
+        public MCvScalar Color { get; init; }
+        public double PositionFromTailMM { get; init; }
+
+        // Measured outline, ordered by angle. Angle in degrees, radius in mm.
+        public List<(double AngleDeg, double RadiusMM)> Outline { get; init; } = [];
+
+        public double MeanRadiusMM { get; init; }
+        public double MaxRadiusMM { get; init; }
+
+        public bool HasDiameters { get; init; }
+        public double WidestDiameterMM { get; init; }
+        public double WidestAngleDeg { get; init; }
+        public double NarrowestDiameterMM { get; init; }
+        public double NarrowestAngleDeg { get; init; }
+
+        // Spindle axis (machine origin) relative to the block centre, in mm.
+        public bool HasSpindleAxis { get; init; }
+        public double SpindleXMM { get; init; }
+        public double SpindleYMM { get; init; }
+        public double SpindleOffsetMM { get; init; }
+    }
+
+    private static SectionData BuildSection(
         List<BinnedRadiusFieldPoint> field,
-        double targetZ)
+        double targetZ,
+        double minZ,
+        string name,
+        string note,
+        MCvScalar color,
+        CenterlineResult? centerline)
     {
         double nearestZ = field
             .Select(p => p.ZBinMM)
@@ -131,179 +157,603 @@ public static class RotatingRadiusSectionOverlayBuilder
             .OrderBy(z => Math.Abs(z - targetZ))
             .First();
 
-        return [.. field
+        List<(double AngleDeg, double RadiusMM)> outline = [.. field
             .Where(p => Math.Abs(p.ZBinMM - nearestZ) < 0.001)
-            .Where(p => p.MeanRadiusMM > 0)
-            .OrderBy(p => p.AngleBinDeg)];
-    }
+            .Where(p => p.MeanRadiusMM > 0 && double.IsFinite(p.MeanRadiusMM))
+            .Select(p => (AngleDeg: NormalizeAngle(p.AngleBinDeg), RadiusMM: p.MeanRadiusMM))
+            .OrderBy(p => p.AngleDeg)];
 
-    /// <summary>
-    /// Draws a section of the binned radius field on the canvas.
-    /// </summary>
-    /// <param name="canvas">The canvas to draw on.</param>
-    /// <param name="slice">The slice of binned radius field points to draw.</param>
-    /// <param name="centerX">The X coordinate of the center of the overlay.</param>
-    /// <param name="centerY">The Y coordinate of the center of the overlay.</param>
-    /// <param name="scale">The scale factor for converting radius to screen coordinates.</param>
-    /// <param name="color">The color to use for drawing the section.</param>
-    /// <param name="label">The label for the section.</param>
-    private static void DrawSection(
-            Mat canvas,
-            List<BinnedRadiusFieldPoint> slice,
-            int centerX,
-            int centerY,
-            double scale,
-            MCvScalar color,
-            string label)
-    {
-        if (slice == null || slice.Count < 6)
-            return;
+        double meanRadius = outline.Count > 0 ? outline.Average(p => p.RadiusMM) : 0.0;
+        double maxRadius = outline.Count > 0 ? outline.Max(p => p.RadiusMM) : 0.0;
 
-        // Build visual-only points.
-        // This does not change the real binned field.
-        var points = BuildVisualSectionPoints(
-            slice,
-            centerX,
-            centerY,
-            scale,
-            normalAngleStepDeg: 10.0,
-            maxFillGapDeg: 30.0);
+        // Diameters: a radius paired with the radius measured 180 degrees opposite.
+        bool hasDiameters = false;
+        double widest = 0.0;
+        double widestAngle = 0.0;
+        double narrowest = double.MaxValue;
+        double narrowestAngle = 0.0;
 
-        if (points.Count < 6)
-            return;
-
-        // Draw visual points.
-        foreach (var p in points)
+        foreach (var point in outline)
         {
-            CvInvoke.Circle(
-                canvas,
-                p.Screen,
-                p.IsEstimated ? 1 : 2,
-                color,
-                -1);
-        }
-
-        // Draw connected visual outline.
-        for (int i = 1; i < points.Count; i++)
-        {
-            double gap = Math.Abs(points[i].Angle - points[i - 1].Angle);
-
-            if (gap <= 15.0)
-            {
-                CvInvoke.Line(
-                    canvas,
-                    points[i - 1].Screen,
-                    points[i].Screen,
-                    color,
-                    1);
-            }
-        }
-
-        double wrapGap = 360.0 - points.Last().Angle + points.First().Angle;
-
-        if (wrapGap <= 15.0)
-        {
-            CvInvoke.Line(
-                canvas,
-                points.Last().Screen,
-                points.First().Screen,
-                color,
-                1);
-        }
-    }
-
-    /// <summary>
-    /// Builds a list of visual section points from a slice of binned radius field points.
-    /// </summary>
-    /// <param name="slice">The slice of binned radius field points.</param>
-    /// <param name="centerX">The X coordinate of the center of the overlay.</param>
-    /// <param name="centerY">The Y coordinate of the center of the overlay.</param>
-    /// <param name="scale">The scale factor for converting radius to screen coordinates.</param>
-    /// <param name="normalAngleStepDeg">The normal angle step in degrees.</param>
-    /// <param name="maxFillGapDeg">The maximum fill gap in degrees.</param>
-    /// <returns>A list of visual section points.</returns>
-    private static List<(Point Screen, double Angle, double Radius, bool IsEstimated)> BuildVisualSectionPoints(
-List<BinnedRadiusFieldPoint> slice,
-int centerX,
-int centerY,
-double scale,
-double normalAngleStepDeg,
-double maxFillGapDeg)
-    {
-        var measured = slice
-            .Where(p => p.MeanRadiusMM > 0)
-            .OrderBy(p => p.AngleBinDeg)
-            .Select(p => new
-            {
-                Angle = NormalizeAngle(p.AngleBinDeg),
-                Radius = p.MeanRadiusMM
-            })
-            .OrderBy(p => p.Angle)
-            .ToList();
-
-        var visual = new List<(double Angle, double Radius, bool IsEstimated)>();
-
-        if (measured.Count == 0)
-            return [];
-
-        for (int i = 0; i < measured.Count; i++)
-        {
-            var current = measured[i];
-
-            visual.Add((current.Angle, current.Radius, false));
-
-            var next = i == measured.Count - 1
-                ? measured[0]
-                : measured[i + 1];
-
-            double nextAngle = next.Angle;
-
-            if (i == measured.Count - 1)
-                nextAngle += 360.0;
-
-            double gap = nextAngle - current.Angle;
-
-            // Only fill small missing gaps.
-            // Do not invent a large missing section.
-            if (gap <= normalAngleStepDeg || gap > maxFillGapDeg)
+            if (point.AngleDeg >= 180.0)
                 continue;
 
-            int missingSteps = (int)Math.Round(gap / normalAngleStepDeg) - 1;
+            double oppositeAngle = point.AngleDeg + 180.0;
+            double oppositeRadius = double.NaN;
+            double bestDifference = 6.0; // degrees
 
-            for (int step = 1; step <= missingSteps; step++)
+            foreach (var candidate in outline)
             {
-                double t = (double)step / (missingSteps + 1);
+                double difference = Math.Abs(candidate.AngleDeg - oppositeAngle);
+                if (difference < bestDifference)
+                {
+                    bestDifference = difference;
+                    oppositeRadius = candidate.RadiusMM;
+                }
+            }
 
-                double filledAngle = current.Angle + normalAngleStepDeg * step;
-                double filledRadius = current.Radius + (next.Radius - current.Radius) * t;
+            if (double.IsNaN(oppositeRadius))
+                continue;
 
-                visual.Add((NormalizeAngle(filledAngle), filledRadius, true));
+            double diameter = point.RadiusMM + oppositeRadius;
+            hasDiameters = true;
+
+            if (diameter > widest)
+            {
+                widest = diameter;
+                widestAngle = point.AngleDeg;
+            }
+
+            if (diameter < narrowest)
+            {
+                narrowest = diameter;
+                narrowestAngle = point.AngleDeg;
             }
         }
 
-        return [.. visual
-            .OrderBy(p => p.Angle)
-            .Select(p =>
+        bool hasSpindle = false;
+        double spindleX = 0.0;
+        double spindleY = 0.0;
+
+        if (centerline is not null && Math.Abs(centerline.DirectionZ) > 1e-9)
+        {
+            double along = (nearestZ - centerline.OriginZ) / centerline.DirectionZ;
+            double blockCenterX = centerline.OriginX + centerline.DirectionX * along;
+            double blockCenterY = centerline.OriginY + centerline.DirectionY * along;
+
+            if (double.IsFinite(blockCenterX) && double.IsFinite(blockCenterY))
             {
-                double theta = p.Angle * Math.PI / 180.0;
+                // The panel is centred on the block, so the machine origin sits at
+                // minus the block centre.
+                spindleX = -blockCenterX;
+                spindleY = -blockCenterY;
+                hasSpindle = true;
+            }
+        }
 
-                int x = centerX + (int)(p.Radius * Math.Cos(theta) * scale);
-                int y = centerY - (int)(p.Radius * Math.Sin(theta) * scale);
+        return new SectionData
+        {
+            Name = name,
+            Note = note,
+            Color = color,
+            PositionFromTailMM = nearestZ - minZ,
+            Outline = outline,
+            MeanRadiusMM = meanRadius,
+            MaxRadiusMM = maxRadius,
+            HasDiameters = hasDiameters,
+            WidestDiameterMM = hasDiameters ? widest : 0.0,
+            WidestAngleDeg = widestAngle,
+            NarrowestDiameterMM = hasDiameters ? narrowest : 0.0,
+            NarrowestAngleDeg = narrowestAngle,
+            HasSpindleAxis = hasSpindle,
+            SpindleXMM = spindleX,
+            SpindleYMM = spindleY,
+            SpindleOffsetMM = hasSpindle
+                ? Math.Sqrt(spindleX * spindleX + spindleY * spindleY)
+                : 0.0
+        };
+    }
 
-                return (
-                    Screen: new Point(x, y),
-                     p.Angle,
-                     p.Radius,
-                     p.IsEstimated
-                );
-            })];
+    // ------------------------------------------------------------
+    // Panels
+    // ------------------------------------------------------------
+
+    private static void DrawSectionPanel(
+        Mat canvas,
+        Rectangle panel,
+        SectionData section,
+        double scale)
+    {
+        CvInvoke.Rectangle(canvas, panel, PanelBorder, 1);
+
+        int centerX = panel.Left + panel.Width / 2;
+        int centerY = panel.Top + panel.Height / 2 - 6;
+
+        DrawGrid(canvas, panel, centerX, centerY, scale, section.MaxRadiusMM + section.SpindleOffsetMM);
+
+        // Title block.
+        Text(canvas, section.Name, panel.Left + 12, panel.Top + 26, 0.8, section.Color, 2);
+        Text(
+            canvas,
+            $"({section.Note})  {Inches(section.PositionFromTailMM):F1} in from tail",
+            panel.Left + 12,
+            panel.Top + 46,
+            0.42,
+            LightGray);
+
+        if (section.Outline.Count < 6)
+        {
+            Text(canvas, "Not enough data for this section", panel.Left + 12, centerY, 0.5, LightGray);
+            return;
+        }
+
+        DrawFill(canvas, section, centerX, centerY, scale);
+        DrawOutline(canvas, section, centerX, centerY, scale, thickness: 2, drawPoints: true);
+
+        if (section.HasDiameters)
+        {
+            // Largest diameter: dotted line across the block through its centre.
+            DrawDiameter(
+                canvas,
+                centerX,
+                centerY,
+                scale,
+                section.WidestAngleDeg,
+                section.MaxRadiusMM * 1.08,
+                WidestColor,
+                dashPixels: 4,
+                gapPixels: 5,
+                thickness: 2);
+
+            DrawDiameter(
+                canvas,
+                centerX,
+                centerY,
+                scale,
+                section.NarrowestAngleDeg,
+                section.MaxRadiusMM * 1.08,
+                NarrowestColor,
+                dashPixels: 10,
+                gapPixels: 6,
+                thickness: 1);
+        }
+
+        // Block centre (fitted centreline).
+        CvInvoke.Circle(canvas, new Point(centerX, centerY), 4, White, -1, LineType.AntiAlias);
+
+        // Spindle axis (machine origin).
+        if (section.HasSpindleAxis)
+        {
+            int spindleX = centerX + (int)Math.Round(section.SpindleXMM * scale);
+            int spindleY = centerY + (int)Math.Round(section.SpindleYMM * scale);
+
+            CvInvoke.Line(canvas, new Point(spindleX - 8, spindleY), new Point(spindleX + 8, spindleY), SpindleColor, 2, LineType.AntiAlias);
+            CvInvoke.Line(canvas, new Point(spindleX, spindleY - 8), new Point(spindleX, spindleY + 8), SpindleColor, 2, LineType.AntiAlias);
+            CvInvoke.Circle(canvas, new Point(spindleX, spindleY), 10, SpindleColor, 1, LineType.AntiAlias);
+        }
+
+        // Numbers.
+        int textX = panel.Left + 12;
+        int textY = panel.Bottom - 58;
+
+        Text(
+            canvas,
+            $"Average diameter: {Inches(section.MeanRadiusMM * 2.0):F2} in",
+            textX,
+            textY,
+            0.45,
+            White);
+
+        if (section.HasDiameters)
+        {
+            Text(
+                canvas,
+                $"Largest: {Inches(section.WidestDiameterMM):F2} in (dotted)   " +
+                $"Smallest: {Inches(section.NarrowestDiameterMM):F2} in (dashed)",
+                textX,
+                textY + 18,
+                0.42,
+                WidestColor);
+
+            Text(
+                canvas,
+                $"Out of round: {Inches(section.WidestDiameterMM - section.NarrowestDiameterMM):F2} in",
+                textX,
+                textY + 36,
+                0.42,
+                LightGray);
+        }
+
+        if (section.HasSpindleAxis)
+        {
+            Text(
+                canvas,
+                $"Block centre from spindle axis:  X {Inches(-section.SpindleXMM):+0.00;-0.00} in   " +
+                $"Y {Inches(-section.SpindleYMM):+0.00;-0.00} in",
+                textX,
+                textY + 52,
+                0.4,
+                SpindleColor);
+        }
+    }
+
+    private static void DrawSummaryPanel(
+        Mat canvas,
+        Rectangle panel,
+        List<BinnedRadiusFieldPoint> field,
+        List<double> zBins,
+        double minZ,
+        double maxZ,
+        SectionData tail,
+        SectionData middle,
+        SectionData head,
+        double scale)
+    {
+        CvInvoke.Rectangle(canvas, panel, PanelBorder, 1);
+
+        Text(canvas, "ALL THREE SECTIONS", panel.Left + 12, panel.Top + 26, 0.7, White, 2);
+        Text(canvas, "View from the tail end of the block", panel.Left + 12, panel.Top + 46, 0.42, LightGray);
+
+        // Smaller overlay of the three outlines on the right-hand side of the panel.
+        double overlayScale = scale * 0.62;
+        int centerX = panel.Left + (int)(panel.Width * 0.66);
+        int centerY = panel.Top + (int)(panel.Height * 0.42);
+
+        double largestRadius = new[] { tail, middle, head }.Max(section => section.MaxRadiusMM);
+        DrawGrid(canvas, panel, centerX, centerY, overlayScale, largestRadius, drawAxisLabels: false, clipToRadius: true);
+
+        foreach (SectionData section in new[] { tail, middle, head })
+        {
+            if (section.Outline.Count >= 6)
+                DrawOutline(canvas, section, centerX, centerY, overlayScale, thickness: 2, drawPoints: false);
+        }
+
+        CvInvoke.Circle(canvas, new Point(centerX, centerY), 3, White, -1, LineType.AntiAlias);
+
+        // Legend.
+        int legendX = panel.Left + 12;
+        int legendY = panel.Top + 78;
+
+        LegendLine(canvas, legendX, legendY, TailColor, "TAIL  - far from operator");
+        LegendLine(canvas, legendX, legendY + 20, MiddleColor, "MIDDLE");
+        LegendLine(canvas, legendX, legendY + 40, HeadColor, "HEAD  - operator side");
+
+        DrawDotted(canvas, new Point(legendX, legendY + 62), new Point(legendX + 26, legendY + 62), WidestColor, 4, 5, 2);
+        Text(canvas, "Largest diameter", legendX + 34, legendY + 66, 0.4, WidestColor);
+
+        DrawDotted(canvas, new Point(legendX, legendY + 82), new Point(legendX + 26, legendY + 82), NarrowestColor, 10, 6, 1);
+        Text(canvas, "Smallest diameter", legendX + 34, legendY + 86, 0.4, NarrowestColor);
+
+        CvInvoke.Circle(canvas, new Point(legendX + 13, legendY + 102), 4, White, -1, LineType.AntiAlias);
+        Text(canvas, "Block centre (fitted centreline)", legendX + 34, legendY + 106, 0.4, White);
+
+        CvInvoke.Line(canvas, new Point(legendX + 6, legendY + 122), new Point(legendX + 20, legendY + 122), SpindleColor, 2, LineType.AntiAlias);
+        CvInvoke.Line(canvas, new Point(legendX + 13, legendY + 115), new Point(legendX + 13, legendY + 129), SpindleColor, 2, LineType.AntiAlias);
+        Text(canvas, "Spindle axis (machine 0, 0)", legendX + 34, legendY + 126, 0.4, SpindleColor);
+
+        // Whole-block numbers.
+        var sliceDiameters = field
+            .Where(p => p.MeanRadiusMM > 0 && double.IsFinite(p.MeanRadiusMM))
+            .GroupBy(p => p.ZBinMM)
+            .Select(group => new
+            {
+                Z = group.Key,
+                DiameterMM = group.Average(p => p.MeanRadiusMM) * 2.0,
+                Count = group.Count()
+            })
+            .Where(slice => slice.Count >= 12)
+            .ToList();
+
+        int textX = panel.Left + 12;
+        int textY = panel.Bottom - 112;
+
+        Text(canvas, "WHOLE BLOCK", textX, textY, 0.5, White, 2);
+        Text(
+            canvas,
+            $"Scanned length: {Inches(maxZ - minZ):F1} in   ({zBins.Count} slices)",
+            textX,
+            textY + 20,
+            0.42,
+            LightGray);
+
+        if (sliceDiameters.Count > 0)
+        {
+            var largest = sliceDiameters.OrderByDescending(slice => slice.DiameterMM).First();
+            var smallest = sliceDiameters.OrderBy(slice => slice.DiameterMM).First();
+
+            Text(
+                canvas,
+                $"Largest average diameter: {Inches(largest.DiameterMM):F2} in at {Inches(largest.Z - minZ):F1} in from tail",
+                textX,
+                textY + 38,
+                0.42,
+                WidestColor);
+
+            Text(
+                canvas,
+                $"Smallest average diameter: {Inches(smallest.DiameterMM):F2} in at {Inches(smallest.Z - minZ):F1} in from tail",
+                textX,
+                textY + 56,
+                0.42,
+                NarrowestColor);
+
+            Text(
+                canvas,
+                $"Average diameter  tail {Inches(tail.MeanRadiusMM * 2.0):F2}   " +
+                $"middle {Inches(middle.MeanRadiusMM * 2.0):F2}   head {Inches(head.MeanRadiusMM * 2.0):F2} in",
+                textX,
+                textY + 74,
+                0.42,
+                LightGray);
+        }
+
+        Text(
+            canvas,
+            "Right = toward V's (+X)   Left = toward lathe (-X)   Down = +Y   Up = -Y",
+            textX,
+            textY + 96,
+            0.38,
+            MidGray);
+    }
+
+    // ------------------------------------------------------------
+    // Drawing helpers
+    // ------------------------------------------------------------
+
+    private static Point ToScreen(
+        int centerX,
+        int centerY,
+        double scale,
+        double angleDeg,
+        double radiusMM)
+    {
+        double theta = angleDeg * Math.PI / 180.0;
+
+        // Machine +Y is down, which is also down on the screen.
+        return new Point(
+            centerX + (int)Math.Round(radiusMM * Math.Cos(theta) * scale),
+            centerY + (int)Math.Round(radiusMM * Math.Sin(theta) * scale));
+    }
+
+    private static void DrawGrid(
+        Mat canvas,
+        Rectangle panel,
+        int centerX,
+        int centerY,
+        double scale,
+        double maxRadiusMM,
+        bool drawAxisLabels = true,
+        bool clipToRadius = false)
+    {
+        // Rings every 2 inches of radius.
+        double ringStepMM = 2.0 * MillimetersPerInch;
+        double outerRingMM = 0.0;
+
+        for (double radius = ringStepMM; radius <= maxRadiusMM * 1.12; radius += ringStepMM)
+        {
+            CvInvoke.Circle(canvas, new Point(centerX, centerY), (int)Math.Round(radius * scale), GridGray, 1, LineType.AntiAlias);
+            outerRingMM = radius;
+
+            Text(
+                canvas,
+                $"{Inches(radius):F0}",
+                centerX + 3,
+                centerY - (int)Math.Round(radius * scale) - 2,
+                0.32,
+                MidGray);
+        }
+
+        // The cross-hair reaches just past the outermost ring so it never runs
+        // into the title or the numbers printed in the panel.
+        int reach = Math.Min(
+            (int)Math.Round(Math.Max(outerRingMM, maxRadiusMM) * scale) + (clipToRadius ? 8 : 14),
+            Math.Min(panel.Width, panel.Height) / 2 - 18);
+
+        CvInvoke.Line(canvas, new Point(centerX - reach, centerY), new Point(centerX + reach, centerY), GridGray, 1);
+        CvInvoke.Line(canvas, new Point(centerX, centerY - reach), new Point(centerX, centerY + reach), GridGray, 1);
+
+        if (!drawAxisLabels)
+            return;
+
+        // Axis labels sit just outside the cross-hair.
+        Text(canvas, "+X V's", centerX + reach + 4, centerY + 4, 0.36, MidGray);
+        Text(canvas, "-X lathe", centerX - reach - 54, centerY + 4, 0.36, MidGray);
+        Text(canvas, "-Y up", centerX + 6, centerY - reach - 4, 0.36, MidGray);
+        Text(canvas, "+Y down", centerX + 6, centerY + reach + 12, 0.36, MidGray);
     }
 
     /// <summary>
-    /// Normalizes an angle to the range [0, 360) degrees.
+    /// Shades the inside of the section with fine spokes from the block centre so
+    /// the cross-section reads as a solid shape.
     /// </summary>
-    /// <param name="angle">The angle in degrees to normalize.</param>
-    /// <returns>The normalized angle in the range [0, 360) degrees.</returns>
+    private static void DrawFill(
+        Mat canvas,
+        SectionData section,
+        int centerX,
+        int centerY,
+        double scale)
+    {
+        MCvScalar fill = new(
+            section.Color.V0 * 0.22,
+            section.Color.V1 * 0.22,
+            section.Color.V2 * 0.22);
+
+        Point center = new(centerX, centerY);
+
+        for (double angle = 0.0; angle < 360.0; angle += 1.0)
+        {
+            double radius = InterpolateRadius(section.Outline, angle);
+            if (!(radius > 0.0))
+                continue;
+
+            CvInvoke.Line(canvas, center, ToScreen(centerX, centerY, scale, angle, radius), fill, 3);
+        }
+    }
+
+    private static void DrawOutline(
+        Mat canvas,
+        SectionData section,
+        int centerX,
+        int centerY,
+        double scale,
+        int thickness,
+        bool drawPoints)
+    {
+        List<(double AngleDeg, double RadiusMM)> outline = section.Outline;
+
+        for (int index = 0; index < outline.Count; index++)
+        {
+            var current = outline[index];
+            var next = outline[(index + 1) % outline.Count];
+
+            double gap = next.AngleDeg - current.AngleDeg;
+            if (gap <= 0.0)
+                gap += 360.0;
+
+            Point from = ToScreen(centerX, centerY, scale, current.AngleDeg, current.RadiusMM);
+
+            if (drawPoints)
+                CvInvoke.Circle(canvas, from, 3, section.Color, -1, LineType.AntiAlias);
+
+            // Join neighbouring measurements. A wide gap is real missing data
+            // and is left open so it is visible.
+            if (gap <= 30.0)
+            {
+                Point to = ToScreen(centerX, centerY, scale, next.AngleDeg, next.RadiusMM);
+                CvInvoke.Line(canvas, from, to, section.Color, thickness, LineType.AntiAlias);
+            }
+        }
+    }
+
+    private static void DrawDiameter(
+        Mat canvas,
+        int centerX,
+        int centerY,
+        double scale,
+        double angleDeg,
+        double reachMM,
+        MCvScalar color,
+        int dashPixels,
+        int gapPixels,
+        int thickness)
+    {
+        Point from = ToScreen(centerX, centerY, scale, angleDeg, reachMM);
+        Point to = ToScreen(centerX, centerY, scale, angleDeg + 180.0, reachMM);
+
+        DrawDotted(canvas, from, to, color, dashPixels, gapPixels, thickness);
+    }
+
+    private static void DrawDotted(
+        Mat canvas,
+        Point from,
+        Point to,
+        MCvScalar color,
+        int dashPixels,
+        int gapPixels,
+        int thickness)
+    {
+        double dx = to.X - from.X;
+        double dy = to.Y - from.Y;
+        double length = Math.Sqrt(dx * dx + dy * dy);
+
+        if (length < 1.0)
+            return;
+
+        double stepX = dx / length;
+        double stepY = dy / length;
+        int period = Math.Max(2, dashPixels + gapPixels);
+
+        for (double start = 0.0; start < length; start += period)
+        {
+            double end = Math.Min(length, start + dashPixels);
+
+            CvInvoke.Line(
+                canvas,
+                new Point(from.X + (int)Math.Round(stepX * start), from.Y + (int)Math.Round(stepY * start)),
+                new Point(from.X + (int)Math.Round(stepX * end), from.Y + (int)Math.Round(stepY * end)),
+                color,
+                thickness,
+                LineType.AntiAlias);
+        }
+    }
+
+    private static void LegendLine(
+        Mat canvas,
+        int x,
+        int y,
+        MCvScalar color,
+        string label)
+    {
+        CvInvoke.Line(canvas, new Point(x, y), new Point(x + 26, y), color, 3, LineType.AntiAlias);
+        Text(canvas, label, x + 34, y + 4, 0.42, color);
+    }
+
+    private static void Text(
+        Mat canvas,
+        string text,
+        int x,
+        int y,
+        double fontScale,
+        MCvScalar color,
+        int thickness = 1)
+    {
+        CvInvoke.PutText(
+            canvas,
+            text,
+            new Point(x, y),
+            FontFace.HersheySimplex,
+            fontScale,
+            color,
+            thickness,
+            LineType.AntiAlias);
+    }
+
+    /// <summary>
+    /// Radius of the outline at any angle, interpolated between the two nearest
+    /// measurements. Returns 0 inside a gap wider than 30 degrees.
+    /// </summary>
+    private static double InterpolateRadius(
+        List<(double AngleDeg, double RadiusMM)> outline,
+        double angleDeg)
+    {
+        if (outline.Count == 0)
+            return 0.0;
+
+        if (outline.Count == 1)
+            return outline[0].RadiusMM;
+
+        for (int index = 0; index < outline.Count; index++)
+        {
+            var current = outline[index];
+            var next = outline[(index + 1) % outline.Count];
+
+            double start = current.AngleDeg;
+            double end = next.AngleDeg;
+
+            if (end <= start)
+                end += 360.0;
+
+            double angle = angleDeg;
+            if (angle < start)
+                angle += 360.0;
+
+            if (angle < start || angle > end)
+                continue;
+
+            double span = end - start;
+            if (span > 30.0)
+                return 0.0;
+
+            double t = span > 0.0 ? (angle - start) / span : 0.0;
+            return current.RadiusMM + (next.RadiusMM - current.RadiusMM) * t;
+        }
+
+        return 0.0;
+    }
+
+    private static double Inches(double millimeters) =>
+        millimeters / MillimetersPerInch;
+
     private static double NormalizeAngle(double angle)
     {
         angle %= 360.0;
@@ -312,45 +762,5 @@ double maxFillGapDeg)
             angle += 360.0;
 
         return angle;
-    }
-
-    /// <summary>
-    /// Draws a grid on the given canvas.
-    /// </summary>
-    /// <param name="canvas">The canvas on which to draw the grid.</param>
-    /// <param name="centerX">The X coordinate of the center of the grid.</param>
-    /// <param name="centerY">The Y coordinate of the center of the grid.</param>
-    /// <param name="scale">The scale factor for converting radius to screen coordinates.</param>
-    /// <param name="maxRadius">The maximum radius of the grid.</param>
-    private static void DrawGrid(
-        Mat canvas,
-        int centerX,
-        int centerY,
-        double scale,
-        double maxRadius)
-    {
-        for (double r = 25.0; r <= maxRadius; r += 25.0)
-        {
-            CvInvoke.Circle(
-                canvas,
-                new Point(centerX, centerY),
-                (int)(r * scale),
-                new MCvScalar(35, 35, 35),
-                1);
-        }
-
-        CvInvoke.Line(
-            canvas,
-            new Point(0, centerY),
-            new Point(canvas.Width, centerY),
-            new MCvScalar(60, 60, 60),
-            1);
-
-        CvInvoke.Line(
-            canvas,
-            new Point(centerX, 0),
-            new Point(centerX, canvas.Height),
-            new MCvScalar(60, 60, 60),
-            1);
     }
 }
