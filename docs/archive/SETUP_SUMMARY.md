@@ -1,5 +1,15 @@
 # Production-Ready Setup Summary
 
+> **Archived change note.** This was written for one configuration change and is kept for history. It is not a current guide. Where it disagrees with the current documents, the current documents are right:
+>
+> - `CommissioningComplete` is not a setting. It is calculated: true when all seven verification flags are true and `CommissioningApprovedBy` and `CommissioningApprovedUtc` are set. A value in the file is ignored.
+> - The number of frames is not fixed at 36 or 94. Every pair between ScanStart and ScanComplete is captured (see [Rotation angles](../scanning/ROTATION_ANGLES.md)).
+> - The production optimization-policy check expects `CompareInscribedGeometry`, not `RecoveryOptimized`. With `RecoveryOptimized` it is reported as a not-enforced warning.
+> - `ReadKnifeClearanceFromPlc: true` skips the carriage-retract payload check. No value is read from the PLC.
+> - Only the essential readiness checks block a PLC write, and the result is sent first and saved straight after (see [Scan cycle](../operation/SCAN_CYCLE.md)).
+> - Settings live in `%LOCALAPPDATA%\OptimizationXY\Charger\Config\appsettings.json` (or under `OPTIMIZATION_XY_DATA_DIR` when that variable is set). There is no cache to clear. **Do not delete that folder: it holds the active calibration.**
+> - The ready-made settings file is now `config/appsettings.production-ready.json`.
+
 ## ✅ What Was Done
 
 ### 1. **Code Changes** (Build Status: ✅ Successful)
@@ -15,8 +25,8 @@
 ### 2. **Configuration Template Provided**
 
 **Two files created with required changes:**
-1. `PRODUCTION_CONFIG_CHANGES.md` - Detailed guide with explanations
-2. `appsettings.production-ready.json` - Complete copy-paste ready config
+1. [`PRODUCTION_CONFIG_CHANGES.md`](PRODUCTION_CONFIG_CHANGES.md) - Detailed guide with explanations
+2. `config/appsettings.production-ready.json` - Complete copy-paste ready config
 
 ---
 
@@ -85,7 +95,7 @@ After applying these changes, all blocks will be removed:
 
 ### Option A: Full File Replacement (Easiest)
 1. Backup your current `appsettings.json`
-2. Replace it with `appsettings.production-ready.json`
+2. Replace it with `config/appsettings.production-ready.json`
 3. Restart application
 
 ### Option B: Manual Updates (If You Have Custom Settings)
@@ -182,7 +192,7 @@ After restarting with new config, check for this in logs:
 ## 📞 Troubleshooting
 
 **Issue:** Settings not loading
-- **Solution:** Delete config cache in `C:\ProgramData\OptimizationXY\`
+- **Solution:** Restart the application; settings are read at start-up. There is no cache to delete. Do not delete the data folder: it holds the active calibration.
 - Restart application
 
 **Issue:** Still seeing blocking checks

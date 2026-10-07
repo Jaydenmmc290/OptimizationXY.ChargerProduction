@@ -5,16 +5,16 @@
 One rotation position consists of one head-camera image and one tail-camera image. The capture boundary combines each synchronized pair before any measurement processing:
 
 ```text
-36 head frames + 36 tail frames
+N head frames + N tail frames
                 |
                 v
-36 full-length concatenated ScanFrame images
+N full-length concatenated ScanFrame images (one per pair, typically 85-100)
                 |
                 v
 profile -> point cloud -> centerline -> radius field -> defects -> optimization
 ```
 
-The processing pipeline must never receive the old interleaved 72-frame sequence. `CompletedLogCapture.Frames` now contains only the 36 full-length images.
+The processing pipeline must never receive the old interleaved 72-frame sequence. `CompletedLogCapture.Frames` now contains only the full-length images.
 
 ## Example validation
 
@@ -61,6 +61,8 @@ The settings are stored under `Acquisition.Concatenation` in the runtime `appset
 
 ### Setting meanings
 
+- `TargetFramePairsPerLog`: no longer the number of frames captured. It is part of the calibration fingerprint and the legacy fixed angle step; leave it at 36.
+
 - `HeadOnLeft`: places the head image before the tail image when true.
 - `ReverseHeadHorizontal` / `ReverseTailHorizontal`: corrects camera orientation without changing measurement scale.
 - crop values: remove fixture-only or duplicate columns at the outside/seam edges.
@@ -70,4 +72,4 @@ The settings are stored under `Acquisition.Concatenation` in the runtime `appset
 
 ## Commissioning check
 
-Use a straight reference target spanning both cameras. Adjust crop, orientation, vertical offset, and overlap until the profile crosses the seam continuously. Then confirm all 36 output images have the expected full width and the same physical millimeters-per-pixel calibration along the complete log length.
+Use a straight reference target spanning both cameras. Adjust crop, orientation, vertical offset, and overlap until the profile crosses the seam continuously. Then confirm all output images have the expected full width and the same physical millimeters-per-pixel calibration along the complete log length.

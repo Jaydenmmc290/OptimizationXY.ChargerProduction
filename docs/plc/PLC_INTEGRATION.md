@@ -19,15 +19,15 @@ The library targets PLC device path `172.16.60.2` on the `172.16.0.0/16` network
 1. On startup, the first `ScanStart` value establishes a baseline only. A stale high value does not start acquisition.
 2. A fresh good-quality low-to-high `ScanStart` edge opens a new scan cycle.
 3. In Production mode, manual start and manual early-stop are disabled.
-4. Both cameras capture 36 synchronized encoder-triggered frames.
-5. After the 36-pair quota is met, the application waits for a good `ScanComplete` from the active PLC cycle.
-6. Timeout, bad quality, missing active cycle, or PLC disconnect blocks processing and result transmission.
+4. Both cameras capture frames until the PLC reports `ScanComplete`.
+5. `ScanComplete` stops frame intake (a few more frames per camera are accepted, `RotatingScan.FramesAcceptedAfterScanComplete`) and processing starts. In Production mode a good `ScanComplete` from the active PLC cycle is required.
+6. Timeout, bad quality, missing active cycle, or PLC disconnect blocks processing and result transmission. The scan is reported as failed and the application is ready for the next `ScanStart` (see [`SCAN_CYCLE.md`](../operation/SCAN_CYCLE.md)).
 
 The application never writes `ScanStart` or `ScanComplete`.
 
 ## Output payloads
 
-All dimensional values are millimeters. The final XY values are offsets relative to the commissioned home convention. `blockCount` is a persistent sequence number kept below 16,000,000 so it remains exactly representable in a PLC `REAL`/single-precision field.
+All dimensional values are sent in inches (the application calculates in millimeters and converts when the payload is built). The final XY values are offsets relative to the commissioned home convention. `blockCount` is a persistent sequence number kept below 16,000,000 so it remains exactly representable in a PLC `REAL`/single-precision field.
 
 ### `ScannedBlockData` — 10 floats
 

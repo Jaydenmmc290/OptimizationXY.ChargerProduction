@@ -6,7 +6,7 @@ The operator selects one of five modes from the main form. All modes use the sam
 
 ```text
 Apply calibration
-Process and preprocess 36 concatenated frames
+Process and preprocess the concatenated frames
 Build profiles
 Build rotating point cloud
 Fit centerline
@@ -36,7 +36,7 @@ Default direct-refinement settings are a 2 mm local radius, 2 mm step, and a 500
 
 This is the existing optimizer. Adaptive weights, wane balance, defect patches, movement cost, guardrails, and the final risk score may influence the selected head/tail spindle position.
 
-## 3. Largest Inscribed Cylinder (default production strategy)
+## 3. Largest Inscribed Cylinder
 
 This mode performs a geometry-only coarse-to-fine search. It selects the head/tail spindle axis that maximizes the minimum circular radius contained inside the measured log for the full analyzed length.
 

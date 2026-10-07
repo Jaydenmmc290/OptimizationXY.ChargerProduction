@@ -161,12 +161,12 @@ New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "ConfigTemplat
 New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot "Database") | Out-Null
 Copy-Item -LiteralPath $template -Destination (Join-Path $packageRoot "ConfigTemplate\appsettings.json") -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "database\OptimizationXY.Schema.sql") -Destination (Join-Path $packageRoot "Database") -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "docs\PRODUCTION_SETUP_WIZARD.md") -Destination $packageRoot -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "docs\PRODUCTION_DEPLOYMENT.md") -Destination $packageRoot -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "docs\COMMISSIONING_CHECKLIST.md") -Destination $packageRoot -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "docs\SAFETY_AND_INTERLOCKS.md") -Destination $packageRoot -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "docs\PLC_INTEGRATION.md") -Destination $packageRoot -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot "docs\DIRECT_CAMERA_AND_OPERATOR_VIEW_IMPLEMENTATION.md") -Destination $packageRoot -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\deployment\PRODUCTION_SETUP_WIZARD.md") -Destination $packageRoot -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\deployment\PRODUCTION_DEPLOYMENT.md") -Destination $packageRoot -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\deployment\COMMISSIONING_CHECKLIST.md") -Destination $packageRoot -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\deployment\SAFETY_AND_INTERLOCKS.md") -Destination $packageRoot -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\plc\PLC_INTEGRATION.md") -Destination $packageRoot -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot "docs\scanning\DIRECT_CAMERA_AND_OPERATOR_VIEW_IMPLEMENTATION.md") -Destination $packageRoot -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\validate-production-host.ps1") -Destination $packageRoot -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot "scripts\install-production.ps1") -Destination $packageRoot -Force
 

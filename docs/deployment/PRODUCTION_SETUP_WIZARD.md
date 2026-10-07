@@ -5,8 +5,7 @@ The setup wizard now configures both Genie Nano cameras directly through Sapera 
 ## Camera discovery and assignment
 
 The Production Setup Wizard automatically discovers acquisition cameras currently
-visible to Sapera. Camera server names are not manually entered and are not used
-as permanent physical-camera identities.
+visible to Sapera. Camera server names are not manually entered.
 
 For each discovered camera the wizard displays:
 
@@ -16,22 +15,19 @@ For each discovered camera the wizard displays:
 
 Assign one discovered physical camera to **Head / Dog** and one to **Tail**.
 
-The application saves the serial number read directly from each camera as the
-persistent physical-camera assignment. The Sapera server name and device index
-are runtime locations and may change when cameras are reconnected, replaced,
-rediscovered, or enumerated in a different order.
+The application saves the Sapera server name and device index of each selected
+camera as the Head / Dog and Tail assignment. The serial number is read from the
+camera and stored in the camera configuration snapshot.
 
 On application startup or camera reconnect, the software:
 
 1. discovers the currently available Sapera acquisition devices;
-2. reads their physical serial numbers;
-3. locates the serial assigned to Head / Dog;
-4. locates the serial assigned to Tail;
-5. updates the current Sapera server name and device index;
-6. connects to those resolved devices;
-7. verifies the camera identity again after connection.
+2. finds the camera at the saved server name and device index for Head / Dog;
+3. finds the camera at the saved server name and device index for Tail;
+4. connects to those devices and reads their serial numbers;
+5. if either camera is not found, reports it so Production Setup can be used to reassign.
 
-A change in Sapera server name alone does not invalidate scanner calibration.
+A change in Sapera server name or device index invalidates the scanner calibration.
 
 Replacing a physical camera with a different serial number DOES require the new
 camera to be explicitly assigned to that machine position and the affected

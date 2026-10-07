@@ -127,11 +127,11 @@ At minimum, the commissioning process includes:
 
 See:
 
-- `START_HERE.md`
-- `PRODUCTION_SETUP_WIZARD.md`
-- `CALIBRATION.md`
-- `COMMISSIONING_CHECKLIST.md`
-- `SAFETY_AND_INTERLOCKS.md`
+- [`START_HERE.md`](../getting-started/START_HERE.md)
+- [`PRODUCTION_SETUP_WIZARD.md`](PRODUCTION_SETUP_WIZARD.md)
+- [`CALIBRATION.md`](../scanning/CALIBRATION.md)
+- [`COMMISSIONING_CHECKLIST.md`](COMMISSIONING_CHECKLIST.md)
+- [`SAFETY_AND_INTERLOCKS.md`](SAFETY_AND_INTERLOCKS.md)
 
 ## 8. Normal software updates
 

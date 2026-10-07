@@ -7,9 +7,11 @@ MainForm
   -> GenieNanoCameraService (head and tail)
   -> RotatingLogCaptureManager
        -> DualCameraFrameConcatenator
-  -> CompletedLogCapture (36 concatenated frames)
+  -> CompletedLogCapture (one concatenated frame per head/tail pair)
   -> LogProcessingCoordinator
   -> LogProcessingPipeline.RunCurrentFramesPipeline
+  -> ProductionReadinessEvaluator
+  -> XyRestrictedPlcService (PLC write)
   -> ScanResultSaveService
        -> SimpleScanSaveService
        -> optional SqlScanSaveService
@@ -19,7 +21,7 @@ The live-capture and folder-processing entry points share one ordered processing
 
 ## Acquisition boundary
 
-A complete 36-position scan contains 36 head images and 36 tail images. `RotatingLogCaptureManager` pairs the frames by sequence and `DualCameraFrameConcatenator` creates exactly 36 full-length images before handing ownership to `CompletedLogCapture`.
+Every head/tail pair between PLC ScanStart and ScanComplete is captured (typically 85-100 pairs). `RotatingLogCaptureManager` pairs the frames by sequence and `DualCameraFrameConcatenator` creates one full-length image per pair before handing ownership to `CompletedLogCapture`. Frame angles are assigned afterwards from one measured revolution (`RevolutionAngleAssigner`, see [`ROTATION_ANGLES.md`](../scanning/ROTATION_ANGLES.md)).
 
 Concatenation supports:
 
@@ -102,7 +104,7 @@ The largest-inscribed oval is a spindle-axis selection strategy, not a claim tha
 
 ## Hardware boundary
 
-The Sapera reference is conditional. `UseSapera=false` compiles a stub with the same public camera API so CI can validate the rest of the application without distributing the proprietary SDK. Production hardware builds must supply `SAPERA_SDK_DIR` or `SaperaSdkDir`.
+The Sapera reference is conditional. `UseSapera=false` compiles a stub with the same public camera API so the rest of the application can be built without the proprietary SDK. Production hardware builds must supply `SAPERA_SDK_DIR` or `SaperaSdkDir`.
 
 ## Writable data
 
