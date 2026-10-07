@@ -756,6 +756,22 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     _state.BinnedRadiusField,
     centerline: _state.Centerline);
 
+        // Single side view for the overlay box on the main form. Drawing must
+        // never fail a scan, so a problem here only loses the picture.
+        _state.LogSideViewOverlay?.Dispose();
+        _state.LogSideViewOverlay = null;
+
+        try
+        {
+            _state.LogSideViewOverlay = LogSideViewOverlayBuilder.Build(
+                _state.BinnedRadiusField,
+                _state.Centerline);
+        }
+        catch (Exception)
+        {
+            _state.LogSideViewOverlay = null;
+        }
+
         if (_state.BinnedRadiusField.Count == 0)
             throw new InvalidOperationException("Binned radius field returned no points.");
 
