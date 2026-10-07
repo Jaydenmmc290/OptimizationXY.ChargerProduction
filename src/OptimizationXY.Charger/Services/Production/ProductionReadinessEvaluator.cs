@@ -431,85 +431,26 @@ public static class ProductionReadinessEvaluator
                 ? "All unused payload fields are zero; no rotation value is present."
                 : "One or more reserved PLC payload fields are nonzero.");
 
-        bool savedRecordExists =
-            !string.IsNullOrWhiteSpace(state.LastSavedRunFolder) &&
-            Directory.Exists(state.LastSavedRunFolder);
+        // Saved-record checks. When the result is sent to the PLC before it is
+        // saved, the record does not exist yet: the checks report "deferred" here
+        // and are brought up to date by RefreshSavedRecordChecks after the save.
+        foreach (SavedRecordCheck check in EvaluateSavedRecord(state))
+        {
+            bool deferred =
+                state.ResultSaveDeferredUntilAfterPlcWrite && !check.Ok;
 
-        Add(
-            report,
-            "Saved production record",
-            !settings.Production.RequireResultSaveBeforePlcWrite || savedRecordExists
-                ? ProductionCheckStatus.Pass
-                : ProductionCheckStatus.Block,
-            savedRecordExists
-                ? state.LastSavedRunFolder
-                : "Result has not yet been saved to an existing folder.");
-
-        bool operatorScanRecordExists =
-            savedRecordExists &&
-            File.Exists(Path.Combine(
-                state.LastSavedRunFolder,
-                "operator-scan-quality.json"));
-
-        Add(
-            report,
-            "Saved operator scan-quality record",
-            !settings.Production.RequireResultSaveBeforePlcWrite || operatorScanRecordExists
-                ? ProductionCheckStatus.Pass
-                : ProductionCheckStatus.Block,
-            operatorScanRecordExists
-                ? "operator-scan-quality.json is preserved with the production scan."
-                : "operator-scan-quality.json is missing from the saved production record.");
-
-        bool calibrationSnapshotExists =
-            savedRecordExists &&
-            File.Exists(Path.Combine(
-                state.LastSavedRunFolder,
-                "scanner-calibration.json"));
-
-        Add(
-            report,
-            "Saved calibration snapshot",
-            !settings.Production.RequireResultSaveBeforePlcWrite || calibrationSnapshotExists
-                ? ProductionCheckStatus.Pass
-                : ProductionCheckStatus.Block,
-            calibrationSnapshotExists
-                ? "The exact scanner calibration used for this result is stored with the scan."
-                : "scanner-calibration.json is missing from the saved production record.");
-
-        string headSnapshotPath = Path.Combine(
-            state.LastSavedRunFolder,
-            "head-camera-configuration.snapshot");
-        string tailSnapshotPath = Path.Combine(
-            state.LastSavedRunFolder,
-            "tail-camera-configuration.snapshot");
-
-        bool cameraSnapshotsExist =
-            savedRecordExists &&
-            File.Exists(headSnapshotPath) &&
-            File.Exists(tailSnapshotPath);
-
-        bool cameraSnapshotsMatchCapture =
-            cameraSnapshotsExist &&
-            FileMatchesSnapshot(
-                headSnapshotPath,
-                state.HeadCameraConfigurationSnapshot) &&
-            FileMatchesSnapshot(
-                tailSnapshotPath,
-                state.TailCameraConfigurationSnapshot);
-
-        Add(
-            report,
-            "Saved camera configuration snapshots",
-            !settings.Production.RequireResultSaveBeforePlcWrite ||
-            cameraSnapshotsMatchCapture
-                ? ProductionCheckStatus.Pass
-                : ProductionCheckStatus.Block,
-            cameraSnapshotsMatchCapture
-                ? "The saved head and tail camera-configuration snapshots exactly match the settings applied by Sapera for this capture."
-                : cameraSnapshotsExist
-                    ? "Saved camera-configuration snapshots do not match the capture-time snapshots."
-                    : "One or both camera-configuration snapshots are missing from the saved production record.");
+            Add(
+                report,
+                check.Name,
+                !settings.Production.RequireResultSaveBeforePlcWrite || check.Ok || deferred
+                    ? ProductionCheckStatus.Pass
+                    : ProductionCheckStatus.Block,
+                check.Ok
+                    ? check.OkMessage
+                    : deferred
+                        ? SavedRecordDeferredMessage
+                        : check.FailMessage);
+        }
 
         Add(
             report,
@@ -529,6 +470,131 @@ public static class ProductionReadinessEvaluator
             RelaxNonEssentialChecks(report);
 
         return report;
+    }
+
+    private const string SavedRecordDeferredMessage =
+        "Deferred: the result is sent to the PLC first and this record is saved immediately afterwards.";
+
+    private sealed record SavedRecordCheck(
+        string Name,
+        bool Ok,
+        string OkMessage,
+        string FailMessage);
+
+    /// <summary>
+    /// Looks at the saved run folder and reports, for each part of the saved
+    /// production record, whether it is present.
+    /// </summary>
+    private static List<SavedRecordCheck> EvaluateSavedRecord(PipelineState state)
+    {
+        string folder = state.LastSavedRunFolder ?? string.Empty;
+
+        bool savedRecordExists =
+            !string.IsNullOrWhiteSpace(folder) &&
+            Directory.Exists(folder);
+
+        bool operatorScanRecordExists =
+            savedRecordExists &&
+            File.Exists(Path.Combine(
+                folder,
+                "operator-scan-quality.json"));
+
+        bool calibrationSnapshotExists =
+            savedRecordExists &&
+            File.Exists(Path.Combine(
+                folder,
+                "scanner-calibration.json"));
+
+        string headSnapshotPath = Path.Combine(
+            folder,
+            "head-camera-configuration.snapshot");
+        string tailSnapshotPath = Path.Combine(
+            folder,
+            "tail-camera-configuration.snapshot");
+
+        bool cameraSnapshotsExist =
+            savedRecordExists &&
+            File.Exists(headSnapshotPath) &&
+            File.Exists(tailSnapshotPath);
+
+        bool cameraSnapshotsMatchCapture =
+            cameraSnapshotsExist &&
+            FileMatchesSnapshot(
+                headSnapshotPath,
+                state.HeadCameraConfigurationSnapshot) &&
+            FileMatchesSnapshot(
+                tailSnapshotPath,
+                state.TailCameraConfigurationSnapshot);
+
+        return
+        [
+            new SavedRecordCheck(
+                "Saved production record",
+                savedRecordExists,
+                folder,
+                "Result has not yet been saved to an existing folder."),
+            new SavedRecordCheck(
+                "Saved operator scan-quality record",
+                operatorScanRecordExists,
+                "operator-scan-quality.json is preserved with the production scan.",
+                "operator-scan-quality.json is missing from the saved production record."),
+            new SavedRecordCheck(
+                "Saved calibration snapshot",
+                calibrationSnapshotExists,
+                "The exact scanner calibration used for this result is stored with the scan.",
+                "scanner-calibration.json is missing from the saved production record."),
+            new SavedRecordCheck(
+                "Saved camera configuration snapshots",
+                cameraSnapshotsMatchCapture,
+                "The saved head and tail camera-configuration snapshots exactly match the settings applied by Sapera for this capture.",
+                cameraSnapshotsExist
+                    ? "Saved camera-configuration snapshots do not match the capture-time snapshots."
+                    : "One or both camera-configuration snapshots are missing from the saved production record.")
+        ];
+    }
+
+    /// <summary>
+    /// Brings the saved-record checks of an already evaluated report up to date
+    /// once the save that followed the PLC write has finished (or failed).
+    ///
+    /// A part that is present becomes a Pass. A part that is missing becomes a
+    /// reported, not-enforced warning: the PLC write has already happened, so it
+    /// cannot block anything, but the audit record must say the save was incomplete.
+    /// </summary>
+    /// <returns>The messages of any parts that are missing; empty when the record is complete.</returns>
+    public static List<string> RefreshSavedRecordChecks(PipelineState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        List<string> problems = [];
+        List<SavedRecordCheck> current = EvaluateSavedRecord(state);
+
+        foreach (SavedRecordCheck check in current)
+        {
+            if (!check.Ok)
+                problems.Add($"{check.Name}: {check.FailMessage}");
+
+            ProductionReadinessCheck? existing = state.ProductionReadiness?.Checks
+                .FirstOrDefault(item => string.Equals(item.Name, check.Name, StringComparison.Ordinal));
+
+            if (existing is null)
+                continue;
+
+            if (check.Ok)
+            {
+                existing.Status = ProductionCheckStatus.Pass;
+                existing.NotEnforced = false;
+                existing.Message = check.OkMessage + " (Saved after the PLC write.)";
+            }
+            else
+            {
+                existing.Status = ProductionCheckStatus.Warning;
+                existing.NotEnforced = true;
+                existing.Message = "MISSING AFTER THE PLC WRITE: " + check.FailMessage;
+            }
+        }
+
+        return problems;
     }
 
     /// <summary>

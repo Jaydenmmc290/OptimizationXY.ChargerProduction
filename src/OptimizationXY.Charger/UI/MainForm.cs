@@ -426,6 +426,23 @@ public partial class MainForm : Form
 
             _processingCoordinator?.DiagnosticsMessage -=
                     ProcessingCoordinator_DiagnosticsMessage;
+
+            // If a finished scan is still waiting for its PLC write, its save has
+            // not been started yet. Start it now so the scan record is not lost.
+            if (_processingCoordinator is not null &&
+                PipelineState.Instance.ResultSaveDeferredUntilAfterPlcWrite &&
+                !PipelineState.Instance.ResultSaveStarted)
+            {
+                _ = _processingCoordinator.SaveResultsAfterPlcWriteAsync();
+            }
+
+            // A block may still be saving (the save follows the PLC write). Give
+            // it time to finish so the last scan record is not cut short.
+            if (_processingCoordinator?.WaitForPendingSave(TimeSpan.FromSeconds(20)) == false)
+            {
+                Logger.Warn("The application closed before the last scan record finished saving.");
+            }
+
             _processingCoordinator = null;
 
             DisposePreviewForm(ref _headCameraForm);
@@ -2129,123 +2146,162 @@ string message)
 
                 SetUIState(ApplicationState.Completed);
 
-                AppendDiagnostics("Saving results...");
+                // Order of the last two steps. Sending first takes the save (files
+                // and SQL record) off the time the PLC waits for its positions.
+                // Saving first is kept whenever the full readiness checks are
+                // enforced, because a failed save must then stop the PLC write.
+                LogProcessingCoordinator saveCoordinator = _processingCoordinator;
+                AppSettings runSettings = PipelineState.Instance.Settings;
+                bool sendBeforeSave =
+                    runSettings.Plc.SendResultsBeforeSave &&
+                    runSettings.Production.EnforceOnlyEssentialReadinessChecks;
 
-                // Production readiness validates the saved run folder and its
-                // operator-quality, calibration, and camera-configuration
-                // snapshots. Saving and readiness therefore have a strict
-                // dependency and must not run in parallel.
-                try
+                PipelineState.Instance.ResultSaveDeferredUntilAfterPlcWrite = sendBeforeSave;
+
+                if (!sendBeforeSave)
                 {
-                    string savePath =
-                        await _processingCoordinator.SaveResultsAsync();
+                    AppendDiagnostics("Saving results...");
 
-                    // Make the completed record explicit for the readiness
-                    // evaluator. This assignment is harmless if the save
-                    // service already stored the same folder.
-                    PipelineState.Instance.LastSavedRunFolder = savePath;
-
-                    AppendDiagnostics($"Results saved: {savePath}");
-                }
-                catch (Exception saveEx)
-                {
-                    AppendDiagnostics($"Save failed: {saveEx.Message}");
-
-                    // With essential-only enforcement a failed save is logged and
-                    // reported, but it does not stop the PLC write.
-                    bool saveFailureBlocksPlc =
-                        productionMode &&
-                        !PipelineState.Instance.Settings.Production.EnforceOnlyEssentialReadinessChecks;
-
-                    if (!saveFailureBlocksPlc && productionMode)
+                    // Production readiness validates the saved run folder and its
+                    // operator-quality, calibration, and camera-configuration
+                    // snapshots. Saving and readiness therefore have a strict
+                    // dependency and must not run in parallel.
+                    try
                     {
-                        AppendDiagnostics(
-                            "ERROR: Production result saving failed. The scan audit record was not preserved. " +
-                            "Continuing to the PLC write because only essential checks are enforced.");
+                        string savePath =
+                            await _processingCoordinator.SaveResultsAsync();
+
+                        // Make the completed record explicit for the readiness
+                        // evaluator. This assignment is harmless if the save
+                        // service already stored the same folder.
+                        PipelineState.Instance.LastSavedRunFolder = savePath;
+
+                        AppendDiagnostics($"Results saved: {savePath}");
                     }
-
-                    if (saveFailureBlocksPlc)
+                    catch (Exception saveEx)
                     {
-                        throw new InvalidOperationException(
-                            "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
-                            saveEx);
-                    }
-                }
+                        AppendDiagnostics($"Save failed: {saveEx.Message}");
 
-                // Build the payload and evaluate readiness only after the save
-                // has completed and LastSavedRunFolder points to the finished
-                // production record. This prevents stale pre-save BLOCK results.
-                ProductionReadinessReport readiness =
-                    _processingCoordinator.PrepareProductionCommand(
-                        _plcService?.IsConnected == true);
+                        // With essential-only enforcement a failed save is logged and
+                        // reported, but it does not stop the PLC write.
+                        bool saveFailureBlocksPlc =
+                            productionMode &&
+                            !PipelineState.Instance.Settings.Production.EnforceOnlyEssentialReadinessChecks;
 
-                if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
-                {
-                    if (readiness.CanSendToPlc &&
-                        PipelineState.Instance.PlcPayload is not null &&
-                        _plcService is not null)
-                    {
-                        // Report any warnings even if we're proceeding
-                        var warningChecks = readiness.Checks
-                            .Where(c => c.Status == ProductionCheckStatus.Warning)
-                            .ToList();
-
-                        if (warningChecks.Count > 0)
-                        {
-                            AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
-                            foreach (var check in warningChecks)
-                            {
-                                AppendDiagnostics(
-                                    check.NotEnforced
-                                        ? $"  ✗ ERROR (not enforced): {check.Name}: {check.Message}"
-                                        : $"  ⚠ WARNING: {check.Name}: {check.Message}");
-                            }
-                        }
-
-                        AppendDiagnostics(
-                            "[PLC] Production checks passed. Sending restricted XY payloads...");
-
-                        var transmission = await _plcService.SendPayloadAsync(
-                            PipelineState.Instance.PlcPayload,
-                            processingCancellation.Token);
-
-                        LogProcessingCoordinator.RecordPlcTransmission(transmission);
-
-                        AppendDiagnostics(
-                            transmission.Success
-                                ? "[PLC] Result accepted by verified tag readback."
-                                : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
-                                  $"Verify machine state, sensors, and PLC configuration before retrying.");
-
-                        if (!transmission.Success && productionMode)
+                        if (!saveFailureBlocksPlc && productionMode)
                         {
                             AppendDiagnostics(
-                                "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
-                            SetUIState(ApplicationState.Faulted);
+                                "ERROR: Production result saving failed. The scan audit record was not preserved. " +
+                                "Continuing to the PLC write because only essential checks are enforced.");
                         }
-                    }
-                    else
-                    {
-                        AppendDiagnostics(
-                            $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
 
-                        // Provide detailed blocking reasons
-                        var blockingChecks = readiness.Checks
-                            .Where(c => c.Status == ProductionCheckStatus.Block)
-                            .ToList();
-
-                        foreach (var check in blockingChecks)
+                        if (saveFailureBlocksPlc)
                         {
-                            AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
+                            throw new InvalidOperationException(
+                                "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
+                                saveEx);
                         }
-
-                        if (productionMode)
-                            SetUIState(ApplicationState.Faulted);
                     }
                 }
                 else
                 {
-                    AppendDiagnostics("[PLC] Automatic result sending is disabled.");
+                    AppendDiagnostics(
+                        "Results will be saved immediately after the PLC write.");
+                }
+
+                // Everything from here to the end of the PLC write runs inside a
+                // try/finally so that, when sending first, the save is ALWAYS
+                // started afterwards: whether the write succeeded, was blocked,
+                // is disabled, was cancelled, or threw.
+                try
+                {
+                    // Build the payload and evaluate readiness. When saving first,
+                    // the save has completed and LastSavedRunFolder points to the
+                    // finished production record. When sending first, the
+                    // saved-record checks report "deferred" and are brought up to
+                    // date by the save that follows.
+                    ProductionReadinessReport readiness =
+                        _processingCoordinator.PrepareProductionCommand(
+                            _plcService?.IsConnected == true);
+
+                    if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
+                    {
+                        if (readiness.CanSendToPlc &&
+                            PipelineState.Instance.PlcPayload is not null &&
+                            _plcService is not null)
+                        {
+                            // Report any warnings even if we're proceeding
+                            var warningChecks = readiness.Checks
+                                .Where(c => c.Status == ProductionCheckStatus.Warning)
+                                .ToList();
+
+                            if (warningChecks.Count > 0)
+                            {
+                                AppendDiagnostics($"[PLC] ⚠ {warningChecks.Count} warning(s) detected, but sending anyway:");
+                                foreach (var check in warningChecks)
+                                {
+                                    AppendDiagnostics(
+                                        check.NotEnforced
+                                            ? $"  ✗ ERROR (not enforced): {check.Name}: {check.Message}"
+                                            : $"  ⚠ WARNING: {check.Name}: {check.Message}");
+                                }
+                            }
+
+                            AppendDiagnostics(
+                                "[PLC] Production checks passed. Sending restricted XY payloads...");
+
+                            var transmission = await _plcService.SendPayloadAsync(
+                                PipelineState.Instance.PlcPayload,
+                                processingCancellation.Token);
+
+                            LogProcessingCoordinator.RecordPlcTransmission(transmission);
+
+                            AppendDiagnostics(
+                                transmission.Success
+                                    ? "[PLC] Result accepted by verified tag readback."
+                                    : $"[PLC] TRANSMISSION FAILED: {transmission.Message}. The PLC rejected the optimized measurements. " +
+                                      $"Verify machine state, sensors, and PLC configuration before retrying.");
+
+                            if (!transmission.Success && productionMode)
+                            {
+                                AppendDiagnostics(
+                                    "[PLC] In Production mode, scan results are not used when transmission fails. Rescan required.");
+                                SetUIState(ApplicationState.Faulted);
+                            }
+                        }
+                        else
+                        {
+                            AppendDiagnostics(
+                                $"[PLC] Automatic send blocked by {readiness.BlockingCount} production check(s).");
+
+                            // Provide detailed blocking reasons
+                            var blockingChecks = readiness.Checks
+                                .Where(c => c.Status == ProductionCheckStatus.Block)
+                                .ToList();
+
+                            foreach (var check in blockingChecks)
+                            {
+                                AppendDiagnostics($"  ✗ BLOCKING: {check.Name}: {check.Message}");
+                            }
+
+                            if (productionMode)
+                                SetUIState(ApplicationState.Faulted);
+                        }
+                    }
+                    else
+                    {
+                        AppendDiagnostics("[PLC] Automatic result sending is disabled.");
+                    }
+                }
+                finally
+                {
+                    if (sendBeforeSave)
+                    {
+                        // Not awaited here on purpose: the scan cycle is finished
+                        // as far as the PLC is concerned. The coordinator holds the
+                        // next scan's processing until this save has completed.
+                        _ = SaveResultsAfterPlcWriteAsync(saveCoordinator);
+                    }
                 }
 
                 UpdateUIForState(_currentState);
@@ -2321,6 +2377,36 @@ string message)
             Interlocked.Exchange(
                 ref _captureFinishRequested,
                 0);
+        }
+    }
+
+    /// <summary>
+    /// Saves the scan (files, SQL record and production audit record) after the
+    /// PLC write and reports the outcome in the diagnostics log.
+    ///
+    /// The save itself runs on a background thread. Nothing can be blocked by a
+    /// failure here because the PLC write has already happened, so a failure is
+    /// reported as an error for the operator and the log.
+    /// </summary>
+    /// <param name="coordinator">The processing coordinator that owns the save.</param>
+    private async Task SaveResultsAfterPlcWriteAsync(LogProcessingCoordinator? coordinator)
+    {
+        if (coordinator is null)
+            return;
+
+        try
+        {
+            AppendDiagnostics("Saving results...");
+
+            string savePath = await coordinator.SaveResultsAfterPlcWriteAsync();
+
+            AppendDiagnostics($"Results saved: {savePath}");
+        }
+        catch (Exception saveEx)
+        {
+            AppendDiagnostics(
+                $"ERROR: Save failed after the PLC write: {saveEx.Message}. " +
+                "The scan audit record for this block was not preserved.");
         }
     }
 

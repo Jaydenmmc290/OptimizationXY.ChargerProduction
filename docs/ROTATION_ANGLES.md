@@ -129,3 +129,48 @@ of frame images; if no calibration file is found beside the frames you are asked
 SQL. The `appsettings.json` on the computer running the replay is used, so copy the
 production file to `C:\ProgramData\OptimizationXY\Charger\Config` first when the result has
 to match production.
+
+## Scan-to-PLC time
+
+Two changes shorten the time from ScanComplete to the PLC write. Neither changes any measured value.
+
+### Reading the laser line
+
+The calibration bands for an image column depend only on the calibration table, not on the frame.
+`LookupTableInterpolator` now works them out once for all columns when a scan starts reading its frames,
+and reuses them for every frame of that scan, instead of searching the whole table again for every column
+of every frame. The calculation itself is unchanged (`BuildColumnBands` is the original code), so every
+radius is identical to before. The remembered bands belong to the loaded calibration table object, and the
+calibration file is read fresh for every scan, so a scan can never use bands from another calibration.
+The calibration files, their fingerprint and the camera settings are not touched.
+
+### Send to the PLC first, save second (`Plc.SendResultsBeforeSave`, default `true`)
+
+Order of the last steps of a scan:
+
+1. Process the scan and show the result.
+2. Build the PLC payload and run the readiness checks (scan-quality gate included, still blocking).
+3. Write to the PLC and verify the readback.
+4. Save the scan files, the SQL record and the production audit record.
+
+Rules that keep this safe:
+
+- The save in step 4 always starts, whether the PLC write succeeded, was blocked, is disabled, or failed.
+- The next scan can be **captured** while the save is still running, but it is not **processed** until the
+  save has finished (`LogProcessingCoordinator.WaitForPendingSaveAsync`). Processing is what clears and
+  reuses the scan data, so the data being saved can never be replaced mid-save.
+- The saved-record readiness checks report "Deferred" at step 2 and are brought up to date after the save.
+  If any part of the record is missing they are written to the audit record as a not-enforced warning and
+  an `ERROR:` line is logged.
+- A failed save is logged as an error; it cannot block the PLC write because the write has already happened.
+- Closing the application starts the save if it has not started yet and waits up to 20 s for it.
+- A scan is saved exactly once.
+
+Set `Plc.SendResultsBeforeSave` to `false` to go back to save first, send second. Save-first is also used
+automatically when `Production.EnforceOnlyEssentialReadinessChecks` is `false`, because the full checks
+require the saved record before the PLC write and a failed save must then stop it.
+
+## Operator scan-quality screen
+
+When a new block starts scanning, the previous block's numbers and log profile picture are cleared, so
+the screen is empty until the new profile is ready.

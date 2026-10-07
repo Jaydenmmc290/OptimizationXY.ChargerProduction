@@ -41,6 +41,19 @@ namespace OptimizationXY.Charger.Services.Core
 
         public string LastSavedRunFolder { get; set; } = string.Empty; // Folder path where the last successful run of the pipeline
                                                                        // was saved, used for reference and reloading previous results.
+
+        /// <summary>
+        /// True when this scan is sent to the PLC first and saved straight after.
+        /// The readiness checks that look for the saved record then report it as
+        /// deferred instead of missing, and are brought up to date after the save.
+        /// </summary>
+        public bool ResultSaveDeferredUntilAfterPlcWrite { get; set; }
+
+        /// <summary>
+        /// True once the save of this scan has been started, so it is never
+        /// started a second time.
+        /// </summary>
+        public bool ResultSaveStarted { get; set; }
         public string CurrentLogFolder { get; set; } = string.Empty;
         public CaptureAuditRecord? CaptureAudit { get; set; }
         public int ProductionRunSequence { get; set; }
@@ -151,6 +164,8 @@ namespace OptimizationXY.Charger.Services.Core
             DiagnosticsReport = string.Empty;
             CurrentLogFolder = string.Empty;
             LastSavedRunFolder = string.Empty;
+            ResultSaveDeferredUntilAfterPlcWrite = false;
+            ResultSaveStarted = false;
             CaptureAudit = null;
             ProductionRunSequence = 0;
             ProductionReadiness = null;

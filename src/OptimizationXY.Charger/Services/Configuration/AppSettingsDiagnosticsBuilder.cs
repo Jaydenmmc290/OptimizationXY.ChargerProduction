@@ -73,6 +73,7 @@ public static class AppSettingsDiagnosticsBuilder
         sb.AppendLine(FormattableString.CurrentCulture($"PLC Integration Enabled: {settings.Plc.Enabled}"));
         sb.AppendLine(FormattableString.CurrentCulture($"PLC Auto Start: {settings.Plc.AutoStartCaptureOnScanStart}"));
         sb.AppendLine(FormattableString.CurrentCulture($"PLC Auto Send: {settings.Plc.AutoSendResultsAfterSave}"));
+        sb.AppendLine(FormattableString.CurrentCulture($"PLC Send Before Save: {settings.Plc.SendResultsBeforeSave}"));
         sb.AppendLine(FormattableString.CurrentCulture($"Require PLC ScanComplete: {settings.Plc.RequireScanCompleteBeforeProcessing}"));
         sb.AppendLine(FormattableString.CurrentCulture($"PLC ScanComplete Timeout: {settings.Plc.ScanCompleteTimeoutMilliseconds} ms"));
         sb.AppendLine(FormattableString.CurrentCulture($"Require Encoder Acquisition: {settings.Production.RequireEncoderAcquisition}"));

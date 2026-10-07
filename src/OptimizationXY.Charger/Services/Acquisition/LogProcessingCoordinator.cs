@@ -38,6 +38,11 @@ public sealed class LogProcessingCoordinator
                 "Completed capture has no frames.");
         }
 
+        // The previous block may still be saving (the save now runs after the
+        // PLC write). Processing clears and reuses the shared pipeline state, so
+        // it must not begin until that save has completely finished.
+        await WaitForPendingSaveAsync();
+
         cancellationToken.ThrowIfCancellationRequested();
 
         // ------------------------------------------------------------
@@ -406,18 +411,159 @@ public sealed class LogProcessingCoordinator
         }
     }
 
+    // The save that is running now, or the last one that ran. Only one save can
+    // be in flight at a time: a new scan waits for it before it is processed.
+    // Shared by every coordinator instance (a camera reconnect creates a new
+    // coordinator) because they all work on the one shared pipeline state.
+    private static volatile Task<string> _pendingSave = Task.FromResult(string.Empty);
+    private static readonly object SaveStartLock = new();
+
+    /// <summary>
+    /// True while a save started by this coordinator has not finished yet.
+    /// </summary>
+    public static bool IsSaveInProgress => !_pendingSave.IsCompleted;
+
+    /// <summary>
+    /// Waits until the save of the previous block has finished. A failed save
+    /// has already been reported by whoever started it, so its error is not
+    /// raised again here.
+    /// </summary>
+    public async Task WaitForPendingSaveAsync()
+    {
+        Task pending = _pendingSave;
+
+        if (pending.IsCompleted)
+            return;
+
+        LogDiagnostics("Waiting for the previous block's save to finish before processing this scan...");
+
+        try
+        {
+            await pending;
+        }
+        catch (Exception)
+        {
+            // Already reported when the save failed.
+        }
+
+        LogDiagnostics("Previous block's save finished.");
+    }
+
+    /// <summary>
+    /// Blocks for up to <paramref name="timeout"/> while a save is finishing.
+    /// Used when the application closes so a scan record is not cut short.
+    /// The save runs entirely on a background thread and never needs the UI
+    /// thread, so waiting for it here cannot deadlock.
+    /// </summary>
+    /// <returns>True when no save is left running.</returns>
+    public bool WaitForPendingSave(TimeSpan timeout)
+    {
+        Task pending = _pendingSave;
+
+        if (pending.IsCompleted)
+            return true;
+
+        try
+        {
+            return pending.Wait(timeout);
+        }
+        catch (Exception)
+        {
+            // The save failed; it is no longer running.
+            return true;
+        }
+    }
+
     /// <summary>
     /// Asynchronously saves the current processing results on a background
     /// thread so file I/O does not block the UI thread.
     ///
-    /// The caller must await this task before evaluating production readiness
-    /// or sending a PLC payload. Readiness verifies LastSavedRunFolder and the
-    /// audit files written by this operation.
+    /// Used when the result is saved BEFORE the PLC write: the caller must await
+    /// this task before evaluating production readiness or sending a PLC payload.
     /// </summary>
     /// <returns>A task that completes when the save operation finishes, returning the save folder path.</returns>
-    public async Task<string> SaveResultsAsync()
+    public Task<string> SaveResultsAsync()
     {
-        return await Task.Run(() => SaveResults());
+        lock (SaveStartLock)
+        {
+            PipelineState.Instance.ResultSaveStarted = true;
+
+            Task<string> save = Task.Run(() => SaveResults());
+            _pendingSave = save;
+            return save;
+        }
+    }
+
+    /// <summary>
+    /// Saves the current processing results AFTER the PLC write, on a background
+    /// thread, and then completes the production audit record so it includes the
+    /// readiness report and the PLC transmission result.
+    ///
+    /// The next scan is not processed until this has finished (see
+    /// <see cref="WaitForPendingSaveAsync"/>), so the data being saved cannot be
+    /// cleared or replaced while it is written.
+    /// </summary>
+    /// <returns>A task that completes when the save has finished, returning the save folder path.</returns>
+    public Task<string> SaveResultsAfterPlcWriteAsync()
+    {
+        lock (SaveStartLock)
+        {
+            // A scan is saved once. If its save has already been started (for
+            // example by the application closing during the PLC write), hand back
+            // that same save instead of starting a second one.
+            if (PipelineState.Instance.ResultSaveStarted)
+                return _pendingSave;
+
+            PipelineState.Instance.ResultSaveStarted = true;
+
+            Task<string> save = Task.Run(() => SaveAndCompleteAuditRecord());
+            _pendingSave = save;
+            return save;
+        }
+    }
+
+    /// <summary>
+    /// Background work of <see cref="SaveResultsAfterPlcWriteAsync"/>: saves the
+    /// scan, then completes the production audit record.
+    /// </summary>
+    private string SaveAndCompleteAuditRecord()
+    {
+        string folderPath = SaveResults();
+
+        PipelineState state = PipelineState.Instance;
+
+        try
+        {
+            List<string> problems =
+                ProductionReadinessEvaluator.RefreshSavedRecordChecks(state);
+
+            foreach (string problem in problems)
+                LogDiagnostics($"ERROR: Saved record is incomplete. {problem}");
+
+            state.DiagnosticsReport +=
+                Environment.NewLine +
+                "=== SAVE AFTER PLC WRITE ===" + Environment.NewLine +
+                $"Folder: {folderPath}" + Environment.NewLine +
+                (problems.Count == 0
+                    ? "Saved record: complete" + Environment.NewLine
+                    : "Saved record: INCOMPLETE" + Environment.NewLine +
+                      string.Join(Environment.NewLine, problems.Select(problem => "  " + problem)) +
+                      Environment.NewLine);
+
+            // Same audit files the save-first order writes, now including the
+            // readiness report and the PLC transmission result in one pass.
+            ProductionAuditWriter.Write(state);
+            SimpleScanSaveService.WriteDiagnosticsReport(
+                state,
+                folderPath);
+        }
+        catch (Exception ex)
+        {
+            LogDiagnostics($"ERROR: The production audit record could not be completed: {ex.Message}");
+            throw;
+        }
+
+        return folderPath;
     }
 
     /// <summary>
