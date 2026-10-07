@@ -30,20 +30,24 @@ An extra buffer can be added only after measuring machine uncertainty, stopping 
 
 ## Fail-closed software gates
 
-A production PLC write is blocked unless all required checks pass, including:
+All of the checks below run on every scan and are written to the readiness report.
+
+By default (`Production.EnforceOnlyEssentialReadinessChecks = true`) only these can block a production PLC write: Production mode, PLC connected, operator scan-quality gate, PLC payload built, final recommendation allowed, finite XY values, hard travel limits, knife clearance, carriage-retract payload, PLC write order, and reserved payload fields zero. Any other check that fails is logged as NOT ENFORCED and does not stop the write. Set the setting to `false` to make every check blocking. See [`SCAN_CYCLE.md`](../operation/SCAN_CYCLE.md).
+
+The checks:
 
 - Operating mode is `Production`.
-- `RecoveryOptimized` mode and direct virtual-peel refinement are enabled.
+- Optimization mode is `CompareInscribedGeometry` (not enforced by default).
 - All physical commissioning flags and approval fields are complete.
 - Both cameras use encoder acquisition.
-- Exactly 36 valid concatenated frames are present.
+- Frame count: exactly `Acquisition.TargetFramePairsPerLog` when `Production.RequireExactFrameCount` is true, otherwise at least `RotatingScan.MinimumValidFrames` (not enforced by default).
 - Dropped-frame count is within the approved limit.
 - A good `ScanComplete` follows the active `ScanStart` cycle.
 - Calibration is loaded and valid.
 - Minimum point-cloud, centerline, and radius-field coverage is met.
 - Final XY values are finite and inside hard travel limits.
 - Required knife clearance is at least 10 peel thicknesses.
-- Results have been saved before transmission.
+- Saved record: by default the result is sent first and saved immediately afterwards (`Plc.SendResultsBeforeSave`). Save-before-send applies only when `EnforceOnlyEssentialReadinessChecks` is false.
 - PLC is connected.
 - PLC policy requires good-quality verified readback.
 - Restricted output payload is valid.

@@ -18,7 +18,7 @@ The operator display uses the existing production pipeline instead of creating a
 - invalid or under-covered axial slices are highlighted in red;
 - the result is classified as `Good`, `Warning`, or `Failed` using configurable `OperatorView` thresholds;
 - `operator-scan-quality.json` is stored with each production scan;
-- a warning or failed result blocks automatic PLC result delivery when `Plc.RequireGoodQuality` is enabled.
+- a failed result always blocks automatic PLC result delivery; a warning result blocks it when `Plc.RequireGoodQuality` is enabled.
 
 The view reuses the existing restricted PLC lifecycle events and does not add new PLC writes:
 
@@ -34,7 +34,7 @@ For each camera, programmatic connection now follows this order:
 1. create `SapLocation(serverName, deviceIndex)`;
 2. create `SapAcqDevice(location)` with no CCF;
 3. call `SapAcqDevice.Create()`;
-4. read and lock the physical camera serial number;
+4. read the physical camera serial number;
 5. check and apply trigger/frame-rate mode;
 6. read back supported feature and image-geometry values;
 7. freeze a deterministic JSON configuration snapshot for calibration and scan auditing;
@@ -67,7 +67,7 @@ The supplied environment is not a Windows x64 production host and does not conta
 - verify the actual camera firmware accepts every required feature name and value;
 - verify `TriggerSource` and `TriggerActivation` against the physical encoder/frame-trigger wiring;
 - confirm the final width, height, offsets, pixel format, exposure, and gain readbacks;
-- capture exactly 36 synchronized head/tail pairs through a complete PLC rotation cycle;
+- capture a complete PLC rotation cycle and confirm `Rotation coverage` passes in the readiness report;
 - verify `ScanComplete` gates processing and neither lifecycle tag is written by this application;
 - test known-good, warning, obstructed, incomplete, camera-disconnected, and PLC-disconnected scans;
 - verify the operator form on the selected lathe monitor and confirm HEAD / DOG and TAIL orientation;

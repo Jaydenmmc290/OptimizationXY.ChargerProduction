@@ -4,33 +4,68 @@ Windows Forms software for dual-camera rotating-log acquisition, calibrated 3D g
 
 ## Documentation map
 
-Start with:
+New to the project? Read [Start here](getting-started/START_HERE.md) first.
 
-- `START_HERE.md` — first installation, commissioning, and update overview.
-- `PRODUCTION_DEPLOYMENT.md` — supported ClickOnce deployment and update process.
-- `PRODUCTION_SETUP_WIZARD.md` — in-program production setup and camera assignment.
-- `CALIBRATION.md` — scanner calibration requirements.
-- `COMMISSIONING_CHECKLIST.md` — final machine commissioning checks.
-- `SAFETY_AND_INTERLOCKS.md` — production safety requirements.
-- `ARCHITECTURE.md` — system architecture and major components.
-- `DUAL_CAMERA_CONCATENATION.md` — head/tail image registration and concatenation.
-- `OPTIMIZATION_MODES.md` — optimization strategy behavior.
+### Getting started
 
-PLC and restricted-library documentation is maintained separately and is not changed as part of the ClickOnce documentation cleanup.
+- [Start here](getting-started/START_HERE.md): first installation, commissioning and update overview.
+
+### Deployment and commissioning
+
+- [Production deployment](deployment/PRODUCTION_DEPLOYMENT.md): the supported ClickOnce deployment and update process.
+- [Production setup wizard](deployment/PRODUCTION_SETUP_WIZARD.md): in-program production setup and camera assignment.
+- [Commissioning checklist](deployment/COMMISSIONING_CHECKLIST.md): final machine commissioning checks.
+- [Safety and interlocks](deployment/SAFETY_AND_INTERLOCKS.md): production safety requirements and software gates.
+- [Production readiness review](deployment/PRODUCTION_READINESS.md): what was hardened for production and the release gates.
+
+### Scanning and measurement
+
+- [Calibration](scanning/CALIBRATION.md): scanner calibration requirements and packages.
+- [Dual camera concatenation](scanning/DUAL_CAMERA_CONCATENATION.md): head/tail image registration and concatenation.
+- [Rotation angles and scan geometry](scanning/ROTATION_ANGLES.md): how frame angles, the centreline and positions are worked out.
+- [Direct camera and operator view](scanning/DIRECT_CAMERA_AND_OPERATOR_VIEW_IMPLEMENTATION.md): direct Sapera initialization and the lathe-operator screen.
+
+### Running a scan
+
+- [Scan cycle](operation/SCAN_CYCLE.md): the order of a scan, which checks block the PLC write, send-then-save, and what happens when a scan fails.
+
+### PLC
+
+- [PLC integration](plc/PLC_INTEGRATION.md): handshake, payloads and the write/readback policy.
+- [PLC tag payloads](plc/PLC_TAG_PAYLOADS.txt): the payload layouts.
+- [XYRestricted consumer guide](plc/XYRESTRICTED_CONSUMER_GUIDE.md): the supplied restricted PLC library (vendor document).
+
+### Design
+
+- [Architecture](design/ARCHITECTURE.md): system architecture and major components.
+- [Optimization modes](design/OPTIMIZATION_MODES.md): optimization strategy behavior.
+- [Implementation and validation report](design/IMPLEMENTATION_VALIDATION_REPORT.md): what was implemented and what must be validated on the machine.
+
+### Development
+
+- [Offline replay](development/OFFLINE_REPLAY.md): re-running a saved scan on the development computer, and how to build.
+
+### Archive
+
+Old change notes kept for history. They are not current guides.
+
+- [Setup summary](archive/SETUP_SUMMARY.md)
+- [Production configuration changes](archive/PRODUCTION_CONFIG_CHANGES.md)
 
 ## Current measurement flow
 
-Each complete scan captures 36 synchronized positions:
+Every head/tail pair between PLC ScanStart and ScanComplete is captured (typically 85-100 pairs):
 
 ```text
-36 head frames + 36 tail frames
+head frames + tail frames
   -> pair by capture index
   -> crop/orient/register each pair
   -> concatenate each pair into one full-length image
-  -> 36 concatenated frames enter the processing pipeline
+  -> the concatenated frames enter the processing pipeline
+  -> frame angles are assigned from one measured revolution
 ```
 
-The live combined preview uses the same crop, orientation, overlap, vertical-offset, camera-side, and equal-height rules as the saved processing images. See `DUAL_CAMERA_CONCATENATION.md`.
+The live combined preview uses the same crop, orientation, overlap, vertical-offset, camera-side, and equal-height rules as the saved processing images. See [Dual camera concatenation](scanning/DUAL_CAMERA_CONCATENATION.md) and [Rotation angles](scanning/ROTATION_ANGLES.md).
 
 ## Production deployment
 
@@ -49,7 +84,7 @@ Development computer
 
 The previous ZIP-based process using `publish-production.ps1` and `install-production.ps1` is legacy and should not be used for normal production installation or updates.
 
-See `PRODUCTION_DEPLOYMENT.md` for the full process.
+See [Production deployment](deployment/PRODUCTION_DEPLOYMENT.md) for the full process.
 
 ## First-run production setup
 
@@ -60,7 +95,7 @@ The wizard can:
 - create or upgrade the local OptimizationXY SQL Express database when database saving is enabled;
 - discover Sapera acquisition cameras;
 - assign the physical Head / Dog and Tail cameras;
-- learn and verify physical camera serial numbers;
+- read each camera's serial number and save the Head/Tail assignment by Sapera server name and device index;
 - reconnect the final head/tail cameras;
 - open separate head/tail previews for physical-side confirmation;
 - configure and verify camera crop, orientation, vertical registration, overlap, and seam;
@@ -69,7 +104,7 @@ The wizard can:
 - capture known round references and build the scanner lookup calibration;
 - stage, hash, validate, archive, activate, and roll back calibration packages.
 
-See `PRODUCTION_SETUP_WIZARD.md` and `CALIBRATION.md`.
+See [Production setup wizard](deployment/PRODUCTION_SETUP_WIZARD.md) and [Calibration](scanning/CALIBRATION.md).
 
 ## Runtime data
 
@@ -103,4 +138,4 @@ Do not copy the Git repository to the production computer for normal updates.
 
 Installation and software update success do not replace machine commissioning.
 
-Before enabling Production mode, complete the required camera, calibration, machine-direction, travel-limit, clearance, guarding, interlock, emergency-stop, and controlled-scan checks described in `COMMISSIONING_CHECKLIST.md` and `SAFETY_AND_INTERLOCKS.md`.
+Before enabling Production mode, complete the required camera, calibration, machine-direction, travel-limit, clearance, guarding, interlock, emergency-stop, and controlled-scan checks described in the [Commissioning checklist](deployment/COMMISSIONING_CHECKLIST.md) and [Safety and interlocks](deployment/SAFETY_AND_INTERLOCKS.md).

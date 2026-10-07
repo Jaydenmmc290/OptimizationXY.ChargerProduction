@@ -13,7 +13,7 @@ This release uses settings schema 10, a separate lathe-operator scan-quality scr
 7. Do not use the old ZIP plus `install-production.ps1` workflow for normal production deployment.
 8. Do not pre-enable Production mode or commissioning approval in a new-machine template.
 
-See `PRODUCTION_DEPLOYMENT.md` for the complete ClickOnce installation and update procedure.
+See [`PRODUCTION_DEPLOYMENT.md`](../deployment/PRODUCTION_DEPLOYMENT.md) for the complete ClickOnce installation and update procedure.
 
 ## Production computer
 
@@ -24,7 +24,7 @@ See `PRODUCTION_DEPLOYMENT.md` for the complete ClickOnce installation and updat
 5. Confirm the application is in Commissioning mode for initial machine setup.
 6. In Production Setup, refresh the discovered Sapera cameras.
 7. Assign one discovered physical camera to Head / Dog and one to Tail.
-8. Save the assignments and reconnect. The application learns each serial number directly from the camera.
+8. Save the assignments and reconnect. The application learns each serial number directly from the camera. The assignment itself is saved as the Sapera server name and device index.
 9. Open both previews and physically verify Head / Dog versus Tail.
 10. Close and reopen each preview to verify that preview visibility does not affect camera acquisition.
 11. Configure and verify Head/Tail crop, orientation, vertical offset, overlap, and camera seam.
@@ -47,4 +47,4 @@ After ClickOnce is installed once on the production computer:
 
 Do not copy the source repository to the production computer and do not manually replace ClickOnce-managed application binaries.
 
-See `PRODUCTION_SETUP_WIZARD.md`, `PRODUCTION_DEPLOYMENT.md`, `CALIBRATION.md`, `COMMISSIONING_CHECKLIST.md`, and `IMPLEMENTATION_VALIDATION_REPORT.md` for the complete setup and machine-acceptance requirements.
+See [`PRODUCTION_SETUP_WIZARD.md`](../deployment/PRODUCTION_SETUP_WIZARD.md), [`PRODUCTION_DEPLOYMENT.md`](../deployment/PRODUCTION_DEPLOYMENT.md), [`CALIBRATION.md`](../scanning/CALIBRATION.md), [`COMMISSIONING_CHECKLIST.md`](../deployment/COMMISSIONING_CHECKLIST.md), and [`IMPLEMENTATION_VALIDATION_REPORT.md`](../design/IMPLEMENTATION_VALIDATION_REPORT.md) for the complete setup and machine-acceptance requirements.

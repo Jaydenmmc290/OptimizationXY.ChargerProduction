@@ -37,13 +37,13 @@ Processing is blocked when any of the following no longer matches the active pac
 - head/tail orientation, crop, reversal, overlap, seam, vertical offset, or equal-height policy;
 - capture-time direct camera snapshot hash;
 - concatenated image width or height;
-- 36-position acquisition geometry;
+- `Acquisition.TargetFramePairsPerLog` (part of the calibration fingerprint; leave at 36);
 - axial pixels/mm or lookup-table structure.
 
 Changing a camera, direct feature configuration, or concatenation setting intentionally invalidates calibration. Reconnect, verify the machine geometry, and recalibrate rather than editing package files manually.
 
 ## Saved scans
 
-Every production scan preserves the exact lookup table and the exact head/tail direct camera snapshots frozen when capture began. These files are included in the scan SHA-256 manifest before automatic PLC result delivery can pass readiness.
+Every production scan preserves the exact lookup table and the exact head/tail direct camera snapshots frozen when capture began. These files are included in the scan SHA-256 manifest. By default the scan is saved immediately after the PLC write.
 
 A loose lookup JSON is not accepted as a production calibration. Use the in-program activation workflow so metadata, serial binding, snapshots, dimensions, geometry fingerprint, archive, and manifest remain consistent.

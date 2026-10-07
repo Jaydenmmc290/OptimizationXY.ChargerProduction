@@ -4,17 +4,17 @@
 
 - Added one lifetime `XYRestricted` connection and the exact five-tag restricted contract.
 - Added fresh-edge `ScanStart` handling that suppresses stale high startup values.
-- Added good-quality `ScanComplete` gating after all 36 synchronized pairs are present.
+- Added good-quality `ScanComplete` gating: `ScanComplete` ends the capture.
 - Added readback verification, quality enforcement, tolerance checks, timeout handling, and fail-closed disconnected behavior for all writable result arrays.
 - Added a persistent block sequence and exact PLC payload builders for spindle XY, diameters, retract radius, and roundup radius.
 - Added a mandatory knife/carriage clearance of at least 10 peel thicknesses, with an optional separately commissioned extra buffer.
 - Added recovery-optimized selection across baseline, penalty-search, cylinder, oval, and a bounded direct XY recovery-refinement candidate using full-sheet virtual-peel output.
 - Added per-log production-readiness reports, capture audit, redacted settings snapshot, PLC payload/transmission record, feedback-availability record, exact calibration/direct-camera snapshots, software-build identity, and SHA-256 scan manifest. Database connection strings are not stored in audit files.
-- Added production/commissioning modes. Production disables manual capture start, manual early-stop, and optimization-mode changes, and requires the direct recovery strategy.
+- Added production/commissioning modes. Production disables manual capture start, manual early-stop, and optimization-mode changes, and the optimization-policy check expects `CompareInscribedGeometry`.
 - Added a named single-instance mutex and fail-closed persistent block-sequence validation. The block sequence never silently wraps; exhaustion requires an approved controls reset.
 - Added production publish, install, and non-writing host-validation scripts plus detailed commissioning/safety/PLC documentation.
 - Host validation now parses the calibration contents, rejects legacy estimated calibration, verifies the configured head/tail direct camera identities and settings, and confirms that the runtime data root is writable.
-- A production result cannot pass readiness unless its saved folder contains the exact scanner calibration and both direct camera snapshots frozen from the live Sapera connections at capture start.
+- A production result cannot pass readiness unless its saved folder contains the exact scanner calibration and both direct camera snapshots frozen from the live Sapera connections at capture start. This applies when `Production.EnforceOnlyEssentialReadinessChecks` is false; by default the saved-record checks are deferred until after the PLC write and a missing part is logged, not blocking.
 - Confirmed no application rotation command or rotation payload field exists.
 
 
@@ -23,7 +23,7 @@
 ### Dual-camera acquisition
 
 - Restored the required dual-camera concatenation boundary.
-- Changed completed capture from 72 interleaved half-log images to 36 paired, full-length processing images.
+- Changed completed capture from 72 interleaved half-log images to one full-length processing image per head/tail pair.
 - Added persisted crop, horizontal reversal, camera-side, overlap, and vertical-registration settings.
 - Made the live combined preview use the same concatenation implementation and settings as the measurement path.
 - Kept strict equal-height validation enabled by default so measurement registration problems fail loudly.
@@ -44,7 +44,7 @@
 - Removed developer-specific Sapera paths and added `SAPERA_SDK_DIR` / `SaperaSdkDir`.
 - Added deterministic `UseSapera=false` builds with a non-hardware camera stub.
 - Removed unused packages and inactive legacy code identified in the earlier cleanup.
-- Added an x64 project target, pinned SDK, analyzers, NuGet audit, CI, Dependabot, and repeatable scripts.
+- Added an x64 project target, pinned SDK, analyzers, NuGet audit, and repeatable scripts.
 
 ### Runtime correctness and safety
 
@@ -63,9 +63,9 @@
 
 These require the real Windows, camera, lathe, PLC, and reference-data environment:
 
-1. Run `./scripts/build.ps1 -SkipSapera` and a Release hardware build with the installed Sapera SDK; resolve every compiler/analyzer finding.
+1. Build the solution in Visual Studio (or with `msbuild` from a Developer Command Prompt) as a Release hardware build with the installed Sapera SDK; resolve every compiler/analyzer finding. The `dotnet` command line, which `scripts/build.ps1` uses, stops with error MSB4803 on this project.
 2. Confirm the Sapera assembly/API version matches `GenieNanoCameraService`.
-3. Commission head/tail registration with a certified target. Tune crop, reversal, vertical offset, overlap, and camera side until the 36 concatenated images match the supplied 40.zip geometry and contain no duplicated or missing seam region.
+3. Commission head/tail registration with a certified target. Tune crop, reversal, vertical offset, overlap, and camera side until the concatenated images match the supplied 40.zip geometry and contain no duplicated or missing seam region.
 4. Confirm frame-pair synchronization against the encoder: head frame N and tail frame N must represent the same physical rotation angle.
 5. Verify the scanner XY-plane angle basis used by `RadiusFieldGenerator` against the installed camera/laser geometry, especially when the fitted centerline is tilted.
 6. Validate inscribed-cylinder and inscribed-oval dimensions against certified circular and elliptical reference artifacts.

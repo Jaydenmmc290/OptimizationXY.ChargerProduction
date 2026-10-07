@@ -27,7 +27,7 @@
     
     <UseSapera8 Condition="'$(UseSapera8)' == ''">false</UseSapera8>
 
-    <Sapera8AssemblyPath Condition="'$(UseSapera8)' == 'true'">$(MSBuildThisFileDirectory)..\..\dependencies\Sapera8\DALSA.SaperaLT.SapClassBasic.dll</Sapera8AssemblyPath>
+    <Sapera8AssemblyPath Condition="'$(UseSapera8)' == 'true'">$(MSBuildThisFileDirectory)..\..\lib\Sapera8\DALSA.SaperaLT.SapClassBasic.dll</Sapera8AssemblyPath>
     
     <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(SAPERA_SDK_DIR)</SaperaSdkDir>
     <SaperaSdkDir Condition="'$(UseSapera)' == 'true' and '$(SaperaSdkDir)' == ''">$(ProgramFiles)\Teledyne DALSA\Sapera\Components\NET\Bin</SaperaSdkDir>

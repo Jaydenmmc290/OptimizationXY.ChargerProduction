@@ -18,7 +18,7 @@
 - [ ] Head and Tail assigned serial numbers were read directly from the cameras.
 - [ ] Head and Tail serial numbers are populated and distinct.
 - [ ] Camera assignments resolve successfully after a reconnect.
-- [ ] Changing Sapera server enumeration does not change the physical camera assignment.
+- [ ] After a reconnect or reboot each camera is still found at its assigned Sapera server name and device index. If a server name changes, reassign in Production Setup; this invalidates the calibration.
 - [ ] Both camera previews can be hidden and reopened without a Sapera resource-lock error.
 - [ ] Both cameras use `Programmatic` initialization.
 - [ ] Both cameras use Encoder mode and the verified wired trigger configuration.
@@ -61,7 +61,7 @@
 ## PLC and machine safety
 
 - [ ] PLC ScanStart rising edge starts exactly one capture cycle.
-- [ ] Exactly 36 synchronized head/tail pairs are captured at the verified positions.
+- [ ] Head and tail capture the same number of frames from ScanStart to ScanComplete, and the readiness report shows `Rotation coverage` as PASS.
 - [ ] Processing waits for a good ScanComplete signal.
 - [ ] No software component writes ScanStart or ScanComplete.
 - [ ] Head X/Y and tail X/Y signs match physical movement.
