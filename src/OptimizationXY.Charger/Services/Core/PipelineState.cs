@@ -137,8 +137,8 @@ namespace OptimizationXY.Charger.Services.Core
         public Mat? DirectRecoveryPeelView { get; set; }
         public Mat? PointCloudOverlay { get; set; }
 
-        /// <summary>Single side view of the block shown in the main form overlay box.</summary>
-        public Mat? LogSideViewOverlay { get; set; }
+        /// <summary>Single view from the head end of the block, shown in the main form overlay box.</summary>
+        public Mat? LogHeadEndViewOverlay { get; set; }
         public Mat? RadiusDefectHeatmap { get; set; }
         public Mat? CenterlineOffsetOverlay { get; set; }
         public Mat? SpindleAxisOverlay { get; set; }
@@ -161,7 +161,7 @@ namespace OptimizationXY.Charger.Services.Core
             KinematicVisualizationState = null;
 
             PointCloudOverlay?.Dispose();
-            LogSideViewOverlay?.Dispose();
+            LogHeadEndViewOverlay?.Dispose();
             RadiusDefectHeatmap?.Dispose();
             CenterlineOffsetOverlay?.Dispose();
             SpindleAxisOverlay?.Dispose();
@@ -173,7 +173,7 @@ namespace OptimizationXY.Charger.Services.Core
             DirectRecoveryPeelView?.Dispose();
 
             PointCloudOverlay = null;
-            LogSideViewOverlay = null;
+            LogHeadEndViewOverlay = null;
             RadiusDefectHeatmap = null;
             CenterlineOffsetOverlay = null;
             SpindleAxisOverlay = null;

@@ -500,8 +500,8 @@ public sealed class SimpleScanSaveService
             state.PointCloudOverlay,
             Path.Combine(overlaysFolder, "point_cloud_overlay.png"));
         SaveMatIfValid(
-            state.LogSideViewOverlay,
-            Path.Combine(overlaysFolder, "log_side_view.png"));
+            state.LogHeadEndViewOverlay,
+            Path.Combine(overlaysFolder, "log_head_end_view.png"));
         SaveMatIfValid(
             state.CenterlineOffsetOverlay,
             Path.Combine(overlaysFolder, "centerline_offset_overlay.png"));
