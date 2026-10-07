@@ -45,5 +45,11 @@ public enum ApplicationState
     /// <summary>
     /// An active operation was cancelled by the user.
     /// </summary>
-    Cancelled
+    Cancelled,
+
+    /// <summary>
+    /// The last scan failed and was stopped. Nothing from it is in progress any
+    /// more and the application is ready to scan the block again.
+    /// </summary>
+    ScanFailed
 }
