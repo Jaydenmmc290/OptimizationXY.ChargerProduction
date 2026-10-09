@@ -68,7 +68,7 @@ namespace OptimizationXY.Charger.UI
             // groupBoxOverlay
             // 
             groupBoxOverlay.Controls.Add(pictureBoxLogOverlay);
-            groupBoxOverlay.Location = new Point(192, 405);
+            groupBoxOverlay.Location = new Point(18, 405);
             groupBoxOverlay.Name = "groupBoxOverlay";
             groupBoxOverlay.Size = new Size(254, 262);
             groupBoxOverlay.TabIndex = 35;
@@ -185,7 +185,7 @@ namespace OptimizationXY.Charger.UI
             groupConcatenated.Controls.Add(pictureBoxConcatenated);
             groupConcatenated.Location = new Point(18, 6);
             groupConcatenated.Name = "groupConcatenated";
-            groupConcatenated.Size = new Size(749, 260);
+            groupConcatenated.Size = new Size(996, 260);
             groupConcatenated.TabIndex = 36;
             groupConcatenated.TabStop = false;
             groupConcatenated.Text = "LIVE | HEAD + TAIL CONCATENATED FOOTAGE";
@@ -196,7 +196,7 @@ namespace OptimizationXY.Charger.UI
             pictureBoxConcatenated.Dock = DockStyle.Fill;
             pictureBoxConcatenated.Location = new Point(3, 19);
             pictureBoxConcatenated.Name = "pictureBoxConcatenated";
-            pictureBoxConcatenated.Size = new Size(743, 238);
+            pictureBoxConcatenated.Size = new Size(990, 238);
             pictureBoxConcatenated.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxConcatenated.TabIndex = 0;
             pictureBoxConcatenated.TabStop = false;
@@ -204,9 +204,9 @@ namespace OptimizationXY.Charger.UI
             // groupBoxDiagnostics
             // 
             groupBoxDiagnostics.Controls.Add(txtDiagnostics);
-            groupBoxDiagnostics.Location = new Point(454, 405);
+            groupBoxDiagnostics.Location = new Point(278, 405);
             groupBoxDiagnostics.Name = "groupBoxDiagnostics";
-            groupBoxDiagnostics.Size = new Size(316, 262);
+            groupBoxDiagnostics.Size = new Size(492, 262);
             groupBoxDiagnostics.TabIndex = 37;
             groupBoxDiagnostics.TabStop = false;
             groupBoxDiagnostics.Text = "Diagnostics";
@@ -219,7 +219,7 @@ namespace OptimizationXY.Charger.UI
             txtDiagnostics.Name = "txtDiagnostics";
             txtDiagnostics.ReadOnly = true;
             txtDiagnostics.ScrollBars = ScrollBars.Vertical;
-            txtDiagnostics.Size = new Size(310, 240);
+            txtDiagnostics.Size = new Size(486, 240);
             txtDiagnostics.TabIndex = 0;
             // 
             // groupBoxProfileMeasurements
@@ -236,7 +236,7 @@ namespace OptimizationXY.Charger.UI
             groupBoxProfileMeasurements.Controls.Add(txtUsableSheets);
             groupBoxProfileMeasurements.Controls.Add(lblUsableVeneerLength);
             groupBoxProfileMeasurements.Controls.Add(txtUsableVeneerLength);
-            groupBoxProfileMeasurements.Location = new Point(15, 405);
+            groupBoxProfileMeasurements.Location = new Point(815, 321);
             groupBoxProfileMeasurements.Name = "groupBoxProfileMeasurements";
             groupBoxProfileMeasurements.Size = new Size(161, 255);
             groupBoxProfileMeasurements.TabIndex = 40;
@@ -349,7 +349,7 @@ namespace OptimizationXY.Charger.UI
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(773, 672);
+            ClientSize = new Size(1026, 672);
             Controls.Add(groupBoxProfileMeasurements);
             Controls.Add(panelControls);
             Controls.Add(groupBoxDiagnostics);

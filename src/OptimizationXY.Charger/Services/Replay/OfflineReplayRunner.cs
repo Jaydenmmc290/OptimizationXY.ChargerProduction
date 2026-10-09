@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using NLog;
@@ -60,6 +61,7 @@ internal static class OfflineReplayRunner
             if (lookupTable is null)
                 return;
 
+
             List<ScanFrame> frames =
                 ScanFrameLoader.LoadFromFolder(framesFolder);
 
@@ -72,14 +74,14 @@ internal static class OfflineReplayRunner
 
             var header = new StringBuilder();
             header.AppendLine("=== OFFLINE REPLAY ===");
-            header.AppendLine($"Replayed: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            header.AppendLine($"Frames Folder: {framesFolder}");
-            header.AppendLine($"Frames Loaded: {frames.Count}");
-            header.AppendLine($"Calibration: {lookupTable.CalibrationId}");
+            header.AppendLine(CultureInfo.InvariantCulture, $"Replayed: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            header.AppendLine(CultureInfo.InvariantCulture, $"Frames Folder: {framesFolder}");
+            header.AppendLine(CultureInfo.InvariantCulture, $"Frames Loaded: {frames.Count}");
+            header.AppendLine(CultureInfo.InvariantCulture, $"Calibration: {lookupTable.CalibrationId}");
             header.AppendLine("PLC: not contacted. SQL: not written. Cameras: not opened.");
-            header.AppendLine(
-                "Settings: the appsettings.json on THIS computer was used. Copy the production " +
-                "appsettings.json here first if the result must match production settings.");
+            header.AppendLine(CultureInfo.InvariantCulture,
+                $"Settings: the appsettings.json on THIS computer was used. Copy the production " +
+                $"appsettings.json here first if the result must match production settings.");
             header.AppendLine();
 
             if (state.Settings.Diagnostics.IncludeSettingsSummary)
@@ -91,7 +93,8 @@ internal static class OfflineReplayRunner
 
             state.ScanFrames = frames;
 
-            Cursor.Current = Cursors.WaitCursor;
+            if (OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+                Cursor.Current = Cursors.WaitCursor;
 
             LogProcessingPipeline.Instance.RunCurrentFramesPipeline(
                 lookupTable,
@@ -108,11 +111,11 @@ internal static class OfflineReplayRunner
             }
             else
             {
-                summary.AppendLine($"Selected Strategy: {recommendation.SelectedStrategy}");
-                summary.AppendLine(
+                summary.AppendLine(CultureInfo.InvariantCulture, $"Selected Strategy: {recommendation.SelectedStrategy}");
+                summary.AppendLine(CultureInfo.InvariantCulture,
                     $"Command Tail X / Y: {recommendation.CommandTailXMM / 25.4:F3} / {recommendation.CommandTailYMM / 25.4:F3} in   " +
                     $"({recommendation.CommandTailXMM:F2} / {recommendation.CommandTailYMM:F2} mm)");
-                summary.AppendLine(
+                summary.AppendLine(CultureInfo.InvariantCulture,
                     $"Command Head X / Y: {recommendation.CommandHeadXMM / 25.4:F3} / {recommendation.CommandHeadYMM / 25.4:F3} in   " +
                     $"({recommendation.CommandHeadXMM:F2} / {recommendation.CommandHeadYMM:F2} mm)");
             }
@@ -123,14 +126,14 @@ internal static class OfflineReplayRunner
                     OperatorScanQualityAnalyzer.Analyze(state);
                 state.OperatorScanQuality = quality;
 
-                summary.AppendLine(
+                summary.AppendLine(CultureInfo.InvariantCulture,
                     $"Scan Quality: {quality.Status} | frames used {quality.FramesUsed} | " +
                     $"coverage {quality.ProfileCoveragePercent:F1}% | valid slices {quality.ValidSlicePercent:F1}%");
                 summary.AppendLine(quality.OperatorMessage);
             }
             catch (Exception qualityException)
             {
-                summary.AppendLine(
+                summary.AppendLine(CultureInfo.InvariantCulture,
                     $"Scan quality could not be evaluated: {qualityException.Message}");
             }
 
@@ -148,13 +151,16 @@ internal static class OfflineReplayRunner
             Logger.Info($"[REPLAY] Report written to '{reportPath}'.");
             Logger.Info(summary.ToString());
 
-            Cursor.Current = Cursors.Default;
+            if (OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+            {
+                Cursor.Current = Cursors.Default;
 
-            MessageBox.Show(
-                $"Replay complete.\r\n\r\n{summary}\r\nFull report:\r\n{reportPath}",
-                "Optimization XY Charger - Offline Replay",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                MessageBox.Show(
+                    $"Replay complete.\r\n\r\n{summary}\r\nFull report:\r\n{reportPath}",
+                    "Optimization XY Charger - Offline Replay",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
 
             try
             {
@@ -170,14 +176,19 @@ internal static class OfflineReplayRunner
         }
         catch (Exception ex)
         {
-            Cursor.Current = Cursors.Default;
+            if (OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+                Cursor.Current = Cursors.Default;
+
             Logger.Error(ex, "[REPLAY] Offline replay failed.");
 
-            MessageBox.Show(
-                $"Offline replay failed:\r\n\r\n{ex.Message}",
-                "Optimization XY Charger - Offline Replay",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            if (OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+            {
+                MessageBox.Show(
+                    $"Offline replay failed:\r\n\r\n{ex.Message}",
+                    "Optimization XY Charger - Offline Replay",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
         finally
         {
@@ -204,6 +215,9 @@ internal static class OfflineReplayRunner
             throw new DirectoryNotFoundException(
                 $"Replay folder was not found: {candidate}");
         }
+
+        if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+            return null;
 
         using var dialog = new FolderBrowserDialog
         {
@@ -248,6 +262,9 @@ internal static class OfflineReplayRunner
                 return table;
         }
 
+        if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+            return null;
+
         using var dialog = new OpenFileDialog
         {
             Title = "Select the scanner calibration used for this scan (scanner-lookup-table.json)",
@@ -260,13 +277,8 @@ internal static class OfflineReplayRunner
 
         ScannerLookupTable? selected = TryLoadCalibration(dialog.FileName);
 
-        if (selected is null)
-        {
-            throw new InvalidDataException(
-                $"'{dialog.FileName}' is not a valid scanner lookup table with calibration points.");
-        }
-
-        return selected;
+        return selected ?? throw new InvalidDataException(
+            $"'{dialog.FileName}' is not a valid scanner lookup table with calibration points.");
     }
 
     private static ScannerLookupTable? TryLoadCalibration(string path)
