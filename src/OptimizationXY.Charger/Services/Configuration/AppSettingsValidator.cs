@@ -167,6 +167,13 @@ public static class AppSettingsValidator
         {
             throw new InvalidOperationException("Operator-view missing-gap thresholds are invalid.");
         }
+
+        if (!double.IsFinite(view.MaximumAngularGapDeg) ||
+            view.MaximumAngularGapDeg <= 0.0 ||
+            view.MaximumAngularGapDeg > 360.0)
+        {
+            throw new InvalidOperationException("OperatorView.MaximumAngularGapDeg must be greater than 0 and at most 360.");
+        }
     }
 
     /// <summary>

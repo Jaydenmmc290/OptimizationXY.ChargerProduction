@@ -35,6 +35,16 @@ public static class LaserRadiusProfileBuilder
 
         foreach (var p in orderedLaser)
         {
+            // A stripe point in an image column the calibration never saw has
+            // no radius. Skip that one point instead of throwing, which used to
+            // reject the whole frame. Live captures are already refused up front
+            // when the image size differs from the calibration, so this only
+            // matters for replays of wider images (for example frames captured
+            // by another program), where stray reflections past the end of the
+            // log land in the extra columns.
+            if (p.X < 0 || p.X >= lookupTable.ImageWidth)
+                continue;
+
             double radiusMM = LookupTableInterpolator.GetRadiusMM(
                 lookupTable,
                 p.X,
