@@ -77,6 +77,105 @@ public static class SaperaCameraDiscoveryService
             .OrderBy(camera => camera.ServerName)
             .ThenBy(camera => camera.DeviceIndex)];
     }
+
+    /// <summary>
+    /// Feature names a GigE Vision / Genie camera may use for its serial number
+    /// or a fixed device ID. Every one that exists is read, because different
+    /// camera families put the label serial number in different features.
+    /// </summary>
+    private static readonly string[] IdentityFeatureNames =
+    [
+        "DeviceSerialNumber",
+        "DeviceID",
+        "DeviceUserID",
+        "DeviceFactorySerialNumber",
+        "deviceSerialNumber",
+        "deviceID"
+    ];
+
+    /// <summary>
+    /// Discovers every camera like <see cref="Discover"/> and also opens each one
+    /// briefly to read the serial-number / device-ID strings it reports. Call it
+    /// only while this program has no camera open (before connecting).
+    /// </summary>
+    public static IReadOnlyList<DiscoveredCamera> DiscoverWithIdentity()
+    {
+        var probed = new List<DiscoveredCamera>();
+
+        foreach (DiscoveredCamera camera in Discover())
+        {
+            var location = new SapLocation(camera.ServerName, camera.DeviceIndex);
+            IReadOnlyList<string> identities = [];
+
+            SapAcqDevice? device = null;
+            try
+            {
+                device = new SapAcqDevice(location);
+                identities = device.Create()
+                    ? ReadIdentityStrings(device, location)
+                    : ReadLocationSerialOnly(location);
+            }
+            catch
+            {
+                identities = ReadLocationSerialOnly(location);
+            }
+            finally
+            {
+                try { device?.Destroy(); } catch { /* probe only */ }
+                device?.Dispose();
+            }
+
+            probed.Add(camera with { IdentityStrings = identities });
+        }
+
+        return probed;
+    }
+
+    /// <summary>
+    /// Reads every identity string an opened camera reports: the serial-number
+    /// and device-ID features plus Sapera's own serial number for the location.
+    /// Duplicates and empty values are removed.
+    /// </summary>
+    public static IReadOnlyList<string> ReadIdentityStrings(
+        SapAcqDevice device,
+        SapLocation location)
+    {
+        var values = new List<string>();
+
+        foreach (string feature in IdentityFeatureNames)
+        {
+            try
+            {
+                if (device.IsFeatureAvailable(feature) &&
+                    device.GetFeatureValue(feature, out string value) &&
+                    !string.IsNullOrWhiteSpace(value))
+                {
+                    values.Add(value.Trim());
+                }
+            }
+            catch
+            {
+                // Optional identity feature.
+            }
+        }
+
+        values.AddRange(ReadLocationSerialOnly(location));
+
+        return [.. values.Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static IReadOnlyList<string> ReadLocationSerialOnly(SapLocation location)
+    {
+        try
+        {
+            string serial = (SapManager.GetSerialNumber(location) ?? string.Empty).Trim();
+            return serial.Length == 0 ? [] : [serial];
+        }
+        catch
+        {
+            return [];
+        }
+    }
 }
 
 #endif

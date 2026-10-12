@@ -553,9 +553,10 @@ public partial class MainForm : Form
                 new ArgumentOutOfRangeException(
                     nameof(headSettings.Mode),
                     headSettings.Mode,
-                    "Unsupported camera acquisition mode."));
+                    "Unsupported camera acquisition mode."),
+                _headOpenLocation);
 
-            AppendDiagnostics($"Head camera connected: {headSettings.ServerName} [{headSettings.DeviceIndex}]");
+            AppendDiagnostics($"Head camera connected: {_headOpenLocation?.DisplayName ?? $"{headSettings.ServerName} [{headSettings.DeviceIndex}]"}");
 
             _tailCameraService.Connect(tailSettings, _tailCameraForm.CameraViewHost, new ArgumentOutOfRangeException(
                     nameof(tailSettings.Mode),
@@ -564,10 +565,11 @@ public partial class MainForm : Form
                 new ArgumentOutOfRangeException(
                     nameof(tailSettings.Mode),
                     tailSettings.Mode,
-                    "Unsupported camera acquisition mode."));
+                    "Unsupported camera acquisition mode."),
+                _tailOpenLocation);
 
 
-            AppendDiagnostics($"Tail camera connected: {tailSettings.ServerName} [{tailSettings.DeviceIndex}]");
+            AppendDiagnostics($"Tail camera connected: {_tailOpenLocation?.DisplayName ?? $"{tailSettings.ServerName} [{tailSettings.DeviceIndex}]"}");
 
 
 
@@ -1346,10 +1348,32 @@ public partial class MainForm : Form
 
 
 
+    /// <summary>
+    /// Sapera location to open for each camera on this start-up. Normally the
+    /// configured ServerName/DeviceIndex; when ExpectedSerialNumber is set it is
+    /// wherever that serial number was found, which may differ after Sapera
+    /// re-orders its GigEVision_Device_N names.
+    /// </summary>
+    private DiscoveredCamera? _headOpenLocation;
+    private DiscoveredCamera? _tailOpenLocation;
+
     private void ResolveAssignedCameras()
     {
-        IReadOnlyList<DiscoveredCamera> cameras =
-            SaperaCameraDiscoveryService.Discover();
+        CameraDeviceSettings head =
+            _cameraSettings.HeadCamera;
+
+        CameraDeviceSettings tail =
+            _cameraSettings.TailCamera;
+
+        bool bySerial =
+            !string.IsNullOrWhiteSpace(head.ExpectedSerialNumber) ||
+            !string.IsNullOrWhiteSpace(tail.ExpectedSerialNumber);
+
+        // Probing opens each camera briefly to read its serial number, so only
+        // do it when serial-number binding is configured.
+        IReadOnlyList<DiscoveredCamera> cameras = bySerial
+            ? SaperaCameraDiscoveryService.DiscoverWithIdentity()
+            : SaperaCameraDiscoveryService.Discover();
 
         if (cameras.Count == 0)
         {
@@ -1358,38 +1382,19 @@ public partial class MainForm : Form
                 "Verify the cameras are powered, connected, and visible in Sapera.");
         }
 
-        CameraDeviceSettings head =
-            _cameraSettings.HeadCamera;
-
-        CameraDeviceSettings tail =
-            _cameraSettings.TailCamera;
-
-        // Find cameras by Sapera location (ServerName + DeviceIndex)
-        DiscoveredCamera? discoveredHead =
-            cameras.FirstOrDefault(c =>
-                string.Equals(c.ServerName, head.ServerName, StringComparison.OrdinalIgnoreCase) &&
-                c.DeviceIndex == head.DeviceIndex);
-
-        DiscoveredCamera? discoveredTail =
-            cameras.FirstOrDefault(c =>
-                string.Equals(c.ServerName, tail.ServerName, StringComparison.OrdinalIgnoreCase) &&
-                c.DeviceIndex == tail.DeviceIndex);
-
-        if (discoveredHead is null)
+        if (bySerial)
         {
-            throw new InvalidOperationException(
-                $"Head camera not found at Sapera location {head.ServerName} [{head.DeviceIndex}]. Open Production Setup and assign cameras.");
+            foreach (DiscoveredCamera camera in cameras)
+            {
+                AppendDiagnostics(
+                    $"Sapera camera {camera.DisplayName} reports: {camera.IdentityDescription}");
+            }
         }
 
-        if (discoveredTail is null)
-        {
-            throw new InvalidOperationException(
-                $"Tail camera not found at Sapera location {tail.ServerName} [{tail.DeviceIndex}]. Open Production Setup and assign cameras.");
-        }
+        DiscoveredCamera discoveredHead = FindAssignedCamera(head, cameras);
+        DiscoveredCamera discoveredTail = FindAssignedCamera(tail, cameras);
 
-        // Check if cameras are assigned to the same Sapera location (ServerName + DeviceIndex).
-        // This is the definitive indicator of physical camera identity. If they're at different
-        // locations they are different cameras, regardless of serial number.
+        // Different Sapera locations are different cameras.
         if (string.Equals(
                 discoveredHead.ServerName,
                 discoveredTail.ServerName,
@@ -1400,14 +1405,64 @@ public partial class MainForm : Form
                 "The same physical camera cannot be assigned to both Head and Tail.");
         }
 
-        head.ServerName = discoveredHead.ServerName;
-        head.DeviceIndex = discoveredHead.DeviceIndex;
-
-        tail.ServerName = discoveredTail.ServerName;
-        tail.DeviceIndex = discoveredTail.DeviceIndex;
-
-
+        // The configured ServerName/DeviceIndex are deliberately NOT changed:
+        // they are the calibrated identity and part of the calibration
+        // fingerprint. Only the location opened on this start-up follows the
+        // serial number.
+        _headOpenLocation = discoveredHead;
+        _tailOpenLocation = discoveredTail;
     }
+
+    /// <summary>
+    /// Finds the Sapera location of one assigned camera: by serial number when
+    /// ExpectedSerialNumber is set, otherwise by the configured ServerName and
+    /// DeviceIndex (the original behaviour).
+    /// </summary>
+    private DiscoveredCamera FindAssignedCamera(
+        CameraDeviceSettings settings,
+        IReadOnlyList<DiscoveredCamera> cameras)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ExpectedSerialNumber))
+        {
+            return cameras.FirstOrDefault(c =>
+                    string.Equals(c.ServerName, settings.ServerName, StringComparison.OrdinalIgnoreCase) &&
+                    c.DeviceIndex == settings.DeviceIndex)
+                ?? throw new InvalidOperationException(
+                    $"{settings.Position} camera not found at Sapera location {settings.ServerName} [{settings.DeviceIndex}]. " +
+                    "Open Production Setup and assign cameras.");
+        }
+
+        List<DiscoveredCamera> matches = [.. cameras.Where(c =>
+            CameraSerialNumber.MatchesAny(settings.ExpectedSerialNumber, c.IdentityStrings))];
+
+        if (matches.Count == 1)
+        {
+            DiscoveredCamera match = matches[0];
+            bool moved =
+                !string.Equals(match.ServerName, settings.ServerName, StringComparison.OrdinalIgnoreCase) ||
+                match.DeviceIndex != settings.DeviceIndex;
+
+            AppendDiagnostics(
+                $"{settings.Position} camera serial {settings.ExpectedSerialNumber} found at {match.DisplayName}" +
+                (moved
+                    ? $" (Sapera now names it differently from the calibrated {settings.ServerName} [{settings.DeviceIndex}]; " +
+                      "opening it by serial number, calibration unchanged)."
+                    : "."));
+
+            return match;
+        }
+
+        string found = string.Join(
+            "; ",
+            cameras.Select(c => $"{c.DisplayName}: {c.IdentityDescription}"));
+
+        throw new InvalidOperationException(matches.Count == 0
+            ? $"{settings.Position} camera with serial number {settings.ExpectedSerialNumber} was not found. " +
+              $"Cameras found: {found}. Check the camera is powered and connected, and that " +
+              $"Acquisition.{settings.Position}Camera.ExpectedSerialNumber matches the camera."
+            : $"More than one camera reports serial number {settings.ExpectedSerialNumber}: {found}.");
+    }
+
     /// <summary>
     /// Handles a camera frame event for the specified camera position. It checks if the application is disposing
     /// or if the frame is null or empty, and disposes of the frame if necessary. If the preview should be updated,

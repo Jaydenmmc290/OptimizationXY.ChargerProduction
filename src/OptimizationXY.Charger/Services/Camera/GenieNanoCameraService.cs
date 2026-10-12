@@ -50,7 +50,10 @@ public sealed class GenieNanoCameraService : IDisposable
     /// <param name="argumentOutOfRangeException1">An additional exception to be thrown if an argument is out of range.</param>
     /// <exception cref="InvalidDataException">Thrown if the camera configuration file is empty.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the camera cannot be created or the serial number cannot be read.</exception>
-    public void Connect(CameraDeviceSettings settings, Control panelCameraView, Exception argumentOutOfRangeException1, ArgumentOutOfRangeException argumentOutOfRangeException)
+    /// <param name="openLocation">Sapera location to open on this start-up when it was found by serial
+    /// number. When null the configured ServerName/DeviceIndex is opened. The configured values are still
+    /// what the configuration snapshot records, so the calibration fingerprint does not change.</param>
+    public void Connect(CameraDeviceSettings settings, Control panelCameraView, Exception argumentOutOfRangeException1, ArgumentOutOfRangeException argumentOutOfRangeException, DiscoveredCamera? openLocation = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(panelCameraView);
@@ -72,9 +75,12 @@ public sealed class GenieNanoCameraService : IDisposable
             _frameCounter = 0;
             PanelCameraView = panelCameraView;
 
-            SapLocation location = new(settings.ServerName, settings.DeviceIndex);
+            string openServerName = openLocation?.ServerName ?? settings.ServerName;
+            int openDeviceIndex = openLocation?.DeviceIndex ?? settings.DeviceIndex;
+
+            SapLocation location = new(openServerName, openDeviceIndex);
             LogDiagnostics(
-                $"Opening {settings.Position} Sapera device '{settings.ServerName}' resource {settings.DeviceIndex} using {settings.InitializationMode} initialization...");
+                $"Opening {settings.Position} Sapera device '{openServerName}' resource {openDeviceIndex} using {settings.InitializationMode} initialization...");
 
             byte[]? legacySnapshot = null;
             if (settings.InitializationMode == CameraInitializationMode.ConfigurationFile)
@@ -97,6 +103,25 @@ public sealed class GenieNanoCameraService : IDisposable
 
             ConnectedSerialNumber = ReadCameraSerialNumber(_acqDevice, location);
             ConnectedModelName = ReadStringFeature(_acqDevice, "DeviceModelName");
+
+            // When the camera is bound by serial number, confirm the device that
+            // was actually opened is that camera before anything is captured.
+            if (!string.IsNullOrWhiteSpace(settings.ExpectedSerialNumber))
+            {
+                IReadOnlyList<string> identities =
+                    SaperaCameraDiscoveryService.ReadIdentityStrings(_acqDevice, location);
+
+                if (!CameraSerialNumber.MatchesAny(settings.ExpectedSerialNumber, identities))
+                {
+                    throw new InvalidOperationException(
+                        $"{settings.Position} camera at '{openServerName}' [{openDeviceIndex}] reports " +
+                        $"'{(identities.Count == 0 ? "<no identity>" : string.Join(" / ", identities))}', " +
+                        $"not the expected serial number {settings.ExpectedSerialNumber}.");
+                }
+
+                LogDiagnostics(
+                    $"{settings.Position} camera serial number {settings.ExpectedSerialNumber} verified at '{openServerName}' [{openDeviceIndex}].");
+            }
 
             if (string.IsNullOrWhiteSpace(ConnectedSerialNumber) &&
                 settings.RequireConfiguredFeatures)
