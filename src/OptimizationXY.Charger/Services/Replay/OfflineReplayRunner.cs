@@ -82,6 +82,7 @@ internal static class OfflineReplayRunner
             header.AppendLine(CultureInfo.InvariantCulture,
                 $"Settings: the appsettings.json on THIS computer was used. Copy the production " +
                 $"appsettings.json here first if the result must match production settings.");
+            AppendImageSizeCheck(header, frames, lookupTable);
             header.AppendLine();
 
             if (state.Settings.Diagnostics.IncludeSettingsSummary)
@@ -128,7 +129,9 @@ internal static class OfflineReplayRunner
 
                 summary.AppendLine(CultureInfo.InvariantCulture,
                     $"Scan Quality: {quality.Status} | frames used {quality.FramesUsed} | " +
-                    $"coverage {quality.ProfileCoveragePercent:F1}% | valid slices {quality.ValidSlicePercent:F1}%");
+                    $"length coverage {quality.ProfileCoveragePercent:F1}% | valid slices {quality.ValidSlicePercent:F1}% | " +
+                    $"revolution {quality.AngularBinsCovered}/{quality.ExpectedAngularBins} angle bins, " +
+                    $"largest angle gap {quality.LargestAngularGapDeg:F0} deg");
                 summary.AppendLine(quality.OperatorMessage);
             }
             catch (Exception qualityException)
@@ -193,6 +196,48 @@ internal static class OfflineReplayRunner
         finally
         {
             PipelineState.Instance.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Live scans refuse images whose size differs from the calibration, but a
+    /// replay may be given frames from another capture (for example a wider
+    /// concatenation). Say so in the report, because stripe points in columns the
+    /// calibration does not cover are skipped and the column-to-calibration
+    /// alignment is not guaranteed for such frames.
+    /// </summary>
+    private static void AppendImageSizeCheck(
+        StringBuilder header,
+        List<ScanFrame> frames,
+        ScannerLookupTable lookupTable)
+    {
+        ScanFrame? first = frames.FirstOrDefault(frame =>
+            !string.IsNullOrWhiteSpace(frame.ImagePath));
+
+        if (first is null)
+            return;
+
+        try
+        {
+            using var image = OptimizationXY.Charger.Services.Input.ImageInputService.LoadGrayImage(first.ImagePath);
+
+            if (image.Width == lookupTable.ImageWidth &&
+                image.Height == lookupTable.ImageHeight)
+            {
+                header.AppendLine(CultureInfo.InvariantCulture,
+                    $"Image Size: {image.Width}x{image.Height} (matches the calibration).");
+                return;
+            }
+
+            header.AppendLine(CultureInfo.InvariantCulture,
+                $"Image Size WARNING: frames are {image.Width}x{image.Height} but the calibration was made at " +
+                $"{lookupTable.ImageWidth}x{lookupTable.ImageHeight}. A live scan would refuse these frames. " +
+                $"Stripe points outside the calibrated width are skipped; positions along the log may be " +
+                $"offset if the frames were concatenated differently from the calibration.");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "[REPLAY] Could not read the first frame to check its size.");
         }
     }
 

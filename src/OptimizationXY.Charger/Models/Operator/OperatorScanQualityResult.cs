@@ -72,6 +72,21 @@ public sealed class OperatorScanQualityResult
     public double LargestMissingGapInches { get; init; }
 
     /// <summary>
+    /// Number of angle bins around the revolution that have at least one measurement anywhere along the block.
+    /// </summary>
+    public int AngularBinsCovered { get; init; }
+
+    /// <summary>
+    /// Number of angle bins in a full revolution for the configured bin size.
+    /// </summary>
+    public int ExpectedAngularBins { get; init; }
+
+    /// <summary>
+    /// Largest continuous arc of the revolution, in degrees, with no measurements anywhere along the block.
+    /// </summary>
+    public double LargestAngularGapDeg { get; init; }
+
+    /// <summary>
     /// Gets or sets the processing time in seconds, indicating the duration taken to process the scan.
     /// </summary>
     public double ProcessingSeconds { get; init; }

@@ -161,6 +161,22 @@ public sealed class OperatorScanQualityAnalyzer
         double lengthMM = expectedSliceCount * zBinMM;
         double processingSeconds = state.TimingEntries.Sum(entry => entry.ElapsedSeconds);
 
+        // Profile coverage above is along the length of the block only. Frames
+        // that are lost in a row leave an arc of the revolution with no data at
+        // any position, which that number does not show, so measure it here.
+        int[] occupiedAngularBins = [.. validCells
+            .Select(cell =>
+                (((int)Math.Round(cell.AngleBinDeg / angleBinDeg)) % expectedAngularBins + expectedAngularBins) %
+                expectedAngularBins)
+            .Distinct()
+            .OrderBy(bin => bin)];
+        double largestAngularGapDeg = LargestAngularGapDeg(
+            occupiedAngularBins,
+            expectedAngularBins,
+            angleBinDeg);
+        bool angularGapTooLarge =
+            largestAngularGapDeg > view.MaximumAngularGapDeg;
+
         bool good =
             framePercent >= view.GoodMinimumFramePercent &&
             profileCoveragePercent >= view.GoodMinimumProfileCoveragePercent &&
@@ -173,7 +189,9 @@ public sealed class OperatorScanQualityAnalyzer
             validSlicePercent >= view.WarningMinimumValidSlicePercent &&
             largestGapMM <= view.WarningMaximumMissingGapMM;
 
-        ScanQualityStatus status = good
+        ScanQualityStatus status = angularGapTooLarge
+            ? ScanQualityStatus.Failed
+            : good
             ? ScanQualityStatus.Good
             : warning
                 ? ScanQualityStatus.Warning
@@ -197,7 +215,9 @@ public sealed class OperatorScanQualityAnalyzer
             validSlicePercent,
             largestGapMM,
             minimumAngularBins,
-            expectedAngularBins);
+            expectedAngularBins,
+            occupiedAngularBins.Length,
+            largestAngularGapDeg);
 
         return new OperatorScanQualityResult
         {
@@ -213,6 +233,9 @@ public sealed class OperatorScanQualityAnalyzer
             MinimumDiameterInches = validDiametersMM.Min() / 25.4,
             MaximumDiameterInches = validDiametersMM.Max() / 25.4,
             LargestMissingGapInches = largestGapMM / 25.4,
+            AngularBinsCovered = occupiedAngularBins.Length,
+            ExpectedAngularBins = expectedAngularBins,
+            LargestAngularGapDeg = largestAngularGapDeg,
             ProcessingSeconds = processingSeconds,
             ProfilePoints = profile
         };
@@ -262,12 +285,47 @@ public sealed class OperatorScanQualityAnalyzer
         double validSlicePercent,
         double largestGapMM,
         int minimumAngularBins,
-        int expectedAngularBins)
+        int expectedAngularBins,
+        int angularBinsCovered,
+        double largestAngularGapDeg)
     {
         return
             $"Frames {framePercent:F1}% | profile coverage {coveragePercent:F1}% | " +
             $"valid slices {validSlicePercent:F1}% | largest gap {largestGapMM / 25.4:F2} in | " +
-            $"slice requirement {minimumAngularBins}/{expectedAngularBins} angular bins.";
+            $"slice requirement {minimumAngularBins}/{expectedAngularBins} angular bins | " +
+            $"revolution covered {angularBinsCovered}/{expectedAngularBins} angle bins, " +
+            $"largest angle gap {largestAngularGapDeg:F0} deg.";
+    }
+
+    /// <summary>
+    /// Largest continuous arc, in degrees, between occupied angle bins around
+    /// the full circle (the arc from the last bin back to the first counts too).
+    /// </summary>
+    /// <param name="occupiedBins">Distinct occupied bin indices, sorted ascending, each 0..expectedBins-1.</param>
+    /// <param name="expectedBins">Number of bins in a full revolution.</param>
+    /// <param name="binDeg">Size of one bin in degrees.</param>
+    /// <returns>The missing arc in degrees; 360 when no bin is occupied.</returns>
+    private static double LargestAngularGapDeg(
+        int[] occupiedBins,
+        int expectedBins,
+        double binDeg)
+    {
+        if (occupiedBins.Length == 0)
+            return 360.0;
+
+        int largestMissing = 0;
+
+        for (int i = 0; i < occupiedBins.Length; i++)
+        {
+            int current = occupiedBins[i];
+            int next = i + 1 < occupiedBins.Length
+                ? occupiedBins[i + 1]
+                : occupiedBins[0] + expectedBins;
+
+            largestMissing = Math.Max(largestMissing, next - current - 1);
+        }
+
+        return Math.Min(360.0, largestMissing * binDeg);
     }
 
     /// <summary>
