@@ -10,6 +10,17 @@ public sealed record DiscoveredCamera
 
     public required int DeviceIndex { get; init; }
 
+    /// <summary>
+    /// Identity strings the camera reported when it was probed (serial number
+    /// and device ID features). Empty when the camera was not probed.
+    /// </summary>
+    public IReadOnlyList<string> IdentityStrings { get; init; } = [];
+
+    public string IdentityDescription =>
+        IdentityStrings.Count == 0
+            ? "<no identity reported>"
+            : string.Join(" / ", IdentityStrings);
+
     public string DisplayName =>
         $"{ServerName} [{DeviceIndex}]";
 

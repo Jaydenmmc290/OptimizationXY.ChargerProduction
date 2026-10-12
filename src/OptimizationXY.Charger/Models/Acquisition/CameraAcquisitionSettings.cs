@@ -101,6 +101,13 @@ public sealed class CameraAcquisitionSettings
                 "The head and tail cameras cannot use the same Sapera server and device index.");
         }
 
+        if (!string.IsNullOrWhiteSpace(HeadCamera.ExpectedSerialNumber) &&
+            CameraSerialNumber.Matches(HeadCamera.ExpectedSerialNumber, TailCamera.ExpectedSerialNumber))
+        {
+            throw new InvalidOperationException(
+                "The head and tail cameras cannot have the same ExpectedSerialNumber.");
+        }
+
         if (TargetFramePairsPerLog <= 0)
             throw new ArgumentOutOfRangeException(nameof(TargetFramePairsPerLog));
         if (QueueCapacityPerCamera < 1)
@@ -172,6 +179,17 @@ public sealed class CameraDeviceSettings
     public CameraPosition Position { get; set; }
     public string ServerName { get; set; } = string.Empty;
     public int DeviceIndex { get; set; }
+
+    /// <summary>
+    /// Serial number printed on / reported by this physical camera (for example
+    /// "02-2020C-07697"). When set, the camera is found by this serial number at
+    /// every start-up instead of by its Sapera name, because Sapera can hand out
+    /// the GigEVision_Device_N names in a different order after a reboot, power
+    /// cycle or network change. ServerName/DeviceIndex are then kept only as the
+    /// calibrated identity (they are part of the calibration fingerprint), so the
+    /// existing calibration stays valid. Leave empty to keep the old behaviour.
+    /// </summary>
+    public string ExpectedSerialNumber { get; set; } = string.Empty;
     /// <summary>
     /// <summary>
     /// The physical camera is identified by ServerName and DeviceIndex (Sapera location).
