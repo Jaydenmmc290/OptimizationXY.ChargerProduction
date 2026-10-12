@@ -321,6 +321,84 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // Processes each frame in the rotating scan folder, building a profile for each.
     // ------------------------------------------------------------
 
+    /// <summary>
+    /// Allowed amount, in millimetres, by which one frame's stripe may run past
+    /// the end of the block agreed by most frames. A block end that is not cut
+    /// square moves the visible end by a few millimetres as the block turns;
+    /// a reflection or image artifact past the end runs much further.
+    /// </summary>
+    private const double FrameLengthConsensusToleranceMM = 40.0;
+
+    /// <summary>
+    /// The block does not change length as it turns, so every frame should see
+    /// the stripe end at about the same image column. A frame whose stripe runs
+    /// well past the end agreed by the median frame has picked up something that
+    /// is not wood (for example a flat band that continues the stripe to the
+    /// image edge past the tail end). Those columns are removed from that frame
+    /// only; the rest of the frame is kept.
+    /// </summary>
+    /// <returns>Report lines describing what was trimmed (empty when nothing was).</returns>
+    private string TrimFramesBeyondConsensusLength(ScannerLookupTable lookupTable)
+    {
+        var framesWithProfiles = _state.ScanFrames
+            .Where(frame => frame.IsValid && frame.Profile is { Count: > 0 })
+            .ToList();
+
+        if (framesWithProfiles.Count < 5)
+            return string.Empty;
+
+        double pixelsPerMM =
+            double.IsFinite(lookupTable.LengthPixelsPerMM) && lookupTable.LengthPixelsPerMM > 0.0
+                ? lookupTable.LengthPixelsPerMM
+                : 0.5;
+        int tolerancePixels = Math.Max(
+            5,
+            (int)Math.Round(FrameLengthConsensusToleranceMM * pixelsPerMM));
+
+        static int MedianOf(List<int> values)
+        {
+            values.Sort();
+            return values[values.Count / 2];
+        }
+
+        int consensusFirstX = MedianOf([.. framesWithProfiles.Select(frame => frame.Profile.Min(column => column.X))]);
+        int consensusLastX = MedianOf([.. framesWithProfiles.Select(frame => frame.Profile.Max(column => column.X))]);
+
+        int trimmedFrames = 0;
+        int trimmedColumns = 0;
+
+        foreach (ScanFrame frame in framesWithProfiles)
+        {
+            int before = frame.Profile.Count;
+
+            if (frame.Profile.Max(column => column.X) <= consensusLastX + tolerancePixels &&
+                frame.Profile.Min(column => column.X) >= consensusFirstX - tolerancePixels)
+            {
+                continue;
+            }
+
+            List<LogProfileColumn> kept = [.. frame.Profile
+                .Where(column =>
+                    column.X <= consensusLastX &&
+                    column.X >= consensusFirstX)];
+
+            if (kept.Count == 0)
+                continue;
+
+            frame.Profile = kept;
+            trimmedFrames++;
+            trimmedColumns += before - kept.Count;
+        }
+
+        if (trimmedFrames == 0)
+            return string.Empty;
+
+        return
+            $"Frames trimmed to the agreed block length: {trimmedFrames} " +
+            $"({trimmedColumns} stripe columns past image X {consensusFirstX}-{consensusLastX} removed; " +
+            $"tolerance {tolerancePixels} px)\r\n";
+    }
+
     internal void ProcessRotatingScanFrames(ScannerLookupTable lookupTable, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -372,13 +450,20 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
                 }
             });
 
+        string lengthConsensusReport = TrimFramesBeyondConsensusLength(lookupTable);
+
+        totalProfilePoints = _state.ScanFrames
+            .Where(frame => frame.IsValid && frame.Profile is not null)
+            .Sum(frame => frame.Profile.Count);
+
         _state.DiagnosticsReport +=
             "ROTATING FRAME PROCESSING\r\n" +
             $"Total frames: {_state.ScanFrames.Count}\r\n" +
             $"Valid frames: {validFrames}\r\n" +
             $"Invalid frames: {invalidFrames}\r\n" +
             $"Total profile points: {totalProfilePoints}\r\n" +
-            $"Average profile points/frame: {(validFrames > 0 ? totalProfilePoints / (double)validFrames : 0):F1}\r\n\r\n";
+            $"Average profile points/frame: {(validFrames > 0 ? totalProfilePoints / (double)validFrames : 0):F1}\r\n" +
+            lengthConsensusReport + "\r\n";
 
         // ------------------------------------------------------------
         // CALIBRATION RANGE USE
