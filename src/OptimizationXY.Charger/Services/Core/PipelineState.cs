@@ -148,6 +148,14 @@ namespace OptimizationXY.Charger.Services.Core
         public Mat? BaselinePeelView { get; set; }
         public Mat? PenaltyPeelView { get; set; }
         public Mat? DirectRecoveryPeelView { get; set; }
+
+        /// <summary>
+        /// Peel images still to be drawn. The pipeline chooses the position from
+        /// numbers only and queues the images here; they are drawn after the PLC
+        /// write, just before the scan is saved (DeferredPeelViewRenderer).
+        /// </summary>
+        public List<DeferredPeelView> DeferredPeelViews { get; } = new();
+
         public Mat? PointCloudOverlay { get; set; }
 
         /// <summary>Single view from the head end of the block, shown in the main form overlay box.</summary>
@@ -198,6 +206,7 @@ namespace OptimizationXY.Charger.Services.Core
             BaselinePeelView = null;
             PenaltyPeelView = null;
             DirectRecoveryPeelView = null;
+            DeferredPeelViews.Clear();
             Calibration = null;
             ScannerCalibrationSnapshot = null;
             HeadCameraConfigurationSnapshot = null;

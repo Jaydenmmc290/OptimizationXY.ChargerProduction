@@ -1,0 +1,49 @@
+namespace OptimizationXY.Charger.Models.Calibration;
+
+/// <summary>
+/// An unfinished scanner-calibration session saved by the Production Setup
+/// wizard so it can be resumed later. This is wizard progress only; it is not a
+/// calibration package and is never loaded for scanning.
+/// </summary>
+public sealed class CalibrationSessionState
+{
+    public int SchemaVersion { get; set; } = 1;
+    public DateTime SavedUtc { get; set; }
+    public string OperatorName { get; set; } = string.Empty;
+
+    // Camera seam alignment
+    public bool HeadOnLeft { get; set; }
+    public bool ReverseHeadHorizontal { get; set; }
+    public bool ReverseTailHorizontal { get; set; }
+    public int HeadCropLeftPixels { get; set; }
+    public int HeadCropRightPixels { get; set; }
+    public int TailCropLeftPixels { get; set; }
+    public int TailCropRightPixels { get; set; }
+    public int TailVerticalOffsetPixels { get; set; }
+    public int OverlapPixels { get; set; }
+    public bool CameraSeamConfirmed { get; set; }
+    public string CameraSeamPreviewBase64 { get; set; } = string.Empty;
+
+    // Length scale
+    public double KnownLengthMM { get; set; }
+    public int StartPixelX { get; set; }
+    public int EndPixelX { get; set; }
+    public double LengthPixelsPerMM { get; set; }
+    public bool LengthScaleConfirmed { get; set; }
+    public string LengthCalibrationImageBase64 { get; set; } = string.Empty;
+
+    // References and validation
+    public List<CalibrationSessionReference> CapturedReferences { get; set; } = [];
+    public bool IndependentValidationCompleted { get; set; }
+    public double? IndependentValidationMeanErrorMM { get; set; }
+    public double? IndependentValidationMaximumErrorMM { get; set; }
+    public string CalibrationNotes { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// One captured calibration reference stored in a saved session.
+/// </summary>
+public sealed class CalibrationSessionReference
+{
+    public CalibrationReferenceCapture? Capture { get; set; }
+}

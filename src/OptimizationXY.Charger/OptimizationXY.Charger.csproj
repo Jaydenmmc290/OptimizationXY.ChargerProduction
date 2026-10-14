@@ -45,6 +45,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="OptimizationXY.Charger.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="Tests\**" />
     <EmbeddedResource Remove="Tests\**" />
     <None Remove="Tests\**" />
@@ -106,7 +110,8 @@
 
   
   <ItemGroup>
-    <EmbeddedResource Include="licenses.licx">
+    <!-- SkipLicx=true is only for command-line compile checks (dotnet build cannot embed .licx, MSB4803). Visual Studio and ClickOnce builds are unchanged. -->
+    <EmbeddedResource Include="licenses.licx" Condition="'$(SkipLicx)' != 'true'">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>

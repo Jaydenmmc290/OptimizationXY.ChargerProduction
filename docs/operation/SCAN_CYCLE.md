@@ -56,6 +56,26 @@ Set `Plc.SendResultsBeforeSave` to `false` to go back to save first, send second
 automatically when `Production.EnforceOnlyEssentialReadinessChecks` is `false`, because the full checks
 require the saved record before the PLC write and a failed save must then stop it.
 
+## Peel images are drawn after the PLC write
+
+The spindle position is chosen from the virtual-peel **numbers** only
+(`UnwrappedPeelViewBuilder.ComputeMetrics`): sheet counts, usable length and wane, calculated over
+exactly the same grid as the drawn peel. The peel **images** can be over 100,000 pixels wide, so they
+are queued and drawn when the scan is saved (`DeferredPeelViewRenderer`), which is after the PLC write
+in the default send-first order.
+
+Each drawn image recalculates its numbers and they are compared with the numbers the decision used.
+The result is in the diagnostics report under `PEEL IMAGES (drawn after the spindle decision)`; any
+difference is reported as `WARNING ... differ from the decision` and logged as an error. A failure to
+draw an image is logged and the scan is saved without that image.
+
+## Safe carriage retract radius
+
+`SafeCarriageRetractRadius` is the largest measured distance of the block from the spindle axis plus
+the knife clearance. The distance is taken from both the current axis and the commanded axis, so it
+covers the block as it actually turns after the move and is never smaller than before.
+All `*MM` fields of the PLC payload are sent in **inches** (the names are historical).
+
 ## Operator scan-quality screen
 
 When a new block starts scanning, the previous block's numbers and log profile picture are cleared, so

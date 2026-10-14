@@ -12,8 +12,14 @@ public sealed class PlcCommandPayload
     public int BlockCount { get; set; }
 
     /// <summary>
-    /// Gets or sets the head and tail coordinates in millimeters, as well as the small and large diameters,
-    /// largest and smallest measured radii, knife clearance, and safe carriage retract radius.
+    /// Head/tail commands, diameters, radii, knife clearance and safe carriage
+    /// retract radius sent to the PLC.
+    ///
+    /// UNITS: these values are in INCHES. PlcPayloadBuilder converts from
+    /// millimetres before filling them. The "MM" in the property names is
+    /// historical and is kept only so saved audit records and existing tools
+    /// keep reading the same field names. Convert with x 25.4 before comparing
+    /// with any millimetre value.
     /// </summary>
     public double HeadXMM { get; set; }
     public double HeadYMM { get; set; }

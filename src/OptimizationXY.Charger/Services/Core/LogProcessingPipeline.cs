@@ -1764,19 +1764,11 @@ BuildFinalSpindleRecommendation(
             _state.LargestInscribedCylinder = cylinder;
             _state.LargestInscribedOval = oval;
 
-            _state.CylinderPeelView?.Dispose();
-            _state.CylinderPeelView =
-                cylinderPeel?.Image;
-
-            _state.OvalPeelView?.Dispose();
-            _state.OvalPeelView =
-                ovalPeel?.Image;
-
-            // Preserve separate cylinder/oval images while also keeping the
-            // existing selected-peel property used by viewers and storage.
-            _state.UnwrappedPeelView?.Dispose();
-            _state.UnwrappedPeelView =
-                selectedPeel.Image.Clone();
+            // The peels above are numbers only. Queue the images; they are
+            // drawn after the PLC write when the scan is saved.
+            DeferPeelView(PeelViewSlot.Cylinder, cylinderPeel);
+            DeferPeelView(PeelViewSlot.Oval, ovalPeel);
+            DeferPeelView(PeelViewSlot.Unwrapped, selectedPeel);
 
             OptimizedSpindleMovement move =
                 selectedGeometry.SpindleMovement;
@@ -2230,24 +2222,16 @@ BuildFinalSpindleRecommendation(
             _state.LargestInscribedCylinder = cylinder;
             _state.LargestInscribedOval = oval;
 
-            _state.BaselinePeelView?.Dispose();
-            _state.BaselinePeelView = baselinePeel?.Image;
-
-            _state.PenaltyPeelView?.Dispose();
-            _state.PenaltyPeelView = penaltyPeel?.Image;
-
-            _state.CylinderPeelView?.Dispose();
-            _state.CylinderPeelView = cylinderPeel?.Image;
-
-            _state.OvalPeelView?.Dispose();
-            _state.OvalPeelView = ovalPeel?.Image;
-
-            _state.DirectRecoveryPeelView?.Dispose();
-            _state.DirectRecoveryPeelView = directRecoveryPeel?.Image;
+            // The peels above are numbers only. Queue the images; they are
+            // drawn after the PLC write when the scan is saved.
+            DeferPeelView(PeelViewSlot.Baseline, baselinePeel);
+            DeferPeelView(PeelViewSlot.Penalty, penaltyPeel);
+            DeferPeelView(PeelViewSlot.Cylinder, cylinderPeel);
+            DeferPeelView(PeelViewSlot.Oval, ovalPeel);
+            DeferPeelView(PeelViewSlot.DirectRecovery, directRecoveryPeel);
             _state.DirectRecoverySearch = directRecoverySearch;
 
-            _state.UnwrappedPeelView?.Dispose();
-            _state.UnwrappedPeelView = recovery.Selected.Peel.Image.Clone();
+            DeferPeelView(PeelViewSlot.Unwrapped, recovery.Selected.Peel);
 
             OptimizedSpindleMovement move = recovery.Selected.Movement;
 
@@ -2472,9 +2456,31 @@ BuildFinalSpindleRecommendation(
     /// </summary>
     /// <param name="movement">The optimized spindle movement to simulate.</param>
     /// <returns>A peel simulation result for the given spindle movement.</returns>
+    /// <summary>
+    /// Queues the image for a numbers-only peel. Any image left in that slot
+    /// from earlier is released now; the new one is drawn when the scan is saved.
+    /// </summary>
+    private void DeferPeelView(PeelViewSlot slot, PeelSimulationResult? peel)
+    {
+        switch (slot)
+        {
+            case PeelViewSlot.Unwrapped: _state.UnwrappedPeelView?.Dispose(); _state.UnwrappedPeelView = null; break;
+            case PeelViewSlot.Cylinder: _state.CylinderPeelView?.Dispose(); _state.CylinderPeelView = null; break;
+            case PeelViewSlot.Oval: _state.OvalPeelView?.Dispose(); _state.OvalPeelView = null; break;
+            case PeelViewSlot.Baseline: _state.BaselinePeelView?.Dispose(); _state.BaselinePeelView = null; break;
+            case PeelViewSlot.Penalty: _state.PenaltyPeelView?.Dispose(); _state.PenaltyPeelView = null; break;
+            case PeelViewSlot.DirectRecovery: _state.DirectRecoveryPeelView?.Dispose(); _state.DirectRecoveryPeelView = null; break;
+        }
+
+        _state.DeferredPeelViews.RemoveAll(request => request.Slot == slot);
+
+        if (peel is not null)
+            _state.DeferredPeelViews.Add(new DeferredPeelView(slot, peel));
+    }
+
     private PeelSimulationResult BuildPeelForMovement(OptimizedSpindleMovement movement)
     {
-        return UnwrappedPeelViewBuilder.BuildSimulation(
+        return UnwrappedPeelViewBuilder.ComputeMetrics(
             _state.PointCloud,
             _state.Settings.PeelView,
             _state.Settings.UsableRadius,
@@ -2495,7 +2501,7 @@ BuildFinalSpindleRecommendation(
         OptimizedSpindleMovement move =
             geometry.SpindleMovement;
 
-        return UnwrappedPeelViewBuilder.BuildSimulation(
+        return UnwrappedPeelViewBuilder.ComputeMetrics(
             _state.PointCloud,
             _state.Settings.PeelView,
             _state.Settings.UsableRadius,
@@ -2575,18 +2581,19 @@ BuildFinalSpindleRecommendation(
         double headXMM = final?.BestTestedHeadXMM ?? 0.0;
         double headYMM = final?.BestTestedHeadYMM ?? 0.0;
 
-        var result = UnwrappedPeelViewBuilder.BuildSimulation(
-_state.PointCloud,
-_state.Settings.PeelView,
-_state.Settings.UsableRadius,
-_state.Settings.Wane,
-tailXMM,
-tailYMM,
-headXMM,
-headYMM);
+        // Numbers only; the image is drawn after the PLC write when the scan
+        // is saved (DeferredPeelViewRenderer).
+        var result = UnwrappedPeelViewBuilder.ComputeMetrics(
+            _state.PointCloud,
+            _state.Settings.PeelView,
+            _state.Settings.UsableRadius,
+            _state.Settings.Wane,
+            tailXMM,
+            tailYMM,
+            headXMM,
+            headYMM);
 
-        _state.UnwrappedPeelView?.Dispose();
-        _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pipeline state
+        DeferPeelView(PeelViewSlot.Unwrapped, result);
 
         if (_state.FinalSpindleRecommendation is not null)
         {
@@ -3383,11 +3390,29 @@ double maxSpindleMovementMM)
         finally
         {
             stopwatch.Stop();
+            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds);
+        }
+    }
 
-            _state.TimingEntries.Add(new PipelineTimingEntry  // Record the elapsed time in milliseconds along with the step name in the pipeline state for later reporting
+    /// <summary>
+    /// Guards <see cref="PipelineState.TimingEntries"/>. RunTimed is called from
+    /// inside the parallel per-frame loop, and List.Add is not thread-safe:
+    /// two frames adding at the same time can lose an entry or throw, and a
+    /// throw there used to mark a good frame invalid.
+    /// </summary>
+    private static readonly object TimingEntriesLock = new();
+
+    /// <summary>
+    /// Adds one timing entry. Safe to call from several threads at once.
+    /// </summary>
+    private void RecordTiming(string stepName, double elapsedMilliseconds)
+    {
+        lock (TimingEntriesLock)
+        {
+            _state.TimingEntries.Add(new PipelineTimingEntry
             {
                 StepName = stepName,
-                ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds
+                ElapsedMilliseconds = elapsedMilliseconds
             });
         }
     }
@@ -3411,12 +3436,7 @@ double maxSpindleMovementMM)
         finally
         {
             stopwatch.Stop();
-
-            _state.TimingEntries.Add(new PipelineTimingEntry
-            {
-                StepName = stepName,
-                ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds
-            });
+            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds);
         }
     }
 
@@ -3618,35 +3638,18 @@ double maxSpindleMovementMM)
             "Binning radius field...",
             () => BinRotatingScanRadiusField(token));
 
-        // Parallelize independent analysis stages
-        // AnalyzeOvality and AnalyzeRadiusDefects are independent and can run in parallel
-        progress?.Invoke("Analyzing ovality and defects...");
-        RunTimed(
-            "Analyze Ovality And Radius Defects (Parallel)",
-            () =>
-            {
-                var ovalityTask = Task.Run(() =>
-                {
-                    token.ThrowIfCancellationRequested();
-                    AnalyzeOvality(token);
-                }, token);
-
-                var defectsTask = Task.Run(() =>
-                {
-                    token.ThrowIfCancellationRequested();
-                    AnalyzeRadiusDefects(token);
-                }, token);
-
-                // Wait for both to complete before proceeding
-                try
-                {
-                    Task.WaitAll([ovalityTask, defectsTask], token);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-            });
+        // Ovality and radius defects run one after the other. Both append a
+        // section to _state.DiagnosticsReport; run in parallel, the two
+        // appends could overlap and one section was silently lost. Both
+        // stages take only milliseconds, so nothing is gained by overlapping.
+        RunStage(
+            "Analyze Ovality",
+            "Analyzing ovality...",
+            () => AnalyzeOvality(token));
+        RunStage(
+            "Analyze Radius Defects",
+            "Analyzing radius defects...",
+            () => AnalyzeRadiusDefects(token));
 
         RunStage(
             "Analyze Defect Patches",
