@@ -61,6 +61,19 @@ public sealed class InscribedGeometryResult
     public double CenterlineDeviationMM { get; set; }
 
     /// <summary>
+    /// Set when the certified search ran (InscribedGeometry.UseCertifiedCylinderSearch):
+    /// no position within machine travel can score more than this many mm better
+    /// than the selected one. 0 means proven best within the search tolerance.
+    /// </summary>
+    public double? CertifiedGapMM { get; set; }
+
+    /// <summary>Positions tested by the certified search.</summary>
+    public int CertifiedEvaluations { get; set; }
+
+    /// <summary>True when the certified search found a better position than the grid search.</summary>
+    public bool CertifiedSearchImproved { get; set; }
+
+    /// <summary>
     /// Number of candidate orientations that were tested during the inscribed geometry search.
     /// This is a measure of how many potential orientations were evaluated to find the optimal inscribed geometry.
     /// </summary>

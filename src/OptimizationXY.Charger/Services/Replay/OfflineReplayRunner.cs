@@ -72,6 +72,12 @@ internal static class OfflineReplayRunner
             PipelineState state = PipelineState.Instance;
             state.Clear();
 
+            var appliedOverrides = new List<string>();
+            foreach (string assignment in SettingsOverride.FromCommandLine(args))
+                appliedOverrides.Add(SettingsOverride.Apply(state.Settings, assignment));
+            if (appliedOverrides.Count > 0)
+                AppSettingsValidator.Validate(state.Settings);
+
             var header = new StringBuilder();
             header.AppendLine("=== OFFLINE REPLAY ===");
             header.AppendLine(CultureInfo.InvariantCulture, $"Replayed: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -82,6 +88,8 @@ internal static class OfflineReplayRunner
             header.AppendLine(CultureInfo.InvariantCulture,
                 $"Settings: the appsettings.json on THIS computer was used. Copy the production " +
                 $"appsettings.json here first if the result must match production settings.");
+            foreach (string change in appliedOverrides)
+                header.AppendLine("Setting changed for this replay only: " + change);
             AppendImageSizeCheck(header, frames, lookupTable);
             header.AppendLine();
 
@@ -324,6 +332,32 @@ internal static class OfflineReplayRunner
 
         return selected ?? throw new InvalidDataException(
             $"'{dialog.FileName}' is not a valid scanner lookup table with calibration points.");
+    }
+
+    /// <summary>
+    /// The calibration saved with a scan folder (no dialogs). Null when none is valid.
+    /// </summary>
+    internal static ScannerLookupTable? LoadSavedCalibration(string scanFolder)
+    {
+        string[] candidates =
+        [
+            Path.Combine(scanFolder, "scanner-calibration.json"),
+            Path.Combine(scanFolder, "scanner-lookup-table.json"),
+            Path.Combine(Path.GetDirectoryName(scanFolder) ?? scanFolder, "scanner-calibration.json"),
+            Path.Combine(Path.GetDirectoryName(scanFolder) ?? scanFolder, "scanner-lookup-table.json")
+        ];
+
+        foreach (string candidate in candidates)
+        {
+            if (!File.Exists(candidate))
+                continue;
+
+            ScannerLookupTable? table = TryLoadCalibration(candidate);
+            if (table is not null)
+                return table;
+        }
+
+        return null;
     }
 
     private static ScannerLookupTable? TryLoadCalibration(string path)
