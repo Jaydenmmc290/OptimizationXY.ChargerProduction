@@ -1,9 +1,11 @@
-name: Build check
+name: Build and test
 
-# Compile check for every push and pull request.
-# Builds with the non-hardware camera stub (UseSapera=false) because the
-# Sapera SDK is not installed on GitHub's build machines. This proves the
-# code compiles; it does not replace testing on the production computer.
+# Runs on every push and pull request:
+#   1. compiles the application (non-hardware camera stub, UseSapera=false,
+#      because the Sapera SDK is not installed on GitHub's build machines);
+#   2. runs the automated tests in tests/ (no cameras, PLC or SQL needed).
+# This proves the code compiles and the tested calculations hold; it does not
+# replace a check on the production computer.
 
 on:
   push:
@@ -22,10 +24,18 @@ jobs:
 
       # SkipLicx: the dotnet command line cannot embed licenses.licx (MSB4803).
       # Visual Studio / ClickOnce builds still embed it.
-      - name: Build (no Sapera)
+      - name: Build application (no Sapera)
         shell: pwsh
         run: |
           dotnet build src/OptimizationXY.Charger/OptimizationXY.Charger.csproj -c Release -p:UseSapera=false -p:SkipLicx=true -p:Platform=x64 -clp:NoSummary 2>&1 | Tee-Object -FilePath build.log
           $code = $LASTEXITCODE
           Select-String -Path build.log -Pattern ': error ' | Select-Object -First 40 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+          exit $code
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          dotnet test tests/OptimizationXY.Charger.Tests/OptimizationXY.Charger.Tests.csproj -c Release -p:UseSapera=false -p:SkipLicx=true -p:Platform=x64 --logger "console;verbosity=normal" 2>&1 | Tee-Object -FilePath test.log
+          $code = $LASTEXITCODE
+          Select-String -Path test.log -Pattern ': error |Failed |\[FAIL\]|Assert\.' | Select-Object -First 40 | ForEach-Object { Write-Output "::error::$($_.Line)" }
           exit $code

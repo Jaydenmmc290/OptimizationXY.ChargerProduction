@@ -173,6 +173,10 @@ public static class UnwrappedPeelViewBuilder
         return new PeelSimulationResult
         {
             Image = imageToReturn,
+            AxisTailXMM = tailXMM,
+            AxisTailYMM = tailYMM,
+            AxisHeadXMM = headXMM,
+            AxisHeadYMM = headYMM,
             Revolutions = peelRadii.Count,
             OuterDiameterMM = surface.OuterRadiusMM * 2.0,
             CoreDiameterMM = coreRadiusMM * 2.0,
@@ -188,6 +192,347 @@ public static class UnwrappedPeelViewBuilder
             AverageUsableCoveragePercent =
                 sheetSummary.AverageUsableCoveragePercent
         };
+    }
+
+    /// <summary>
+    /// Same virtual peel as <see cref="BuildSimulation"/>, but numbers only: no
+    /// image is drawn. Every sheet count, veneer length and wane percentage is
+    /// calculated over exactly the same pixel grid with exactly the same rules,
+    /// so the results are identical to BuildSimulation for the same inputs.
+    ///
+    /// The drawn peel strip is one pixel column per 0.5 mm of veneer and can be
+    /// over 100,000 pixels wide (hundreds of MB). Choosing the spindle position
+    /// only needs the numbers, so the decision uses this method and the images
+    /// are drawn later, after the PLC write (see DeferredPeelViewRenderer).
+    ///
+    /// The returned Image is empty.
+    /// </summary>
+    public static PeelSimulationResult ComputeMetrics(
+            List<Point3D> pointCloud,
+            PeelViewSettings settings,
+            UsableRadiusSettings usableSettings,
+            WaneSettings waneSettings,
+            double tailXMM = 0.0,
+            double tailYMM = 0.0,
+            double headXMM = 0.0,
+            double headYMM = 0.0,
+            double? fixedOuterRadiusMM = null)
+    {
+        var result = new PeelSimulationResult
+        {
+            AxisTailXMM = tailXMM,
+            AxisTailYMM = tailYMM,
+            AxisHeadXMM = headXMM,
+            AxisHeadYMM = headYMM
+        };
+
+        if (pointCloud == null || pointCloud.Count == 0)
+            return result;
+
+        SurfaceModel surface = BuildSurfaceModel(
+            pointCloud,
+            settings,
+            tailXMM,
+            tailYMM,
+            headXMM,
+            headYMM);
+
+        if (fixedOuterRadiusMM.HasValue && fixedOuterRadiusMM.Value > 0)
+        {
+            surface.OuterRadiusMM = fixedOuterRadiusMM.Value;
+        }
+
+        double coreRadiusMM = usableSettings.CoreDiameterInches * MM_PER_INCH / 2.0;
+
+        if (surface.OuterRadiusMM <= coreRadiusMM)
+        {
+            result.OuterDiameterMM = surface.OuterRadiusMM * 2.0;
+            result.CoreDiameterMM = coreRadiusMM * 2.0;
+            result.LogLengthMM = surface.LogLengthMM;
+            return result;
+        }
+
+        List<double> peelRadii = BuildPeelRadii(
+            surface.OuterRadiusMM,
+            coreRadiusMM,
+            usableSettings.VeneerThicknessMM);
+
+        double totalStripWidthMM = peelRadii.Sum(r => 2.0 * Math.PI * r);
+
+        // Same strip size as BuildSimulation, so the same pixel samples.
+        int stripWidthPixels = Math.Max(900, (int)(totalStripWidthMM * settings.PixelsPerMM));
+        int stripHeightPixels = settings.LengthBins;
+
+        Dictionary<int, SheetQualityStats> sheetStats = AccumulateSheetStatistics(
+            surface,
+            settings,
+            waneSettings,
+            stripWidthPixels,
+            stripHeightPixels,
+            peelRadii,
+            out long totalSamples,
+            out long waneSamples,
+            out long severeWaneSamples);
+
+        PeelSheetSummary sheetSummary = SummarizeSheets(
+            settings,
+            totalStripWidthMM,
+            stripWidthPixels,
+            sheetStats);
+
+        result.Revolutions = peelRadii.Count;
+        result.OuterDiameterMM = surface.OuterRadiusMM * 2.0;
+        result.CoreDiameterMM = coreRadiusMM * 2.0;
+        result.LogLengthMM = surface.LogLengthMM;
+        result.TotalWaneAreaPercent =
+            totalSamples > 0 ? 100.0 * waneSamples / totalSamples : 0.0;
+        result.SevereWaneAreaPercent =
+            totalSamples > 0 ? 100.0 * severeWaneSamples / totalSamples : 0.0;
+        result.TotalFullSheets = sheetSummary.TotalFullSheets;
+        result.UsableFullSheets = sheetSummary.UsableFullSheets;
+        result.RejectedFullSheets = sheetSummary.RejectedFullSheets;
+        result.TotalVeneerLengthMM = sheetSummary.TotalVeneerLengthMM;
+        result.UsableVeneerLengthMM = sheetSummary.UsableVeneerLengthMM;
+        result.PartialSheetLengthMM = sheetSummary.PartialSheetLengthMM;
+        result.AverageUsableCoveragePercent = sheetSummary.AverageUsableCoveragePercent;
+
+        return result;
+    }
+
+    /// <summary>
+    /// Counting half of DrawPeelAsContinuousSheets, without drawing. It walks
+    /// the same pixel grid (stripWidth columns x stripHeight rows) with the same
+    /// column-to-revolution/angle/sheet mapping and the same wane tests, so the
+    /// counts are identical. Kept separate from the drawing code on purpose;
+    /// the deferred renderer compares both on every scan and logs any mismatch.
+    /// </summary>
+    private static Dictionary<int, SheetQualityStats> AccumulateSheetStatistics(
+            SurfaceModel surface,
+            PeelViewSettings settings,
+            WaneSettings waneSettings,
+            int stripWidth,
+            int stripHeight,
+            List<double> peelRadii,
+            out long totalSamples,
+            out long waneSamples,
+            out long severeWaneSamples)
+    {
+        totalSamples = 0;
+        waneSamples = 0;
+        severeWaneSamples = 0;
+
+        var sheetStats = new Dictionary<int, SheetQualityStats>();
+
+        if (peelRadii == null || peelRadii.Count == 0 || stripWidth <= 0 || stripHeight <= 0)
+            return sheetStats;
+
+        int zBins = surface.RadiusByZAndAngle.GetLength(0);
+        int angleBins = surface.RadiusByZAndAngle.GetLength(1);
+
+        double[] revolutionStartMM = new double[peelRadii.Count];
+        double[] revolutionWidthMM = new double[peelRadii.Count];
+
+        double totalVeneerLengthMM = 0.0;
+
+        for (int rev = 0; rev < peelRadii.Count; rev++)
+        {
+            revolutionStartMM[rev] = totalVeneerLengthMM;
+
+            double circumferenceMM = 2.0 * Math.PI * peelRadii[rev];
+
+            revolutionWidthMM[rev] = circumferenceMM;
+            totalVeneerLengthMM += circumferenceMM;
+        }
+
+        double sheetLengthMM =
+            Math.Max(1.0, settings.VeneerMarkerSpacingInches) * MM_PER_INCH;
+
+        double[] peelRadiusByX = new double[stripWidth];
+        int[] angleByX = new int[stripWidth];
+        int[] sheetByX = new int[stripWidth];
+
+        int currentRev = 0;
+        int maxSheet = 0;
+
+        for (int px = 0; px < stripWidth; px++)
+        {
+            double xRatio =
+                px / (double)Math.Max(1, stripWidth - 1);
+
+            double veneerDistanceMM =
+                xRatio * totalVeneerLengthMM;
+
+            while (currentRev < peelRadii.Count - 1 &&
+                   veneerDistanceMM >= revolutionStartMM[currentRev] + revolutionWidthMM[currentRev])
+            {
+                currentRev++;
+            }
+
+            double localDistanceMM =
+                veneerDistanceMM - revolutionStartMM[currentRev];
+
+            double angleRatio =
+                revolutionWidthMM[currentRev] > 0.0001
+                    ? localDistanceMM / revolutionWidthMM[currentRev]
+                    : 0.0;
+
+            angleRatio = Math.Clamp(angleRatio, 0.0, 1.0);
+
+            angleByX[px] = ClampInt(
+                (int)Math.Round(angleRatio * (angleBins - 1)),
+                0,
+                angleBins - 1);
+
+            sheetByX[px] = (int)Math.Floor(veneerDistanceMM / sheetLengthMM);
+            peelRadiusByX[px] = peelRadii[currentRev];
+
+            if (sheetByX[px] > maxSheet)
+                maxSheet = sheetByX[px];
+        }
+
+        // Counters per sheet as arrays (fast); turned into the dictionary at
+        // the end, containing exactly the sheets that received a sample.
+        long[] totalBySheet = new long[maxSheet + 1];
+        long[] waneBySheet = new long[maxSheet + 1];
+        long[] severeBySheet = new long[maxSheet + 1];
+
+        double waneToleranceMM = waneSettings.WaneToleranceMM;
+        double severeWaneMM = waneSettings.SevereWaneMM;
+
+        for (int row = 0; row < stripHeight; row++)
+        {
+            double zRatio =
+                row / (double)Math.Max(1, stripHeight - 1);
+
+            int zIndex = ClampInt(
+                (int)Math.Round(zRatio * (zBins - 1)),
+                0,
+                zBins - 1);
+
+            for (int px = 0; px < stripWidth; px++)
+            {
+                double missingWoodMM =
+                    peelRadiusByX[px] - surface.RadiusByZAndAngle[zIndex, angleByX[px]];
+
+                int sheetIndex = sheetByX[px];
+
+                totalBySheet[sheetIndex]++;
+
+                if (missingWoodMM > waneToleranceMM)
+                    waneBySheet[sheetIndex]++;
+
+                if (missingWoodMM > severeWaneMM)
+                    severeBySheet[sheetIndex]++;
+            }
+        }
+
+        for (int sheet = 0; sheet <= maxSheet; sheet++)
+        {
+            if (totalBySheet[sheet] == 0)
+                continue;
+
+            sheetStats[sheet] = new SheetQualityStats
+            {
+                TotalCells = (int)totalBySheet[sheet],
+                WaneCells = (int)waneBySheet[sheet],
+                UsableCells = (int)(totalBySheet[sheet] - waneBySheet[sheet]),
+                SevereWaneCells = (int)severeBySheet[sheet]
+            };
+
+            totalSamples += totalBySheet[sheet];
+            waneSamples += waneBySheet[sheet];
+            severeWaneSamples += severeBySheet[sheet];
+        }
+
+        return sheetStats;
+    }
+
+    /// <summary>
+    /// Counting half of DrawSheetBoundariesAndLabels, without drawing: the same
+    /// full/partial, usable/rejected rules and the same pixel-span test.
+    /// </summary>
+    private static PeelSheetSummary SummarizeSheets(
+        PeelViewSettings settings,
+        double totalVeneerLengthMM,
+        int stripWidth,
+        Dictionary<int, SheetQualityStats> sheetStats)
+    {
+        double sheetLengthMM =
+            Math.Max(1.0, settings.VeneerMarkerSpacingInches) *
+            MM_PER_INCH;
+
+        var summary = new PeelSheetSummary
+        {
+            TotalVeneerLengthMM = Math.Max(0.0, totalVeneerLengthMM)
+        };
+
+        if (sheetLengthMM <= 0 || totalVeneerLengthMM <= 0)
+            return summary;
+
+        int displayedSheetCount =
+            Math.Max(1, (int)Math.Ceiling(totalVeneerLengthMM / sheetLengthMM));
+
+        int fullSheetCount =
+            Math.Max(0, (int)Math.Floor(totalVeneerLengthMM / sheetLengthMM));
+
+        summary.TotalFullSheets = fullSheetCount;
+        summary.PartialSheetLengthMM =
+            Math.Max(0.0, totalVeneerLengthMM - fullSheetCount * sheetLengthMM);
+
+        double fullSheetCoverageSum = 0.0;
+
+        for (int sheet = 0; sheet < displayedSheetCount; sheet++)
+        {
+            double startMM = sheet * sheetLengthMM;
+            double endMM = Math.Min(totalVeneerLengthMM, startMM + sheetLengthMM);
+
+            // Same visible-span test as the drawing code (strip left edge = 0).
+            int x1 = (int)Math.Round((startMM / totalVeneerLengthMM) * stripWidth);
+            int x2 = (int)Math.Round((endMM / totalVeneerLengthMM) * stripWidth);
+
+            if (x2 <= 0 || x1 >= stripWidth)
+                continue;
+
+            sheetStats.TryGetValue(sheet, out SheetQualityStats? stats);
+
+            double wanePercent =
+                stats is not null && stats.TotalCells > 0
+                    ? 100.0 * stats.WaneCells / stats.TotalCells
+                    : 0.0;
+
+            double severePercent =
+                stats is not null && stats.TotalCells > 0
+                    ? 100.0 * stats.SevereWaneCells / stats.TotalCells
+                    : 0.0;
+
+            double coveragePercent = Math.Clamp(100.0 - wanePercent, 0.0, 100.0);
+
+            bool isFullSheet = sheet < fullSheetCount;
+
+            bool usable =
+                isFullSheet &&
+                coveragePercent >= settings.MinimumUsableSheetCoveragePercent &&
+                severePercent <= settings.MaximumUsableSheetSevereWanePercent;
+
+            if (isFullSheet)
+            {
+                fullSheetCoverageSum += coveragePercent;
+
+                if (usable)
+                    summary.UsableFullSheets++;
+                else
+                    summary.RejectedFullSheets++;
+            }
+        }
+
+        summary.UsableVeneerLengthMM = summary.UsableFullSheets * sheetLengthMM;
+
+        summary.AverageUsableCoveragePercent =
+            fullSheetCount > 0
+                ? fullSheetCoverageSum / fullSheetCount
+                : 0.0;
+
+        return summary;
     }
 
     /// <summary>

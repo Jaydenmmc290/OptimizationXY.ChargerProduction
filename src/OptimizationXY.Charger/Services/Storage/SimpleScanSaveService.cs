@@ -50,6 +50,12 @@ public sealed class SimpleScanSaveService
         ArgumentNullException.ThrowIfNull(state);
         ApplicationPaths.EnsureCreated();
 
+        // Peel images are drawn now, after the spindle decision (and after the
+        // PLC write in the default send-first order), so the PLC never waits
+        // for them. Runs before the diagnostics report is written so the
+        // image check is included in it.
+        DeferredPeelViewRenderer.RenderPending(state);
+
         DeleteOldSavedScans(state.Settings.Storage);
 
         DateTime now = DateTime.Now;

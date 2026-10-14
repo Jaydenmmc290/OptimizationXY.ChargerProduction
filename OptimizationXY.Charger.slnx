@@ -5,4 +5,7 @@
   <Project Path="src/OptimizationXY.Charger/OptimizationXY.Charger.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
+  <Project Path="tests/OptimizationXY.Charger.Tests/OptimizationXY.Charger.Tests.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
 </Solution>

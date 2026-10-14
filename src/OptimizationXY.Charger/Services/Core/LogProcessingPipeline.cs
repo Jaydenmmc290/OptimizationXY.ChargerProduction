@@ -1764,19 +1764,11 @@ BuildFinalSpindleRecommendation(
             _state.LargestInscribedCylinder = cylinder;
             _state.LargestInscribedOval = oval;
 
-            _state.CylinderPeelView?.Dispose();
-            _state.CylinderPeelView =
-                cylinderPeel?.Image;
-
-            _state.OvalPeelView?.Dispose();
-            _state.OvalPeelView =
-                ovalPeel?.Image;
-
-            // Preserve separate cylinder/oval images while also keeping the
-            // existing selected-peel property used by viewers and storage.
-            _state.UnwrappedPeelView?.Dispose();
-            _state.UnwrappedPeelView =
-                selectedPeel.Image.Clone();
+            // The peels above are numbers only. Queue the images; they are
+            // drawn after the PLC write when the scan is saved.
+            DeferPeelView(PeelViewSlot.Cylinder, cylinderPeel);
+            DeferPeelView(PeelViewSlot.Oval, ovalPeel);
+            DeferPeelView(PeelViewSlot.Unwrapped, selectedPeel);
 
             OptimizedSpindleMovement move =
                 selectedGeometry.SpindleMovement;
@@ -2230,24 +2222,16 @@ BuildFinalSpindleRecommendation(
             _state.LargestInscribedCylinder = cylinder;
             _state.LargestInscribedOval = oval;
 
-            _state.BaselinePeelView?.Dispose();
-            _state.BaselinePeelView = baselinePeel?.Image;
-
-            _state.PenaltyPeelView?.Dispose();
-            _state.PenaltyPeelView = penaltyPeel?.Image;
-
-            _state.CylinderPeelView?.Dispose();
-            _state.CylinderPeelView = cylinderPeel?.Image;
-
-            _state.OvalPeelView?.Dispose();
-            _state.OvalPeelView = ovalPeel?.Image;
-
-            _state.DirectRecoveryPeelView?.Dispose();
-            _state.DirectRecoveryPeelView = directRecoveryPeel?.Image;
+            // The peels above are numbers only. Queue the images; they are
+            // drawn after the PLC write when the scan is saved.
+            DeferPeelView(PeelViewSlot.Baseline, baselinePeel);
+            DeferPeelView(PeelViewSlot.Penalty, penaltyPeel);
+            DeferPeelView(PeelViewSlot.Cylinder, cylinderPeel);
+            DeferPeelView(PeelViewSlot.Oval, ovalPeel);
+            DeferPeelView(PeelViewSlot.DirectRecovery, directRecoveryPeel);
             _state.DirectRecoverySearch = directRecoverySearch;
 
-            _state.UnwrappedPeelView?.Dispose();
-            _state.UnwrappedPeelView = recovery.Selected.Peel.Image.Clone();
+            DeferPeelView(PeelViewSlot.Unwrapped, recovery.Selected.Peel);
 
             OptimizedSpindleMovement move = recovery.Selected.Movement;
 
@@ -2472,9 +2456,31 @@ BuildFinalSpindleRecommendation(
     /// </summary>
     /// <param name="movement">The optimized spindle movement to simulate.</param>
     /// <returns>A peel simulation result for the given spindle movement.</returns>
+    /// <summary>
+    /// Queues the image for a numbers-only peel. Any image left in that slot
+    /// from earlier is released now; the new one is drawn when the scan is saved.
+    /// </summary>
+    private void DeferPeelView(PeelViewSlot slot, PeelSimulationResult? peel)
+    {
+        switch (slot)
+        {
+            case PeelViewSlot.Unwrapped: _state.UnwrappedPeelView?.Dispose(); _state.UnwrappedPeelView = null; break;
+            case PeelViewSlot.Cylinder: _state.CylinderPeelView?.Dispose(); _state.CylinderPeelView = null; break;
+            case PeelViewSlot.Oval: _state.OvalPeelView?.Dispose(); _state.OvalPeelView = null; break;
+            case PeelViewSlot.Baseline: _state.BaselinePeelView?.Dispose(); _state.BaselinePeelView = null; break;
+            case PeelViewSlot.Penalty: _state.PenaltyPeelView?.Dispose(); _state.PenaltyPeelView = null; break;
+            case PeelViewSlot.DirectRecovery: _state.DirectRecoveryPeelView?.Dispose(); _state.DirectRecoveryPeelView = null; break;
+        }
+
+        _state.DeferredPeelViews.RemoveAll(request => request.Slot == slot);
+
+        if (peel is not null)
+            _state.DeferredPeelViews.Add(new DeferredPeelView(slot, peel));
+    }
+
     private PeelSimulationResult BuildPeelForMovement(OptimizedSpindleMovement movement)
     {
-        return UnwrappedPeelViewBuilder.BuildSimulation(
+        return UnwrappedPeelViewBuilder.ComputeMetrics(
             _state.PointCloud,
             _state.Settings.PeelView,
             _state.Settings.UsableRadius,
@@ -2495,7 +2501,7 @@ BuildFinalSpindleRecommendation(
         OptimizedSpindleMovement move =
             geometry.SpindleMovement;
 
-        return UnwrappedPeelViewBuilder.BuildSimulation(
+        return UnwrappedPeelViewBuilder.ComputeMetrics(
             _state.PointCloud,
             _state.Settings.PeelView,
             _state.Settings.UsableRadius,
@@ -2575,18 +2581,19 @@ BuildFinalSpindleRecommendation(
         double headXMM = final?.BestTestedHeadXMM ?? 0.0;
         double headYMM = final?.BestTestedHeadYMM ?? 0.0;
 
-        var result = UnwrappedPeelViewBuilder.BuildSimulation(
-_state.PointCloud,
-_state.Settings.PeelView,
-_state.Settings.UsableRadius,
-_state.Settings.Wane,
-tailXMM,
-tailYMM,
-headXMM,
-headYMM);
+        // Numbers only; the image is drawn after the PLC write when the scan
+        // is saved (DeferredPeelViewRenderer).
+        var result = UnwrappedPeelViewBuilder.ComputeMetrics(
+            _state.PointCloud,
+            _state.Settings.PeelView,
+            _state.Settings.UsableRadius,
+            _state.Settings.Wane,
+            tailXMM,
+            tailYMM,
+            headXMM,
+            headYMM);
 
-        _state.UnwrappedPeelView?.Dispose();
-        _state.UnwrappedPeelView = result.Image;  // Store the resulting image in the pipeline state
+        DeferPeelView(PeelViewSlot.Unwrapped, result);
 
         if (_state.FinalSpindleRecommendation is not null)
         {

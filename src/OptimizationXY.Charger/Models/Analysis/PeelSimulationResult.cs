@@ -12,7 +12,16 @@ public sealed class PeelSimulationResult
 
 
    //  Gets or sets the processed image resulting from the peel simulation.
+   //  Empty when the result came from UnwrappedPeelViewBuilder.ComputeMetrics
+   //  (numbers only); the image is then drawn later by DeferredPeelViewRenderer.
     public Mat Image { get; set; } = new();
+
+    // Spindle axis (head/tail X/Y, mm, point-cloud frame) this peel was
+    // simulated for. Lets the image be drawn later for exactly the same axis.
+    public double AxisTailXMM { get; set; }
+    public double AxisTailYMM { get; set; }
+    public double AxisHeadXMM { get; set; }
+    public double AxisHeadYMM { get; set; }
 
     //  Gets or sets the number of revolutions made during the peel simulation.
     public int Revolutions { get; set; }
