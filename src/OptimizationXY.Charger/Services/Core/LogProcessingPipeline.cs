@@ -1650,8 +1650,21 @@ BuildFinalSpindleRecommendation(
                     oval = ovalTask.Result;
                 });
 
-                cylinderPeel = RunTimed("Peel Numbers: Cylinder", () => BuildPeelForGeometry(cylinder!));
-                ovalPeel = RunTimed("Peel Numbers: Oval", () => BuildPeelForGeometry(oval!));
+                // The two peels are independent; work them out at the same time.
+                RunTimed("Peel Numbers: Cylinder And Oval (run together)", () =>
+                {
+                    Task<PeelSimulationResult> cylinderPeelTask = Task.Run(
+                        () => RunTimed("Peel Numbers: Cylinder", () => BuildPeelForGeometry(cylinder!)),
+                        token);
+                    Task<PeelSimulationResult> ovalPeelTask = Task.Run(
+                        () => RunTimed("Peel Numbers: Oval", () => BuildPeelForGeometry(oval!)),
+                        token);
+
+                    Task.WaitAll([cylinderPeelTask, ovalPeelTask], token);
+
+                    cylinderPeel = cylinderPeelTask.Result;
+                    ovalPeel = ovalPeelTask.Result;
+                });
 
                 _state.DiagnosticsReport +=
                     BuildInscribedGeometryReport(cylinder, cylinderPeel);
