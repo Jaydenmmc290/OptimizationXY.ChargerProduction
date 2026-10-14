@@ -398,33 +398,56 @@ public static class UnwrappedPeelViewBuilder
 
         double waneToleranceMM = waneSettings.WaneToleranceMM;
         double severeWaneMM = waneSettings.SevereWaneMM;
+        double[,] radiusGrid = surface.RadiusByZAndAngle;
+        object mergeLock = new();
 
-        for (int row = 0; row < stripHeight; row++)
-        {
-            double zRatio =
-                row / (double)Math.Max(1, stripHeight - 1);
-
-            int zIndex = ClampInt(
-                (int)Math.Round(zRatio * (zBins - 1)),
-                0,
-                zBins - 1);
-
-            for (int px = 0; px < stripWidth; px++)
+        // Rows are independent and only whole-number counts are kept, so the
+        // rows can be counted in parallel and added together afterwards; the
+        // totals are exactly the same as counting row by row.
+        Parallel.For(
+            0,
+            stripHeight,
+            () => (Total: new long[maxSheet + 1], Wane: new long[maxSheet + 1], Severe: new long[maxSheet + 1]),
+            (row, _, local) =>
             {
-                double missingWoodMM =
-                    peelRadiusByX[px] - surface.RadiusByZAndAngle[zIndex, angleByX[px]];
+                double zRatio =
+                    row / (double)Math.Max(1, stripHeight - 1);
 
-                int sheetIndex = sheetByX[px];
+                int zIndex = ClampInt(
+                    (int)Math.Round(zRatio * (zBins - 1)),
+                    0,
+                    zBins - 1);
 
-                totalBySheet[sheetIndex]++;
+                for (int px = 0; px < stripWidth; px++)
+                {
+                    double missingWoodMM =
+                        peelRadiusByX[px] - radiusGrid[zIndex, angleByX[px]];
 
-                if (missingWoodMM > waneToleranceMM)
-                    waneBySheet[sheetIndex]++;
+                    int sheetIndex = sheetByX[px];
 
-                if (missingWoodMM > severeWaneMM)
-                    severeBySheet[sheetIndex]++;
-            }
-        }
+                    local.Total[sheetIndex]++;
+
+                    if (missingWoodMM > waneToleranceMM)
+                        local.Wane[sheetIndex]++;
+
+                    if (missingWoodMM > severeWaneMM)
+                        local.Severe[sheetIndex]++;
+                }
+
+                return local;
+            },
+            local =>
+            {
+                lock (mergeLock)
+                {
+                    for (int sheet = 0; sheet <= maxSheet; sheet++)
+                    {
+                        totalBySheet[sheet] += local.Total[sheet];
+                        waneBySheet[sheet] += local.Wane[sheet];
+                        severeBySheet[sheet] += local.Severe[sheet];
+                    }
+                }
+            });
 
         for (int sheet = 0; sheet <= maxSheet; sheet++)
         {
