@@ -23,6 +23,15 @@ public sealed class GenieNanoCameraService : IDisposable
         Control panelCameraView) =>
         ThrowUnavailable();
 
+    // Same signature as the Sapera build, so MainForm compiles without the SDK.
+    public void Connect(
+        CameraDeviceSettings settings,
+        Control panelCameraView,
+        Exception argumentOutOfRangeException1,
+        ArgumentOutOfRangeException argumentOutOfRangeException,
+        DiscoveredCamera? openLocation = null) =>
+        ThrowUnavailable();
+
     public void StartLive() => ThrowUnavailable();
 
     public void StartManagedFrameCapture() =>
@@ -51,5 +60,16 @@ public sealed class GenieNanoCameraService : IDisposable
         throw new PlatformNotSupportedException(
             MissingSdkMessage);
     }
+}
+
+/// <summary>
+/// Non-hardware build: no Sapera SDK, so no cameras can be discovered.
+/// The production build (SAPERA defined) uses the real discovery service.
+/// </summary>
+public static class SaperaCameraDiscoveryService
+{
+    public static IReadOnlyList<DiscoveredCamera> Discover() => [];
+
+    public static IReadOnlyList<DiscoveredCamera> DiscoverWithIdentity() => [];
 }
 #endif
