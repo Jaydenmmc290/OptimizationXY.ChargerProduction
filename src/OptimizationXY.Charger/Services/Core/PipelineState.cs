@@ -102,6 +102,13 @@ namespace OptimizationXY.Charger.Services.Core
         // Do not use this for final measurements or spindle optimization.
 
         public List<PipelineTimingEntry> TimingEntries { get; set; } = new();
+
+        /// <summary>
+        /// Real elapsed time of the last processing run (frames in hand to
+        /// position chosen), in seconds. 0 until a run finishes. TimingEntries
+        /// cannot be added up for this: frames are processed in parallel.
+        /// </summary>
+        public double ProcessingElapsedSeconds { get; set; }
         public List<Point3D> DisplayPointCloud { get; set; } = new();
         public CenterlineResult? Centerline { get; set; }
         public List<LocalCenterlineSlice> LocalCenterlines { get; set; } = new();
@@ -232,6 +239,7 @@ namespace OptimizationXY.Charger.Services.Core
             }
 
             TimingEntries.Clear();
+            ProcessingElapsedSeconds = 0.0;
             ScanFrames.Clear();
             RevolutionAngles = null;
             PointCloud.Clear();

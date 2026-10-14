@@ -159,7 +159,12 @@ public sealed class OperatorScanQualityAnalyzer
             : 100.0 * validSliceCount / expectedSliceCount;
         double largestGapMM = largestGapBins * zBinMM;
         double lengthMM = expectedSliceCount * zBinMM;
-        double processingSeconds = state.TimingEntries.Sum(entry => entry.ElapsedSeconds);
+        // Real elapsed processing time. Adding up TimingEntries overstated it
+        // several times over, because frames are processed in parallel and
+        // nested steps were counted inside their parent stage as well.
+        double processingSeconds = state.ProcessingElapsedSeconds > 0.0
+            ? state.ProcessingElapsedSeconds
+            : state.TimingEntries.Where(entry => entry.Depth == 0).Sum(entry => entry.ElapsedSeconds);
 
         // Profile coverage above is along the length of the block only. Frames
         // that are lost in a row leave an arc of the revolution with no data at

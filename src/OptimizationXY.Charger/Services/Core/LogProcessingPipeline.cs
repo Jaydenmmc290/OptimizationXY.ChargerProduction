@@ -23,6 +23,7 @@ using OptimizationXY.Charger.Services.Preprocessing;
 using OptimizationXY.Charger.Services.Profile;
 using OptimizationXY.Charger.Visualization;
 using System.Diagnostics;
+using System.Text;
 using OptimizationXY.Charger.Models.Core;
 using System.Globalization;
 using OptimizationXY.Charger.Models.Analysis;
@@ -1548,13 +1549,8 @@ BuildFinalSpindleRecommendation(
 
         string engineeringDetails = _state.DiagnosticsReport;  // Store the current diagnostics report in a local variable for later use in building the final diagnostics report
 
-        //------------------------------------------------------------
-        // Append the timing report to the engineering details if the settings indicate that timing information should be included in the diagnostics report
-        //------------------------------------------------------------
-        if (_state.Settings.Diagnostics.IncludeTimingReport)
-        {
-            engineeringDetails += BuildTimingReport(_state.TimingEntries);
-        }
+        // The timing report is appended once, at the end of
+        // RunCurrentFramesPipeline, so it includes this stage as well.
 
         if (_state.Settings.Diagnostics.IncludeEngineeringDetails)  // If the settings indicate that engineering details should be included in the diagnostics report,
                                                                     // append the operator summary and engineering details to the final diagnostics report for comprehensive reporting
@@ -1625,41 +1621,37 @@ BuildFinalSpindleRecommendation(
         {
             if (mode == SpindleOptimizationMode.CompareInscribedGeometry)
             {
-                // Parallelize cylinder and oval searches when comparing both
-                Task<InscribedGeometryResult> cylinderTask =
-                    Task.Run(() =>
-                        InscribedGeometryOptimizer.FindLargestCylinder(
-                            _state.OptimizationBinnedRadiusField,
-                            _state.Settings.Optimization,
-                            _state.Settings.InscribedGeometry,
-                            _state.Settings.MachineLimits,
-                            token),
-                        token);
-
-                Task<InscribedGeometryResult> ovalTask =
-                    Task.Run(() =>
-                        InscribedGeometryOptimizer.FindLargestOval(
-                            _state.OptimizationBinnedRadiusField,
-                            _state.Settings.Optimization,
-                            _state.Settings.InscribedGeometry,
-                            _state.Settings.MachineLimits,
-                            token),
-                        token);
-
-                try
+                // Cylinder and oval searches run at the same time.
+                RunTimed("Cylinder And Oval Search (run together)", () =>
                 {
+                    Task<InscribedGeometryResult> cylinderTask =
+                        Task.Run(() => RunTimed("Largest Inscribed Cylinder Search", () =>
+                            InscribedGeometryOptimizer.FindLargestCylinder(
+                                _state.OptimizationBinnedRadiusField,
+                                _state.Settings.Optimization,
+                                _state.Settings.InscribedGeometry,
+                                _state.Settings.MachineLimits,
+                                token)),
+                            token);
+
+                    Task<InscribedGeometryResult> ovalTask =
+                        Task.Run(() => RunTimed("Largest Inscribed Oval Search", () =>
+                            InscribedGeometryOptimizer.FindLargestOval(
+                                _state.OptimizationBinnedRadiusField,
+                                _state.Settings.Optimization,
+                                _state.Settings.InscribedGeometry,
+                                _state.Settings.MachineLimits,
+                                token)),
+                            token);
+
                     Task.WaitAll([cylinderTask, ovalTask], token);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
 
-                cylinder = cylinderTask.Result;
-                oval = ovalTask.Result;
+                    cylinder = cylinderTask.Result;
+                    oval = ovalTask.Result;
+                });
 
-                cylinderPeel = BuildPeelForGeometry(cylinder);
-                ovalPeel = BuildPeelForGeometry(oval);
+                cylinderPeel = RunTimed("Peel Numbers: Cylinder", () => BuildPeelForGeometry(cylinder!));
+                ovalPeel = RunTimed("Peel Numbers: Oval", () => BuildPeelForGeometry(oval!));
 
                 _state.DiagnosticsReport +=
                     BuildInscribedGeometryReport(cylinder, cylinderPeel);
@@ -2036,12 +2028,8 @@ BuildFinalSpindleRecommendation(
             string engineeringDetails =
                 _state.DiagnosticsReport;
 
-            if (_state.Settings.Diagnostics.IncludeTimingReport)
-            {
-                engineeringDetails +=
-                    BuildTimingReport(
-                        _state.TimingEntries);
-            }
+            // The timing report is appended once, at the end of
+            // RunCurrentFramesPipeline, so it includes this stage as well.
 
             _state.DiagnosticsReport =
                 _state.Settings.Diagnostics.IncludeEngineeringDetails
@@ -3381,7 +3369,10 @@ double maxSpindleMovementMM)
     /// <param name="action">The action to execute and time.</param>
     private void RunTimed(string stepName, Action action)
     {
-        Stopwatch stopwatch = Stopwatch.StartNew();  // Start a stopwatch to measure the elapsed time for the given action
+        double startOffsetMS = _runClock.Elapsed.TotalMilliseconds;
+        int depth = TimingDepth.Value;
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        TimingDepth.Value = depth + 1;
 
         try
         {
@@ -3390,9 +3381,21 @@ double maxSpindleMovementMM)
         finally
         {
             stopwatch.Stop();
-            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds);
+            TimingDepth.Value = depth;
+            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds, startOffsetMS, depth);
         }
     }
+
+    /// <summary>
+    /// Clock for the current processing run; restarted by RunCurrentFramesPipeline.
+    /// </summary>
+    private readonly Stopwatch _runClock = new();
+
+    /// <summary>
+    /// How deeply the current step is nested inside other timed steps. Flows into
+    /// parallel work, so per-frame steps are recorded as part of their stage.
+    /// </summary>
+    private static readonly AsyncLocal<int> TimingDepth = new();
 
     /// <summary>
     /// Guards <see cref="PipelineState.TimingEntries"/>. RunTimed is called from
@@ -3405,14 +3408,20 @@ double maxSpindleMovementMM)
     /// <summary>
     /// Adds one timing entry. Safe to call from several threads at once.
     /// </summary>
-    private void RecordTiming(string stepName, double elapsedMilliseconds)
+    private void RecordTiming(
+        string stepName,
+        double elapsedMilliseconds,
+        double startOffsetMilliseconds,
+        int depth)
     {
         lock (TimingEntriesLock)
         {
             _state.TimingEntries.Add(new PipelineTimingEntry
             {
                 StepName = stepName,
-                ElapsedMilliseconds = elapsedMilliseconds
+                ElapsedMilliseconds = elapsedMilliseconds,
+                StartOffsetMilliseconds = startOffsetMilliseconds,
+                Depth = depth
             });
         }
     }
@@ -3427,7 +3436,10 @@ double maxSpindleMovementMM)
     /// <returns>The result of the function.</returns>
     private T RunTimed<T>(string stepName, Func<T> func)
     {
+        double startOffsetMS = _runClock.Elapsed.TotalMilliseconds;
+        int depth = TimingDepth.Value;
         Stopwatch stopwatch = Stopwatch.StartNew();
+        TimingDepth.Value = depth + 1;
 
         try
         {
@@ -3436,85 +3448,86 @@ double maxSpindleMovementMM)
         finally
         {
             stopwatch.Stop();
-            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds);
+            TimingDepth.Value = depth;
+            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds, startOffsetMS, depth);
         }
     }
 
     /// <summary>
-    /// Builds a timing report summarizing the elapsed time for each step in the pipeline, including the total time and individual step times in seconds.
+    /// Timing report in real elapsed (wall-clock) time.
+    ///
+    /// Frames are processed in parallel, so adding up per-frame times gives CPU
+    /// time, not elapsed time (the old "Total Time" did that and read several
+    /// times too high). Stages are listed in the order they ran with their real
+    /// elapsed time; steps timed inside a stage are indented under it and are
+    /// part of that stage's time. Per-frame work is shown separately as CPU time.
     /// </summary>
-    /// <param name="entries">The list of pipeline timing entries.</param>
-    /// <returns>A string representing the timing report.</returns>
-    private static string BuildTimingReport(List<PipelineTimingEntry> entries)
+    internal static string BuildTimingReport(
+        List<PipelineTimingEntry> entries,
+        double processingElapsedMS)
     {
         if (entries == null || entries.Count == 0)
             return string.Empty;
 
-        double totalMS = entries.Sum(e => e.ElapsedMilliseconds);
+        static bool IsPerFrame(PipelineTimingEntry entry) =>
+            entry.StepName.StartsWith("Frame", StringComparison.OrdinalIgnoreCase) &&
+            entry.StepName.Contains(" - ", StringComparison.Ordinal);
 
-        string report =
-            "\r\nPIPELINE TIMING REPORT\r\n" +
-            $"Total Time: {(totalMS / 1000.0):F2} sec\r\n";
+        var report = new StringBuilder();
 
-        // Group entries to aggregate per-frame operations (Frame X - Operation Y) into operation summaries
-        // This makes the report much more concise and readable by hiding verbose per-frame details.
-        var groupedEntries = new Dictionary<string, (double TotalMs, int Count)>();
-        var opaqueEntries = new List<PipelineTimingEntry>(); // Non-frame entries displayed as-is
+        report.Append("\r\nPIPELINE TIMING REPORT (real elapsed time)\r\n");
+        report.Append(
+            $"Processing time, frames in hand to position chosen: {processingElapsedMS / 1000.0:F2} s\r\n");
 
-        foreach (var entry in entries)
+        List<PipelineTimingEntry> stages = [.. entries
+            .Where(entry => !IsPerFrame(entry))
+            .OrderBy(entry => entry.StartOffsetMilliseconds)
+            .ThenBy(entry => entry.Depth)];
+
+        if (stages.Count > 0)
         {
-            // Check if this is a per-frame timing entry (format: "Frame N - OpName")
-            // or, for frames loaded from a folder, "Frame_0001.png - OpName".
-            if (entry.StepName.StartsWith("Frame", StringComparison.OrdinalIgnoreCase))
-            {
-                // Extract the operation name (everything after "Frame N - ")
-                int dashIndex = entry.StepName.IndexOf(" - ", StringComparison.Ordinal);
-                if (dashIndex > 0)
-                {
-                    string operationName = entry.StepName.Substring(dashIndex + 3);
+            report.Append("\r\nStages in the order they ran (indented lines are part of the line above):\r\n");
 
-                    if (groupedEntries.TryGetValue(operationName, out (double TotalMs, int Count) value))
-                    {
-                        var (existing, count) = value;
-                        groupedEntries[operationName] = (existing + entry.ElapsedMilliseconds, count + 1);
-                    }
-                    else
-                    {
-                        groupedEntries[operationName] = (entry.ElapsedMilliseconds, 1);
-                    }
-                    continue;
-                }
+            foreach (PipelineTimingEntry entry in stages)
+            {
+                string indent = new(' ', 2 + 2 * Math.Max(0, entry.Depth));
+                string name = indent + entry.StepName;
+                report.Append(
+                    $"{name.PadRight(64)} {entry.ElapsedSeconds,7:F2} s   (started at {entry.StartOffsetMilliseconds / 1000.0:F2} s)\r\n");
             }
 
-            // Not a per-frame entry; add to opaque list to display as-is
-            opaqueEntries.Add(entry);
+            double topLevelMS = stages
+                .Where(entry => entry.Depth == 0)
+                .Sum(entry => entry.ElapsedMilliseconds);
+            double otherMS = Math.Max(0.0, processingElapsedMS - topLevelMS);
+
+            report.Append(
+                $"{"  Between stages (reports, hand-over)".PadRight(64)} {otherMS / 1000.0,7:F2} s\r\n");
         }
 
-        // First, output aggregated per-frame operations
-        if (groupedEntries.Count > 0)
-        {
-            report += "\nPer-Frame Operations (Aggregated):\r\n";
-            foreach (var kvp in groupedEntries.OrderBy(x => x.Key))
-            {
-                double totalSeconds = kvp.Value.TotalMs / 1000.0;
-                int count = kvp.Value.Count;
-                report +=
-                    $"{kvp.Key} (total, {count} frames): {totalSeconds:F2} sec\r\n";
-            }
-        }
+        var perFrame = entries
+            .Where(IsPerFrame)
+            .GroupBy(entry => entry.StepName[(entry.StepName.IndexOf(" - ", StringComparison.Ordinal) + 3)..])
+            .OrderByDescending(group => group.Sum(entry => entry.ElapsedMilliseconds))
+            .ToList();
 
-        // Then, output non-frame entries (the main pipeline stages)
-        if (opaqueEntries.Count > 0)
+        if (perFrame.Count > 0)
         {
-            report += "\nPipeline Stages:\r\n";
-            foreach (var entry in opaqueEntries)
+            report.Append(
+                "\r\nPer-frame work inside \"Process Rotating Scan Frames\" (CPU time added up over all frames).\r\n" +
+                $"Frames run in parallel on {Environment.ProcessorCount} logical processors, so these add up to more than the stage's real time:\r\n");
+
+            foreach (var group in perFrame)
             {
-                report +=
-                    $"{entry.StepName}: {entry.ElapsedSeconds:F2} sec\r\n";
+                double totalMS = group.Sum(entry => entry.ElapsedMilliseconds);
+                int count = group.Count();
+
+                report.Append(
+                    $"  {group.Key} ({count} frames): {totalMS / 1000.0:F2} s CPU, {totalMS / Math.Max(1, count):F1} ms per frame\r\n");
             }
         }
 
-        return report;  // Return the constructed timing report string summarizing the elapsed time for each step in the pipeline, including the total time and individual step times in seconds
+        return report.ToString();
     }
 
     /// <summary>
@@ -3538,6 +3551,44 @@ double maxSpindleMovementMM)
                 "Scanner calibration is invalid or incomplete.");
         }
 
+        _runClock.Restart();
+        TimingDepth.Value = 0;
+
+        try
+        {
+            RunAllStages(lookupTable, token, progress);
+        }
+        finally
+        {
+            _runClock.Stop();
+        }
+
+        _state.ProcessingElapsedSeconds = _runClock.Elapsed.TotalSeconds;
+
+        if (_state.Settings.Diagnostics.IncludeTimingReport &&
+            _state.Settings.Diagnostics.IncludeEngineeringDetails)
+        {
+            List<PipelineTimingEntry> snapshot;
+
+            lock (TimingEntriesLock)
+            {
+                snapshot = [.. _state.TimingEntries];
+            }
+
+            _state.DiagnosticsReport += BuildTimingReport(
+                snapshot,
+                _runClock.Elapsed.TotalMilliseconds);
+        }
+    }
+
+    /// <summary>
+    /// The ordered stage list of <see cref="RunCurrentFramesPipeline"/>.
+    /// </summary>
+    private void RunAllStages(
+        ScannerLookupTable lookupTable,
+        CancellationToken token,
+        Action<string>? progress)
+    {
         void RunStage(
             string timingName,
             string progressMessage,
