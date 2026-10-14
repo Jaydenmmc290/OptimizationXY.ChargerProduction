@@ -27,6 +27,11 @@ public static class LaserRadiusProfileBuilder
         if (lookupTable == null || lookupTable.Points.Count < 2)
             throw new InvalidOperationException("Lookup table needs at least two calibration points.");
 
+        // Checked once per frame here instead of once per stripe column inside
+        // the lookup (IsValid is expensive; see GetRadiusMMFromValidatedTable).
+        if (!lookupTable.IsValid)
+            throw new InvalidOperationException("Lookup table is invalid.");
+
         var orderedLaser = laserProfile
             .OrderBy(p => p.X)
             .ToList();
@@ -45,7 +50,7 @@ public static class LaserRadiusProfileBuilder
             if (p.X < 0 || p.X >= lookupTable.ImageWidth)
                 continue;
 
-            double radiusMM = LookupTableInterpolator.GetRadiusMM(
+            double radiusMM = LookupTableInterpolator.GetRadiusMMFromValidatedTable(
                 lookupTable,
                 p.X,
                 p.LaserCenterY,
