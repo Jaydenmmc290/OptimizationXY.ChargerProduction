@@ -49,4 +49,5 @@ jobs:
           dotnet test tests/OptimizationXY.Charger.Tests/OptimizationXY.Charger.Tests.csproj -c Release -p:UseSapera=false -p:SkipLicx=true -p:Platform=x64 --logger "console;verbosity=normal" 2>&1 | Tee-Object -FilePath test.log
           $code = $LASTEXITCODE
           Select-String -Path test.log -Pattern ': error |Failed |\[FAIL\]|Assert\.' | Select-Object -First 40 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+          Select-String -Path test.log -Pattern 'Passed!|Failed!|Total tests' | ForEach-Object { Write-Output "::notice title=Test summary::$($_.Line.Trim())" }
           exit $code
