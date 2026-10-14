@@ -1,0 +1,115 @@
+using System.Text.Json;
+using OptimizationXY.Charger.Infrastructure;
+using OptimizationXY.Charger.Models.Calibration;
+
+namespace OptimizationXY.Charger.Services.Calibration;
+
+/// <summary>
+/// Saves and loads the Production Setup wizard's unfinished calibration
+/// session (Config\Calibration\InProgress\calibration-session.json).
+///
+/// This file is wizard progress only. It never touches the active calibration
+/// package, its fingerprint or the camera configuration, and it is never read
+/// by scanning.
+/// </summary>
+public static class CalibrationSessionStore
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
+    public static string SessionPath =>
+        Path.Combine(
+            ApplicationPaths.CalibrationInProgressDirectory,
+            "calibration-session.json");
+
+    public static CalibrationSessionState CreateSessionState(
+        string operatorName,
+        bool headOnLeft,
+        bool reverseHeadHorizontal,
+        bool reverseTailHorizontal,
+        int headCropLeftPixels,
+        int headCropRightPixels,
+        int tailCropLeftPixels,
+        int tailCropRightPixels,
+        int tailVerticalOffsetPixels,
+        int overlapPixels,
+        bool cameraSeamConfirmed,
+        string cameraSeamPreviewBase64,
+        double knownLengthMM,
+        int startPixelX,
+        int endPixelX,
+        double lengthPixelsPerMM,
+        bool lengthScaleConfirmed,
+        string lengthCalibrationImageBase64,
+        List<CalibrationReferenceCapture> capturedReferences,
+        bool independentValidationCompleted,
+        double? independentValidationMeanErrorMM,
+        double? independentValidationMaximumErrorMM,
+        string calibrationNotes)
+    {
+        return new CalibrationSessionState
+        {
+            SavedUtc = DateTime.UtcNow,
+            OperatorName = operatorName ?? string.Empty,
+            HeadOnLeft = headOnLeft,
+            ReverseHeadHorizontal = reverseHeadHorizontal,
+            ReverseTailHorizontal = reverseTailHorizontal,
+            HeadCropLeftPixels = headCropLeftPixels,
+            HeadCropRightPixels = headCropRightPixels,
+            TailCropLeftPixels = tailCropLeftPixels,
+            TailCropRightPixels = tailCropRightPixels,
+            TailVerticalOffsetPixels = tailVerticalOffsetPixels,
+            OverlapPixels = overlapPixels,
+            CameraSeamConfirmed = cameraSeamConfirmed,
+            CameraSeamPreviewBase64 = cameraSeamPreviewBase64 ?? string.Empty,
+            KnownLengthMM = knownLengthMM,
+            StartPixelX = startPixelX,
+            EndPixelX = endPixelX,
+            LengthPixelsPerMM = lengthPixelsPerMM,
+            LengthScaleConfirmed = lengthScaleConfirmed,
+            LengthCalibrationImageBase64 = lengthCalibrationImageBase64 ?? string.Empty,
+            CapturedReferences = [.. (capturedReferences ?? [])
+                .Select(capture => new CalibrationSessionReference { Capture = capture })],
+            IndependentValidationCompleted = independentValidationCompleted,
+            IndependentValidationMeanErrorMM = independentValidationMeanErrorMM,
+            IndependentValidationMaximumErrorMM = independentValidationMaximumErrorMM,
+            CalibrationNotes = calibrationNotes ?? string.Empty
+        };
+    }
+
+    public static void SaveIncompleteSession(CalibrationSessionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        Directory.CreateDirectory(ApplicationPaths.CalibrationInProgressDirectory);
+
+        // Write to a temporary file, then replace, so a crash mid-write never
+        // leaves a half-written session behind.
+        string path = SessionPath;
+        string temporaryPath = path + ".tmp";
+
+        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state, JsonOptions));
+        File.Move(temporaryPath, path, overwrite: true);
+    }
+
+    public static bool IncompleteSessionExists() =>
+        File.Exists(SessionPath);
+
+    public static CalibrationSessionState? LoadIncompleteSession()
+    {
+        if (!File.Exists(SessionPath))
+            return null;
+
+        return JsonSerializer.Deserialize<CalibrationSessionState>(
+            File.ReadAllText(SessionPath),
+            JsonOptions);
+    }
+
+    public static void ClearIncompleteSession()
+    {
+        if (File.Exists(SessionPath))
+            File.Delete(SessionPath);
+    }
+}
