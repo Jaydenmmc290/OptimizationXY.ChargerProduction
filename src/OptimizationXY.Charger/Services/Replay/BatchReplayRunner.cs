@@ -604,10 +604,19 @@ internal static class BatchReplayRunner
         {
             foreach (IReadOnlyList<string> names in sameBlockGroups)
             {
-                bool Matches(Row row, string name) =>
-                    string.Equals(row.Block, name, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(Path.GetFileName(row.ScanFolder), name, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(row.ScanFolder, name, StringComparison.OrdinalIgnoreCase);
+                static string Normal(string path) => path.Replace('/', '\\').Trim('\\');
+
+                // "09\11\Block_0001" matches every scan under that folder.
+                bool Matches(Row row, string name)
+                {
+                    string scan = Normal(row.ScanFolder);
+                    string wanted = Normal(name);
+
+                    return string.Equals(row.Block, name, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(Path.GetFileName(row.ScanFolder), name, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(scan, wanted, StringComparison.OrdinalIgnoreCase) ||
+                        scan.StartsWith(wanted + "\\", StringComparison.OrdinalIgnoreCase);
+                }
 
                 List<Row> scans = [.. rows.Where(row => names.Any(name => Matches(row, name)))];
 

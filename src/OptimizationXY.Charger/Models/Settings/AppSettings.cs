@@ -795,15 +795,16 @@ public sealed class InscribedGeometrySettings
     public int CertifiedSearchMaxEvaluations { get; set; } = 150000;
 
     /// <summary>
-    /// 0 (default): CompareInscribedGeometry picks the oval whenever its virtual
-    /// peel is better in any way, however small.
-    /// Above 0: when the oval and cylinder give the same usable sheets, usable
-    /// veneer length and rejected sheets, the oval is only chosen if it cuts
-    /// severe or total wane by at least this many percent; otherwise the cylinder
-    /// is kept. Stops 0.1-0.5% wane differences from flipping the choice (and
-    /// the axis) between repeat scans. Compare with --replay-batch first.
+    /// When the cylinder and oval give the same usable sheets, usable veneer
+    /// length and rejected sheets, the oval is only chosen if it cuts severe or
+    /// total wane by at least this many percent; otherwise the cylinder is kept.
+    /// Stops 0.1-0.5% wane differences from flipping the choice (and moving the
+    /// axis) between repeat scans of the same block. It never costs a sheet: it
+    /// only acts when the sheets are equal. Default 1 (checked on 22 saved scans:
+    /// identical sheets, oval/cylinder choice stable). 0 = the oval wins on any
+    /// wane difference, however small (the behaviour before this setting).
     /// </summary>
-    public double OvalMinimumWaneAdvantagePercent { get; set; }
+    public double OvalMinimumWaneAdvantagePercent { get; set; } = 1.0;
 }
 
 /// <summary>

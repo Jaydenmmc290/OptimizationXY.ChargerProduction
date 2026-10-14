@@ -67,12 +67,12 @@ sits differently on the spindles each time and the machine commands are *expecte
 Scans in one folder (`Scan_0001`, `Scan_0002`, ...) are one group. Otherwise list them:
 
 ```
---replay-batch "<SavedScans>" --same-block "B01,B02,B03,B04,B05,B06,B07" --same-block "B08,B09,B10,B11"
+--replay-batch "<SavedScans>" --same-block "09\11\Block_0001,09\11\Block_0002,09\11\Block_0003" --same-block "09\11\Block_0008,09\11\Block_0009"
 ```
 
-A name matches the scan's block folder, its own folder name, or its path relative to the scans folder.
+A name can be a block folder with its date (`09\11\Block_0001`, matches every scan under it), a scan folder name, or a path relative to the scans folder.
 
-### Options to compare (all off by default)
+### Options to compare (off by default unless noted)
 
 | `--set` | What it changes |
 |---|---|
@@ -81,7 +81,7 @@ A name matches the scan's block folder, its own folder name, or its path relativ
 | `Geometry.OptimizationCellIgnoreLowestReadings=1` | Ignore the single lowest reading of a well-filled cell in the spindle search, so one noisy low reading cannot decide the position |
 | `InscribedGeometry.UseCertifiedCylinderSearch=true` | After the grid search, search the whole machine travel and report a certified gap: no position can score more than that many mm better |
 | `RotatingScan.SubFrameRevolutionClosure=true` | Place the 360 degree point between two frames (e.g. 84.6 frames) instead of rounding the revolution to whole frames |
-| `InscribedGeometry.OvalMinimumWaneAdvantagePercent=1` | When cylinder and oval give the same sheets, choose the oval only if it cuts wane by at least 1%; stops small wane differences flipping the choice between scans |
+| `InscribedGeometry.OvalMinimumWaneAdvantagePercent=0` | **On by default (1).** When cylinder and oval give the same sheets, the oval is chosen only if it cuts wane by at least 1%. `=0` restores the old rule (oval wins on any wane difference) |
 | `OptimizationMode=RecoveryOptimized` | Choose the position by simulated veneer recovery (direct refinement around all the strategy seeds) instead of cylinder vs oval |
 
 Turn an option on in production only after the batch shows it gains sheets or tightens the

@@ -93,6 +93,32 @@ public class RepeatabilityTests
         Assert.InRange(refinedFrames[42].AngleDeg, 178.5, 179.0);   // 42 x 360 / 84.6 = 178.72
     }
 
+    [Fact]
+    public void Assign_Unverified_ReportsClosestReturnAndEndRest()
+    {
+        // The block turns only about 300 degrees, then rests: no closure.
+        var frames = new List<ScanFrame>();
+        for (int index = 0; index < 82; index++)
+        {
+            double angle = Math.Min(index, 70) * 360.0 / 84.6;
+            var profile = new List<LogProfileColumn>();
+
+            for (int x = 0; x < Columns; x++)
+                profile.Add(new LogProfileColumn { X = x, RadiusMM = RadiusAt(x, angle) });
+
+            frames.Add(new ScanFrame { FrameIndex = index, Profile = profile, IsValid = true });
+        }
+
+        var settings = new RotatingScanSettings { StationaryProfileChangeMM = 0.3 };
+        RevolutionAngleResult result = RevolutionAngleAssigner.Assign(frames, settings);
+
+        Assert.False(result.RevolutionVerified);
+        Assert.True(result.BestClosureFrame >= 20);
+        Assert.True(result.BestClosureErrorMM > settings.RevolutionClosureToleranceMM);
+        Assert.True(result.EndRestDifferenceMM > 1.0);
+        Assert.Contains("Closest return to the start profile", result.Message);
+    }
+
     // ------------------------------------------------------------
     // Cylinder / oval tie-break
     // ------------------------------------------------------------
@@ -108,6 +134,12 @@ public class RepeatabilityTests
     };
 
     private static InscribedGeometryResult Geometry(InscribedGeometryKind kind) => new() { Kind = kind };
+
+    [Fact]
+    public void TieBreak_IsOnByDefault_AtOnePercent()
+    {
+        Assert.Equal(1.0, new InscribedGeometrySettings().OvalMinimumWaneAdvantagePercent);
+    }
 
     [Fact]
     public void TieBreak_Off_OvalWinsOnAnyWaneDifference()
@@ -183,6 +215,22 @@ public class RepeatabilityTests
         Assert.Contains("B01,B02,B04 (3 scans): axis 0.0 to 3.0 mm, inscribed diameter spread 5.60 mm, usable sheets 33 to 35", summary);
         Assert.Contains("cylinder/oval 2/1", summary);
         Assert.DoesNotContain("B12,B13", summary);   // only one of its scans is present
+    }
+
+    [Fact]
+    public void SameBlock_MatchesDateAndBlockFolders()
+    {
+        var rows = new List<BatchReplayRunner.Row>
+        {
+            Row(Path.Combine("09", "11", "Block_0001", "Scan_0001"), 2.0, 423.2, 33, "Largest Inscribed Cylinder"),
+            Row(Path.Combine("09", "11", "Block_0002", "Scan_0001"), 4.7, 425.2, 34, "Largest Inscribed Cylinder"),
+            Row(Path.Combine("10", "05", "Block_0001", "Scan_0001"), 2.9, 377.6, 25, "Largest Inscribed Cylinder")
+        };
+
+        var groups = BatchReplayRunner.GroupRepeatScans(rows, [new[] { "09\\11\\Block_0001", "09/11/Block_0002" }]);
+
+        Assert.Single(groups);
+        Assert.Equal(2, groups[0].Scans.Count);   // 10\05\Block_0001 is a different block
     }
 
     [Fact]

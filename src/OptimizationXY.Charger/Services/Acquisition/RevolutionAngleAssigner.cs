@@ -49,6 +49,23 @@ public sealed class RevolutionAngleResult
     /// <summary>RMS difference between the start profile and the closing profile.</summary>
     public double ClosureErrorMM { get; set; } = double.NaN;
 
+    /// <summary>
+    /// When the revolution was not verified: the frame (at least the minimum
+    /// revolution length after the start) whose profile came closest to the start
+    /// profile, and how close it came. Shows whether closure was a near miss
+    /// (just above the tolerance) or never happened. -1 / NaN when not computed.
+    /// </summary>
+    public int BestClosureFrame { get; set; } = -1;
+    public double BestClosureErrorMM { get; set; } = double.NaN;
+
+    /// <summary>
+    /// When the revolution was not verified: RMS difference between the start
+    /// profile and the last frame of the capture (where the block came to rest).
+    /// Small means the block stopped where it started; large means it stopped at
+    /// another angle or moved on the chucks.
+    /// </summary>
+    public double EndRestDifferenceMM { get; set; } = double.NaN;
+
     /// <summary>Frames excluded because the log had not started turning yet.</summary>
     public int FramesExcludedBeforeRotation { get; set; }
 
@@ -349,12 +366,44 @@ public static class RevolutionAngleAssigner
             fallbackEnd = count;
         }
 
+        // Diagnostics only: how close did any frame come to closing the turn,
+        // and where did the block come to rest? Does not change the angles.
+        int bestClosureFrame = -1;
+        double bestClosureErrorMM = double.NaN;
+
+        for (int position = startPosition + 1; position < profiled.Count; position++)
+        {
+            if (profiled[position] - start < minimumFrames)
+                continue;
+
+            double difference = Difference(profiles[start], profiles[profiled[position]]);
+
+            if (double.IsFinite(difference) &&
+                (!double.IsFinite(bestClosureErrorMM) || difference < bestClosureErrorMM))
+            {
+                bestClosureErrorMM = difference;
+                bestClosureFrame = profiled[position];
+            }
+        }
+
+        double endRestDifferenceMM = Difference(profiles[start], profiles[lastFrame]);
+
         ApplyAngles(frames, start, fallbackEnd, settings, result);
         result.RevolutionVerified = false;
+        result.BestClosureFrame = bestClosureFrame;
+        result.BestClosureErrorMM = bestClosureErrorMM;
+        result.EndRestDifferenceMM = endRestDifferenceMM;
         result.Method = "RotatingFramesEvenly";
         result.Message =
             $"The surface did not return to the starting profile, so a full revolution could not be verified. " +
-            $"Frames {start} to {fallbackEnd - 1} ({result.FramesPerRevolution} frames) were divided evenly over 360 degrees.";
+            $"Frames {start} to {fallbackEnd - 1} ({result.FramesPerRevolution} frames) were divided evenly over 360 degrees." +
+            (bestClosureFrame >= 0
+                ? $" Closest return to the start profile: frame {bestClosureFrame} ({bestClosureFrame - start} frames after the start), " +
+                  $"{bestClosureErrorMM:F2} mm RMS (tolerance {closureToleranceMM:F2} mm)."
+                : " No later frame could be compared with the start profile.") +
+            (double.IsFinite(endRestDifferenceMM)
+                ? $" Resting position at the end of the capture differs from the start by {endRestDifferenceMM:F2} mm RMS."
+                : string.Empty);
         return result;
     }
 
