@@ -534,13 +534,14 @@ internal static class BatchReplayRunner
                 int ovals = scans.Count(r => r.Strategy.Contains("Oval", StringComparison.OrdinalIgnoreCase));
                 int unverified = scans.Count(r => !r.RevolutionVerified);
 
+                string unverifiedText = unverified > 0 ? $" ({unverified} not verified)" : string.Empty;
+
                 text.AppendLine(CultureInfo.InvariantCulture,
                     $"  {name} ({scans.Count} scans): axis {Range(r => r.AxisFromCenterlineMM, "0.0")} mm, " +
                     $"inscribed diameter spread {F(Spread(r => r.InscribedDiameterMM))} mm, " +
                     $"usable sheets {Range(r => r.UsableSheets, "0")}, " +
                     $"revolution {Range(r => double.IsFinite(r.RevolutionFrames) ? r.RevolutionFrames : r.FramesPerRevolution, "0.#")} frames" +
-                    (unverified > 0 ? $" ({unverified} not verified)" : string.Empty) +
-                    $", cylinder/oval {cylinders}/{ovals}");
+                    $"{unverifiedText}, cylinder/oval {cylinders}/{ovals}");
                 text.AppendLine(CultureInfo.InvariantCulture,
                     $"      machine command spread (only meaningful if the block was not re-chucked): " +
                     $"tail X {F(Spread(r => r.TailXMM))}, tail Y {F(Spread(r => r.TailYMM))}, " +
