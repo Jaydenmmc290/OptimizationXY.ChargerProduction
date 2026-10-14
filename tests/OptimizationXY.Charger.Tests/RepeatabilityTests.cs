@@ -93,6 +93,32 @@ public class RepeatabilityTests
         Assert.InRange(refinedFrames[42].AngleDeg, 178.5, 179.0);   // 42 x 360 / 84.6 = 178.72
     }
 
+    [Fact]
+    public void Assign_Unverified_ReportsClosestReturnAndEndRest()
+    {
+        // The block turns only about 300 degrees, then rests: no closure.
+        var frames = new List<ScanFrame>();
+        for (int index = 0; index < 82; index++)
+        {
+            double angle = Math.Min(index, 70) * 360.0 / 84.6;
+            var profile = new List<LogProfileColumn>();
+
+            for (int x = 0; x < Columns; x++)
+                profile.Add(new LogProfileColumn { X = x, RadiusMM = RadiusAt(x, angle) });
+
+            frames.Add(new ScanFrame { FrameIndex = index, Profile = profile, IsValid = true });
+        }
+
+        var settings = new RotatingScanSettings { StationaryProfileChangeMM = 0.3 };
+        RevolutionAngleResult result = RevolutionAngleAssigner.Assign(frames, settings);
+
+        Assert.False(result.RevolutionVerified);
+        Assert.True(result.BestClosureFrame >= 20);
+        Assert.True(result.BestClosureErrorMM > settings.RevolutionClosureToleranceMM);
+        Assert.True(result.EndRestDifferenceMM > 1.0);
+        Assert.Contains("Closest return to the start profile", result.Message);
+    }
+
     // ------------------------------------------------------------
     // Cylinder / oval tie-break
     // ------------------------------------------------------------
@@ -108,6 +134,12 @@ public class RepeatabilityTests
     };
 
     private static InscribedGeometryResult Geometry(InscribedGeometryKind kind) => new() { Kind = kind };
+
+    [Fact]
+    public void TieBreak_IsOnByDefault_AtOnePercent()
+    {
+        Assert.Equal(1.0, new InscribedGeometrySettings().OvalMinimumWaneAdvantagePercent);
+    }
 
     [Fact]
     public void TieBreak_Off_OvalWinsOnAnyWaneDifference()
