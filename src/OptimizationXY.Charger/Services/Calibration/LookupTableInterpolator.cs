@@ -36,6 +36,29 @@ public static class LookupTableInterpolator
                 "Lookup table is invalid.");
         }
 
+        return GetRadiusMMFromValidatedTable(
+            table,
+            x,
+            laserY,
+            maximumLargeRadiusExtrapolationPixels);
+    }
+
+    /// <summary>
+    /// Same as <see cref="GetRadiusMM"/> without re-checking
+    /// <see cref="ScannerLookupTable.IsValid"/>. IsValid walks every calibration
+    /// point and builds a string for each (about 1,900 per call); checking it for
+    /// every stripe column of every frame cost about 0.3 s per frame. Callers
+    /// must have checked IsValid for this table themselves (once per frame).
+    /// The radius returned is identical.
+    /// </summary>
+    internal static double GetRadiusMMFromValidatedTable(
+        ScannerLookupTable table,
+        int x,
+        double laserY,
+        double maximumLargeRadiusExtrapolationPixels = 0.0)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+
         if (x < 0 || x >= table.ImageWidth)
         {
             throw new ArgumentOutOfRangeException(
