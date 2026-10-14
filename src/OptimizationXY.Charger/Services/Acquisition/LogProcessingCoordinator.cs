@@ -416,7 +416,7 @@ public sealed class LogProcessingCoordinator
     // Shared by every coordinator instance (a camera reconnect creates a new
     // coordinator) because they all work on the one shared pipeline state.
     private static volatile Task<string> _pendingSave = Task.FromResult(string.Empty);
-    private static readonly object SaveStartLock = new();
+    private static readonly Lock SaveStartLock = new();
 
     /// <summary>
     /// True while a save started by this coordinator has not finished yet.
@@ -456,7 +456,7 @@ public sealed class LogProcessingCoordinator
     /// thread, so waiting for it here cannot deadlock.
     /// </summary>
     /// <returns>True when no save is left running.</returns>
-    public bool WaitForPendingSave(TimeSpan timeout)
+    public static bool WaitForPendingSave(TimeSpan timeout)
     {
         Task pending = _pendingSave;
 

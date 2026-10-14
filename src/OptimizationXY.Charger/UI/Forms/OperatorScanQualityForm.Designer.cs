@@ -34,6 +34,7 @@ partial class OperatorScanQualityForm
 
     private void InitializeComponent()
     {
+        components = new System.ComponentModel.Container();
         mainLayout = new TableLayoutPanel();
         statusPanel = new Panel();
         statusLayout = new TableLayoutPanel();
