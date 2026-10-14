@@ -241,6 +241,18 @@ public sealed class RotatingScanSettings
     public double RevolutionClosureToleranceMM { get; set; } = 1.5;
 
     /// <summary>
+    /// When no frame returns to the start profile within RevolutionClosureToleranceMM,
+    /// the frame that comes closest is still taken as the end of the revolution if
+    /// it is within this many mm RMS (and clearly closer than the rest of the turn).
+    /// The revolution is then reported as approximate, not verified. Without it,
+    /// the frames up to the final rest are spread over 360 degrees, and the rest is
+    /// detected while the block is still slowing down (80 frames instead of 86-87
+    /// on the saved scans that missed closure by 0.1-0.7 mm).
+    /// 0 = off (the behaviour before this setting).
+    /// </summary>
+    public double ApproximateClosureToleranceMM { get; set; }
+
+    /// <summary>
     /// A revolution is never accepted with fewer frames than this.
     /// </summary>
     public int MinimumFramesPerRevolution { get; set; } = 20;

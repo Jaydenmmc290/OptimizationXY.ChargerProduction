@@ -218,6 +218,11 @@ public static class AppSettingsValidator
             settings.RotatingScan.RevolutionClosureToleranceMM <= 0)
             throw new InvalidOperationException("RevolutionClosureToleranceMM must be greater than zero.");
 
+        if (!double.IsFinite(settings.RotatingScan.ApproximateClosureToleranceMM) ||
+            settings.RotatingScan.ApproximateClosureToleranceMM < 0 ||
+            settings.RotatingScan.ApproximateClosureToleranceMM > 10)
+            throw new InvalidOperationException("ApproximateClosureToleranceMM must be between 0 and 10.");
+
         if (settings.RotatingScan.MinimumFramesPerRevolution < 3)
             throw new InvalidOperationException("MinimumFramesPerRevolution must be at least 3.");
 

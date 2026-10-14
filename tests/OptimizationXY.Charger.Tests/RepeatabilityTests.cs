@@ -119,6 +119,53 @@ public class RepeatabilityTests
         Assert.Contains("Closest return to the start profile", result.Message);
     }
 
+    [Fact]
+    public void Assign_ApproximateClosure_UsesTheClosestReturnInsteadOfTheRestStart()
+    {
+        // One full turn in 86 frames, then rest. From frame 80 on, the profile
+        // carries +/-2 mm of roughness, so it never returns within 1.5 mm.
+        List<ScanFrame> Frames()
+        {
+            var frames = new List<ScanFrame>();
+            for (int index = 0; index < 96; index++)
+            {
+                double angle = Math.Min(index, 86) * 360.0 / 86.0;
+                var profile = new List<LogProfileColumn>();
+
+                for (int x = 0; x < Columns; x++)
+                {
+                    double roughness = index >= 80 ? (x % 2 == 0 ? 2.0 : -2.0) : 0.0;
+                    profile.Add(new LogProfileColumn { X = x, RadiusMM = RadiusAt(x, angle) + roughness });
+                }
+
+                frames.Add(new ScanFrame { FrameIndex = index, Profile = profile, IsValid = true });
+            }
+
+            return frames;
+        }
+
+        var off = new RotatingScanSettings { StationaryProfileChangeMM = 0.3 };
+        Assert.Equal(0.0, off.ApproximateClosureToleranceMM);   // off by default
+
+        RevolutionAngleResult before = RevolutionAngleAssigner.Assign(Frames(), off);
+        Assert.Equal("RotatingFramesEvenly", before.Method);
+        Assert.NotEqual(86, before.FramesPerRevolution);
+        Assert.Equal(86, before.BestClosureFrame);
+        Assert.InRange(before.BestClosureErrorMM, 1.99, 2.01);
+
+        var on = new RotatingScanSettings { StationaryProfileChangeMM = 0.3, ApproximateClosureToleranceMM = 2.5 };
+        RevolutionAngleResult after = RevolutionAngleAssigner.Assign(Frames(), on);
+
+        Assert.Equal("ApproximateProfileClosure", after.Method);
+        Assert.False(after.RevolutionVerified);   // still reported as not verified
+        Assert.Equal(86, after.FramesPerRevolution);
+        Assert.Equal(360.0 / 86.0, after.AngleStepDeg, 6);
+
+        // Too far off for the approximate tolerance: falls back as before.
+        var tight = new RotatingScanSettings { StationaryProfileChangeMM = 0.3, ApproximateClosureToleranceMM = 1.9 };
+        Assert.Equal("RotatingFramesEvenly", RevolutionAngleAssigner.Assign(Frames(), tight).Method);
+    }
+
     // ------------------------------------------------------------
     // Cylinder / oval tie-break
     // ------------------------------------------------------------
