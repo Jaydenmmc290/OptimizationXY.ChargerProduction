@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
 using Emgu.CV;
 using NLog;
@@ -2760,22 +2761,22 @@ string message)
                 {
                     Invoke(new Action(() =>
                     {
-                        txtHeadX.Text = rec.CommandHeadXMM.ToString("F2");
-                        txtHeadY.Text = rec.CommandHeadYMM.ToString("F2");
-                        txtTailX.Text = rec.CommandTailXMM.ToString("F2");
-                        txtTailY.Text = rec.CommandTailYMM.ToString("F2");
-                        txtUsableSheets.Text = rec.UsableFullSheets.ToString();
-                        txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2");
+                        txtHeadX.Text = rec.CommandHeadXMM.ToString("F2", CultureInfo.InvariantCulture);
+                        txtHeadY.Text = rec.CommandHeadYMM.ToString("F2", CultureInfo.InvariantCulture);
+                        txtTailX.Text = rec.CommandTailXMM.ToString("F2", CultureInfo.InvariantCulture);
+                        txtTailY.Text = rec.CommandTailYMM.ToString("F2", CultureInfo.InvariantCulture);
+                        txtUsableSheets.Text = rec.UsableFullSheets.ToString(CultureInfo.InvariantCulture);
+                        txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2", CultureInfo.InvariantCulture);
                     }));
                 }
                 else
                 {
-                    txtHeadX.Text = rec.CommandHeadXMM.ToString("F2");
-                    txtHeadY.Text = rec.CommandHeadYMM.ToString("F2");
-                    txtTailX.Text = rec.CommandTailXMM.ToString("F2");
-                    txtTailY.Text = rec.CommandTailYMM.ToString("F2");
-                    txtUsableSheets.Text = rec.UsableFullSheets.ToString();
-                    txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2");
+                    txtHeadX.Text = rec.CommandHeadXMM.ToString("F2", CultureInfo.InvariantCulture);
+                    txtHeadY.Text = rec.CommandHeadYMM.ToString("F2", CultureInfo.InvariantCulture);
+                    txtTailX.Text = rec.CommandTailXMM.ToString("F2", CultureInfo.InvariantCulture);
+                    txtTailY.Text = rec.CommandTailYMM.ToString("F2", CultureInfo.InvariantCulture);
+                    txtUsableSheets.Text = rec.UsableFullSheets.ToString(CultureInfo.InvariantCulture);
+                    txtUsableVeneerLength.Text = rec.UsableVeneerLengthMM.ToString("F2", CultureInfo.InvariantCulture);
                 }
             }
             catch (Exception ex)

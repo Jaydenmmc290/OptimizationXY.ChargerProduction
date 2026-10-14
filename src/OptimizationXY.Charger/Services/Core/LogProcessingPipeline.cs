@@ -1,3 +1,4 @@
+using System.Globalization;
 using Emgu.CV;
 using OptimizationXY.Charger.Models.Calibration;
 using OptimizationXY.Charger.Models.Diagnostics;
@@ -25,7 +26,6 @@ using OptimizationXY.Charger.Visualization;
 using System.Diagnostics;
 using System.Text;
 using OptimizationXY.Charger.Models.Core;
-using System.Globalization;
 using OptimizationXY.Charger.Models.Analysis;
 
 namespace OptimizationXY.Charger.Services.Core;
@@ -1682,10 +1682,10 @@ BuildFinalSpindleRecommendation(
                 });
 
                 _state.DiagnosticsReport +=
-                    BuildInscribedGeometryReport(cylinder, cylinderPeel);
+                    BuildInscribedGeometryReport(cylinder!, cylinderPeel!);
 
                 _state.DiagnosticsReport +=
-                    BuildInscribedGeometryReport(oval, ovalPeel);
+                    BuildInscribedGeometryReport(oval!, ovalPeel!);
             }
             else if (mode == SpindleOptimizationMode.LargestInscribedCylinder)
             {
@@ -3510,7 +3510,8 @@ double maxSpindleMovementMM)
         var report = new StringBuilder();
 
         report.Append("\r\nPIPELINE TIMING REPORT (real elapsed time)\r\n");
-        report.Append(
+        StringBuilder stringBuilder = report.Append(
+            CultureInfo.InvariantCulture,
             $"Processing time, frames in hand to position chosen: {processingElapsedMS / 1000.0:F2} s\r\n");
 
         List<PipelineTimingEntry> stages = [.. entries
@@ -3526,7 +3527,8 @@ double maxSpindleMovementMM)
             {
                 string indent = new(' ', 2 + 2 * Math.Max(0, entry.Depth));
                 string name = indent + entry.StepName;
-                report.Append(
+                StringBuilder stringBuilder1 = report.Append(
+                    CultureInfo.InvariantCulture,
                     $"{name.PadRight(64)} {entry.ElapsedSeconds,7:F2} s   (started at {entry.StartOffsetMilliseconds / 1000.0:F2} s)\r\n");
             }
 
@@ -3536,6 +3538,7 @@ double maxSpindleMovementMM)
             double otherMS = Math.Max(0.0, processingElapsedMS - topLevelMS);
 
             report.Append(
+                CultureInfo.InvariantCulture,
                 $"{"  Between stages (reports, hand-over)".PadRight(64)} {otherMS / 1000.0,7:F2} s\r\n");
         }
 
@@ -3557,6 +3560,7 @@ double maxSpindleMovementMM)
                 int count = group.Count();
 
                 report.Append(
+                    CultureInfo.InvariantCulture,
                     $"  {group.Key} ({count} frames): {totalMS / 1000.0:F2} s CPU, {totalMS / Math.Max(1, count):F1} ms per frame\r\n");
             }
         }
@@ -3589,13 +3593,13 @@ double maxSpindleMovementMM)
         TimingDepth.Value = 0;
 
         try
-        {
-            RunAllStages(lookupTable, token, progress);
-        }
-        finally
-        {
-            _runClock.Stop();
-        }
+         {
+             RunAllStages(lookupTable, progress, token);
+         }
+         finally
+         {
+             _runClock.Stop();
+         }
 
         _state.ProcessingElapsedSeconds = _runClock.Elapsed.TotalSeconds;
 
@@ -3620,8 +3624,8 @@ double maxSpindleMovementMM)
     /// </summary>
     private void RunAllStages(
         ScannerLookupTable lookupTable,
-        CancellationToken token,
-        Action<string>? progress)
+        Action<string>? progress,
+        CancellationToken token)
     {
         void RunStage(
             string timingName,

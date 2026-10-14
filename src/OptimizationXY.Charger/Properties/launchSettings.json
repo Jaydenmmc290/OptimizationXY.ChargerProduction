@@ -1,8 +1,7 @@
 {
   "profiles": {
     "OptimizationXY.Charger": {
-      "commandName": "Project",
-      "commandLineArgs": "--replay"
+      "commandName": "Project"
     }
   }
 }
