@@ -278,6 +278,15 @@ public sealed class RotatingScanSettings
     /// Compare with --replay-batch first.
     /// </summary>
     public bool SubPixelStripeCenter { get; set; }
+
+    /// <summary>
+    /// Off (default): a revolution is a whole number of frames, from the start
+    /// frame to the frame that best matches it again.
+    /// On: the 360 degree point is placed between the closing frame and its
+    /// neighbour where the profile matches best (for example 84.6 frames), so
+    /// the angle step is not rounded to a whole frame. Compare with --replay-batch first.
+    /// </summary>
+    public bool SubFrameRevolutionClosure { get; set; }
 }
 
 
@@ -784,6 +793,17 @@ public sealed class InscribedGeometrySettings
 
     /// <summary>Upper limit on positions the certified search may test (bounds its time).</summary>
     public int CertifiedSearchMaxEvaluations { get; set; } = 150000;
+
+    /// <summary>
+    /// 0 (default): CompareInscribedGeometry picks the oval whenever its virtual
+    /// peel is better in any way, however small.
+    /// Above 0: when the oval and cylinder give the same usable sheets, usable
+    /// veneer length and rejected sheets, the oval is only chosen if it cuts
+    /// severe or total wane by at least this many percent; otherwise the cylinder
+    /// is kept. Stops 0.1-0.5% wane differences from flipping the choice (and
+    /// the axis) between repeat scans. Compare with --replay-batch first.
+    /// </summary>
+    public double OvalMinimumWaneAdvantagePercent { get; set; }
 }
 
 /// <summary>
