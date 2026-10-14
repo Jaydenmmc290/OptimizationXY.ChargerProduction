@@ -2177,6 +2177,7 @@ string message)
 
                 await _plcService.WaitForScanCompleteAsync();
                 plcScanCompleteVerified = true;
+                ScanTimeline.Start("PLC ScanComplete received");
                 AppendDiagnostics(
                     "[PLC] ScanComplete verified. Processing may begin.");
             }
@@ -2186,6 +2187,11 @@ string message)
             stage = "Collecting the captured frames";
             var completedCapture = _captureManager.FinishCapture();
             captureBelongsToThisScan = false;
+
+            if (plcScanCompleteVerified)
+                ScanTimeline.Mark("Frames collected");
+            else
+                ScanTimeline.Start("Capture finished (no ScanComplete required)");
 
             // Keep managed frames enabled for the idle live preview.
             // FinishCapture removes the current capture from the active capture manager;
@@ -2216,6 +2222,7 @@ string message)
                 string diagnosticsReport = await _processingCoordinator.ProcessCompletedCaptureAsync(
                     completedCapture,
                     processingCancellation.Token);
+                ScanTimeline.Mark("Scan processed, position chosen");
 
                 AppendDiagnostics(diagnosticsReport);
 
@@ -2240,6 +2247,7 @@ string message)
                     GetOperatorRuntimeStatus());
 
                 SetUIState(ApplicationState.Completed);
+                ScanTimeline.Mark("Results shown on both screens");
 
                 // Order of the last two steps. Sending first takes the save (files
                 // and SQL record) off the time the PLC waits for its positions.
@@ -2320,6 +2328,7 @@ string message)
                     ProductionReadinessReport readiness =
                         _processingCoordinator.PrepareProductionCommand(
                             _plcService?.IsConnected == true);
+                    ScanTimeline.Mark("Payload built, readiness checked");
 
                     if (PipelineState.Instance.Settings.Plc.AutoSendResultsAfterSave)
                     {
@@ -2351,6 +2360,12 @@ string message)
                             var transmission = await _plcService.SendPayloadAsync(
                                 PipelineState.Instance.PlcPayload,
                                 processingCancellation.Token);
+
+                            ScanTimeline.Mark(
+                                transmission.Success
+                                    ? "PLC write + readback verified"
+                                    : "PLC write attempted (failed)");
+                            ScanTimeline.Stop();
 
                             LogProcessingCoordinator.RecordPlcTransmission(transmission);
 

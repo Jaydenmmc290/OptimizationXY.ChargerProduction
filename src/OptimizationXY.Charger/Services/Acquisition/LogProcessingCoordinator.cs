@@ -377,7 +377,8 @@ public sealed class LogProcessingCoordinator
             $"Success: {record.Success}" + Environment.NewLine +
             $"Readback Verified: {record.ReadbackVerified}" + Environment.NewLine +
             $"Message: {record.Message}" + Environment.NewLine +
-            $"Tags: {string.Join(", ", record.TagsWritten)}" + Environment.NewLine;
+            $"Tags: {string.Join(", ", record.TagsWritten)}" + Environment.NewLine +
+            ScanTimeline.BuildReport();
 
         if (!string.IsNullOrWhiteSpace(state.LastSavedRunFolder))
         {

@@ -20,4 +20,16 @@ public sealed class PipelineTimingEntry
     /// Gets the elapsed time for the pipeline step in seconds.
     /// </summary>
     public double ElapsedSeconds => ElapsedMilliseconds / 1000.0;
+
+    /// <summary>
+    /// When this step started, in milliseconds after the processing run began.
+    /// Used to list the stages in the order they ran.
+    /// </summary>
+    public double StartOffsetMilliseconds { get; set; }
+
+    /// <summary>
+    /// 0 for a top-level stage; 1 or more for a step timed inside another step.
+    /// Nested steps are part of their parent's time, so they are not added again.
+    /// </summary>
+    public int Depth { get; set; }
 }
