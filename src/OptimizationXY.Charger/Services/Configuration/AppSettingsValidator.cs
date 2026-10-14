@@ -333,6 +333,14 @@ public static class AppSettingsValidator
         if (geometry.SafetyMarginMM < 0)
             throw new InvalidOperationException("InscribedGeometry.SafetyMarginMM cannot be negative.");
 
+        if (!double.IsFinite(geometry.OvalMinimumWaneAdvantagePercent) ||
+            geometry.OvalMinimumWaneAdvantagePercent < 0 ||
+            geometry.OvalMinimumWaneAdvantagePercent > 100)
+        {
+            throw new InvalidOperationException(
+                "InscribedGeometry.OvalMinimumWaneAdvantagePercent must be between 0 and 100.");
+        }
+
         if (geometry.MinimumAxisRatio <= 0 ||
             geometry.MinimumAxisRatio > 1)
         {

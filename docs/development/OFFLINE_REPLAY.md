@@ -35,8 +35,8 @@ beside it. Results go to `%LOCALAPPDATA%\OptimizationXY\Charger\ReplayBatch\Repl
 
 | File | What it holds |
 |---|---|
-| `summary.csv` | One line per scan: commands, inscribed diameter, usable/total sheets, scan quality, processing time |
-| `summary.txt` | Totals, failed scans, changes against a baseline, and the spread of the commands between repeat scans of the same block |
+| `summary.csv` | One line per scan: commands, inscribed diameter, usable/total sheets, scan quality, processing time, revolution length (frames), distance of the chosen axis from the block's own centreline |
+| `summary.txt` | Totals, failed scans, changes against a baseline, and how well repeat scans of the same block agree |
 | `reports\` | The full diagnostics report of every scan |
 
 ### Checking a change
@@ -56,9 +56,21 @@ times as needed. It also works with `--replay`, after the folder.
 
 ### Repeatability
 
-Scan the same block two or more times (`Scan_0001`, `Scan_0002`, ... in one block folder). The
-"REPEAT SCANS OF THE SAME BLOCK" section shows how far apart the commands are. That spread is the
-repeatability of the whole system.
+Scan the same block two or more times. The block is dropped and re-chucked between scans, so it
+sits differently on the spindles each time and the machine commands are *expected* to differ.
+"REPEAT SCANS OF THE SAME BLOCK" therefore compares each group inside the block:
+
+- **axis**: distance of the chosen peel axis from the block's own fitted centreline (largest of tail/head)
+- **inscribed diameter spread**, **usable sheets**, **revolution length** (and how many were not verified)
+- **cylinder/oval**: how often each was chosen
+
+Scans in one folder (`Scan_0001`, `Scan_0002`, ...) are one group. Otherwise list them:
+
+```
+--replay-batch "<SavedScans>" --same-block "B01,B02,B03,B04,B05,B06,B07" --same-block "B08,B09,B10,B11"
+```
+
+A name matches the scan's block folder, its own folder name, or its path relative to the scans folder.
 
 ### Options to compare (all off by default)
 
@@ -68,6 +80,8 @@ repeatability of the whole system.
 | `RotatingScan.SubPixelStripeCenter=true` | Brightness-weighted stripe centre (about 0.1 px) instead of the thresholded midpoint (0.5 px steps) |
 | `Geometry.OptimizationCellIgnoreLowestReadings=1` | Ignore the single lowest reading of a well-filled cell in the spindle search, so one noisy low reading cannot decide the position |
 | `InscribedGeometry.UseCertifiedCylinderSearch=true` | After the grid search, search the whole machine travel and report a certified gap: no position can score more than that many mm better |
+| `RotatingScan.SubFrameRevolutionClosure=true` | Place the 360 degree point between two frames (e.g. 84.6 frames) instead of rounding the revolution to whole frames |
+| `InscribedGeometry.OvalMinimumWaneAdvantagePercent=1` | When cylinder and oval give the same sheets, choose the oval only if it cuts wane by at least 1%; stops small wane differences flipping the choice between scans |
 | `OptimizationMode=RecoveryOptimized` | Choose the position by simulated veneer recovery (direct refinement around all the strategy seeds) instead of cylinder vs oval |
 
 Turn an option on in production only after the batch shows it gains sheets or tightens the

@@ -22,7 +22,8 @@ public static class GeometryPeelSelector
         InscribedGeometryResult cylinder,
         PeelSimulationResult cylinderPeel,
         InscribedGeometryResult oval,
-        PeelSimulationResult ovalPeel)
+        PeelSimulationResult ovalPeel,
+        double ovalMinimumWaneAdvantagePercent = 0.0)
     {
         ArgumentNullException.ThrowIfNull(cylinder);
         ArgumentNullException.ThrowIfNull(cylinderPeel);
@@ -42,6 +43,20 @@ public static class GeometryPeelSelector
                 cylinderPeel,
                 oval.StrategyName,
                 ovalPeel);
+        }
+        else if (comparison < 0 &&
+                 OvalWinIsOnlyMarginalWane(cylinderPeel, ovalPeel, ovalMinimumWaneAdvantagePercent))
+        {
+            // The oval only won on a small wane difference. That decision flips
+            // between repeat scans of the same block and moves the axis for no
+            // extra veneer, so the cylinder is kept.
+            selectedKind = InscribedGeometryKind.Cylinder;
+            reason =
+                $"{oval.StrategyName} matched {cylinder.StrategyName} on usable sheets, usable veneer length " +
+                $"and rejected sheets, and was better on wane by less than {ovalMinimumWaneAdvantagePercent:0.##}% " +
+                $"(severe {cylinderPeel.SevereWaneAreaPercent - ovalPeel.SevereWaneAreaPercent:0.##}%, " +
+                $"total {cylinderPeel.TotalWaneAreaPercent - ovalPeel.TotalWaneAreaPercent:0.##}%), " +
+                $"so {cylinder.StrategyName} was kept (InscribedGeometry.OvalMinimumWaneAdvantagePercent).";
         }
         else if (comparison < 0)
         {
@@ -96,6 +111,32 @@ public static class GeometryPeelSelector
     /// <returns>
     /// A positive value if the first result is better, a negative value if the second result is better, or zero if they are equal.
     /// </returns>
+    /// <summary>
+    /// True when the oval matches the cylinder on everything except wane and
+    /// beats it on wane by less than the margin. A margin of 0 or less turns the
+    /// rule off.
+    /// </summary>
+    internal static bool OvalWinIsOnlyMarginalWane(
+        PeelSimulationResult cylinderPeel,
+        PeelSimulationResult ovalPeel,
+        double marginPercent)
+    {
+        if (!(marginPercent > 0.0))
+            return false;
+
+        if (ovalPeel.UsableFullSheets != cylinderPeel.UsableFullSheets ||
+            ovalPeel.RejectedFullSheets != cylinderPeel.RejectedFullSheets ||
+            Math.Abs(ovalPeel.UsableVeneerLengthMM - cylinderPeel.UsableVeneerLengthMM) > 0.001)
+        {
+            return false;
+        }
+
+        double severeGain = cylinderPeel.SevereWaneAreaPercent - ovalPeel.SevereWaneAreaPercent;
+        double totalGain = cylinderPeel.TotalWaneAreaPercent - ovalPeel.TotalWaneAreaPercent;
+
+        return severeGain < marginPercent && totalGain < marginPercent;
+    }
+
     private static int ComparePeels(
         PeelSimulationResult left,
         PeelSimulationResult right)

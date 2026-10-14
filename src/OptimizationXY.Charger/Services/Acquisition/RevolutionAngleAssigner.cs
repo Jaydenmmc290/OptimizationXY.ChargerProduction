@@ -24,6 +24,19 @@ public sealed class RevolutionAngleResult
     /// <summary>Number of frame slots that were spread across 360 degrees.</summary>
     public int FramesPerRevolution { get; set; }
 
+    /// <summary>
+    /// Length of the revolution in frames, including the fraction of a frame
+    /// found by RotatingScan.SubFrameRevolutionClosure (for example 84.6).
+    /// Equal to FramesPerRevolution when the closure was not refined.
+    /// </summary>
+    public double RevolutionFrames { get; set; }
+
+    /// <summary>
+    /// Fraction of a frame (-1..1) by which the true 360 degree point lies
+    /// after (+) or before (-) the closing frame. 0 when not refined.
+    /// </summary>
+    public double ClosureFrameOffset { get; set; }
+
     /// <summary>Angle assigned between two consecutive frame slots.</summary>
     public double AngleStepDeg { get; set; }
 
@@ -249,15 +262,35 @@ public static class RevolutionAngleAssigner
         if (closurePosition >= 0)
         {
             int end = profiled[closurePosition];
+            double offset = 0.0;
+            string refinedText = string.Empty;
 
-            ApplyAngles(frames, start, end, settings, result);
+            if (settings.SubFrameRevolutionClosure)
+            {
+                offset = RefineClosureOffset(
+                    profiles,
+                    start,
+                    end,
+                    out double refinedErrorMM);
+
+                if (offset != 0.0)
+                {
+                    refinedText =
+                        $" Refined between frames: the start profile is matched {offset:+0.00;-0.00} frame from frame {end} " +
+                        $"({refinedErrorMM:F2} mm RMS).";
+                }
+            }
+
+            ApplyAngles(frames, start, end - start + offset, settings, result);
+            result.ClosureFrameOffset = offset;
             result.RevolutionVerified = true;
             result.ClosureErrorMM = closureErrorMM;
             result.Method = "ProfileClosure";
             result.Message =
                 $"One revolution found from frame {start} to frame {end} " +
-                $"({result.FramesPerRevolution} frames, {result.AngleStepDeg:F3} deg/frame). " +
-                $"The surface returned to the starting profile within {closureErrorMM:F2} mm RMS.";
+                $"({result.RevolutionFrames:0.##} frames, {result.AngleStepDeg:F3} deg/frame). " +
+                $"The surface returned to the starting profile within {closureErrorMM:F2} mm RMS." +
+                refinedText;
             return result;
         }
 
@@ -347,6 +380,7 @@ public static class RevolutionAngleAssigner
             FirstRotatingFrame = 0,
             EndFrameExclusive = frames.Count,
             FramesPerRevolution = stepDeg > 0 ? (int)Math.Round(360.0 / stepDeg) : 0,
+            RevolutionFrames = stepDeg > 0 ? 360.0 / stepDeg : 0,
             AngleStepDeg = stepDeg,
             RevolutionVerified = false,
             Method = "FixedStep",
@@ -366,8 +400,35 @@ public static class RevolutionAngleAssigner
         start = Math.Clamp(start, 0, Math.Max(0, count - 1));
         endExclusive = Math.Clamp(endExclusive, start + 1, count);
 
+        ApplyAngles(frames, start, (double)(endExclusive - start), settings, result);
+    }
+
+    /// <summary>
+    /// Spreads 360 degrees over a revolution that is <paramref name="revolutionFrames"/>
+    /// frames long (it may include a fraction of a frame). Every frame whose angle
+    /// is below 360 degrees is used; the rest are excluded.
+    /// </summary>
+    private static void ApplyAngles(
+        List<ScanFrame> frames,
+        int start,
+        double revolutionFrames,
+        RotatingScanSettings settings,
+        RevolutionAngleResult result)
+    {
+        int count = frames.Count;
+        start = Math.Clamp(start, 0, Math.Max(0, count - 1));
+
+        if (!double.IsFinite(revolutionFrames) || revolutionFrames < 1.0)
+            revolutionFrames = 1.0;
+
+        // Frames start .. start + ceil(revolutionFrames) - 1 lie below 360 degrees.
+        int endExclusive = Math.Clamp(
+            start + (int)Math.Ceiling(revolutionFrames - 1e-9),
+            start + 1,
+            count);
+
         int slots = endExclusive - start;
-        double stepDeg = 360.0 / slots;
+        double stepDeg = 360.0 / revolutionFrames;
         double direction = settings.ReverseRotationDirection ? -1.0 : 1.0;
         double offsetDeg = double.IsFinite(settings.LaserAngleOffsetDeg)
             ? settings.LaserAngleOffsetDeg
@@ -410,9 +471,97 @@ public static class RevolutionAngleAssigner
         result.FirstRotatingFrame = start;
         result.EndFrameExclusive = endExclusive;
         result.FramesPerRevolution = slots;
+        result.RevolutionFrames = revolutionFrames;
         result.AngleStepDeg = stepDeg;
         result.FramesExcludedBeforeRotation = excludedBefore;
         result.FramesExcludedAfterRotation = excludedAfter;
+    }
+
+    /// <summary>
+    /// The closing frame is the frame nearest to 360 degrees, but the true 360
+    /// degree point normally lies between two frames. Treating the profile as
+    /// changing linearly between neighbouring frames, this finds the fraction t
+    /// (-1..1) at which it best matches the start profile:
+    ///   minimise | p(end) + t (p(end +/- 1) - p(end)) - p(start) |.
+    /// Returns 0 when neither neighbour gives a better match.
+    /// </summary>
+    internal static double RefineClosureOffset(
+        double[]?[] profiles,
+        int start,
+        int end,
+        out double refinedErrorMM)
+    {
+        double[]? reference = profiles[start];
+        double[]? closing = profiles[end];
+        refinedErrorMM = Difference(reference, closing);
+
+        if (reference is null || closing is null || !double.IsFinite(refinedErrorMM))
+            return 0.0;
+
+        double bestOffset = 0.0;
+        double bestError = refinedErrorMM;
+
+        foreach (int direction in new[] { -1, 1 })
+        {
+            int neighbour = end + direction;
+
+            if (neighbour <= start || neighbour >= profiles.Length)
+                continue;
+
+            double[]? next = profiles[neighbour];
+            if (next is null)
+                continue;
+
+            int length = Math.Min(reference.Length, Math.Min(closing.Length, next.Length));
+            double dotRD = 0.0;
+            double dotDD = 0.0;
+            int shared = 0;
+
+            for (int x = 0; x < length; x++)
+            {
+                double r = closing[x] - reference[x];
+                double d = next[x] - closing[x];
+
+                if (double.IsNaN(r) || double.IsNaN(d))
+                    continue;
+
+                dotRD += r * d;
+                dotDD += d * d;
+                shared++;
+            }
+
+            if (shared < MinimumCommonColumns || dotDD <= 1e-12)
+                continue;
+
+            double t = Math.Clamp(-dotRD / dotDD, 0.0, 1.0);
+
+            double sum = 0.0;
+            for (int x = 0; x < length; x++)
+            {
+                double r = closing[x] - reference[x];
+                double d = next[x] - closing[x];
+
+                if (double.IsNaN(r) || double.IsNaN(d))
+                    continue;
+
+                double residual = r + t * d;
+                sum += residual * residual;
+            }
+
+            double error = Math.Sqrt(sum / shared);
+
+            if (error < bestError - 1e-9)
+            {
+                bestError = error;
+                bestOffset = direction * t;
+            }
+        }
+
+        // Never move the closure a whole frame: that frame would have been
+        // chosen as the closing frame already.
+        bestOffset = Math.Clamp(bestOffset, -0.99, 0.99);
+        refinedErrorMM = bestError;
+        return bestOffset;
     }
 
     private static double Normalize(double angleDeg)

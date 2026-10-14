@@ -536,12 +536,22 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             ? $"{revolution.ClosureErrorMM:F2} mm RMS"
             : "n/a";
 
+        // Time for one revolution, when the cameras run at a fixed frame rate.
+        var headCamera = _state.Settings.Acquisition.HeadCamera;
+        string revolutionTimeText =
+            headCamera.Mode == OptimizationXY.Charger.Models.Acquisition.AcquisitionMode.FrameRate &&
+            headCamera.AcquisitionFrameRate > 0 &&
+            revolution.RevolutionFrames > 0
+                ? $" ({revolution.RevolutionFrames / headCamera.AcquisitionFrameRate:F2} s at {headCamera.AcquisitionFrameRate:0.##} frames/s)"
+                : string.Empty;
+
         _state.DiagnosticsReport +=
             "ROTATION ANGLE ASSIGNMENT\r\n" +
             $"Method: {revolution.Method}\r\n" +
             $"Full Revolution Verified: {revolutionVerifiedText}\r\n" +
             $"Revolution Frames: {revolution.FirstRotatingFrame} to {revolution.EndFrameExclusive - 1}\r\n" +
             $"Frames Per Revolution: {revolution.FramesPerRevolution}\r\n" +
+            $"Revolution Length: {revolution.RevolutionFrames:0.00} frames{revolutionTimeText}\r\n" +
             $"Angle Step: {revolution.AngleStepDeg:F3} deg\r\n" +
             $"Closure Error: {closureErrorText}\r\n" +
             $"Resting Frames Excluded Before Rotation: {revolution.FramesExcludedBeforeRotation}\r\n" +
@@ -1735,7 +1745,8 @@ BuildFinalSpindleRecommendation(
                         cylinder,
                         cylinderPeel,
                         oval,
-                        ovalPeel);
+                        ovalPeel,
+                        _state.Settings.InscribedGeometry.OvalMinimumWaneAdvantagePercent);
 
                 _state.GeometryPeelComparison = comparison;
 
