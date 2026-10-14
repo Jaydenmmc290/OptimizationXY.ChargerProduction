@@ -440,7 +440,10 @@ public partial class MainForm : Form
 
             // A block may still be saving (the save follows the PLC write). Give
             // it time to finish so the last scan record is not cut short.
-            if (_processingCoordinator?.WaitForPendingSave(TimeSpan.FromSeconds(20)) == false)
+            // WaitForPendingSave is static: the pending save is shared by every
+            // coordinator (a camera reconnect creates a new one), so it is
+            // called on the type. With no save running it returns at once.
+            if (!LogProcessingCoordinator.WaitForPendingSave(TimeSpan.FromSeconds(20)))
             {
                 Logger.Warn("The application closed before the last scan record finished saving.");
             }
