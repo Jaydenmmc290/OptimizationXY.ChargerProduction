@@ -1,3 +1,4 @@
+using OptimizationXY.Charger.Models.Geometry;
 using OptimizationXY.Charger.Models.Plc;
 using OptimizationXY.Charger.Services.Core;
 
@@ -53,6 +54,23 @@ public static class PlcPayloadBuilder
             state.Settings.Safety.ComputeKnifeClearanceMM(
                 state.Settings.UsableRadius.VeneerThicknessMM);
 
+        // The carriage must clear the block as it actually turns. largestRadiusMM
+        // above is measured from the fitted PCA centreline, but the block spins
+        // around the spindle axis, which is offset from that centreline by up to
+        // the commanded move. Use the largest measured distance from either the
+        // current spindle axis or the commanded one, so the retract radius is
+        // never smaller than it was and covers the real swing.
+        double swingRadiusMM = LargestSwingRadiusMM(
+            state.PointCloud,
+            recommendation.CommandTailXMM,
+            recommendation.CommandTailYMM,
+            recommendation.CommandHeadXMM,
+            recommendation.CommandHeadYMM);
+
+        double retractBaseRadiusMM = double.IsFinite(swingRadiusMM)
+            ? Math.Max(largestRadiusMM, swingRadiusMM)
+            : largestRadiusMM;
+
         ValidateFinite(
             recommendation.CommandHeadXMM,
             recommendation.CommandHeadYMM,
@@ -105,11 +123,90 @@ public static class PlcPayloadBuilder
             LargestMeasuredRadiusMM = largestRadiusMM * MM_TO_INCHES,
             SmallestMeasuredRadiusMM = smallestRadiusMM * MM_TO_INCHES,
             KnifeClearanceMM = knifeClearanceMM * MM_TO_INCHES,
-            SafeCarriageRetractRadiusMM = (largestRadiusMM + knifeClearanceMM) * MM_TO_INCHES
+            SafeCarriageRetractRadiusMM = (retractBaseRadiusMM + knifeClearanceMM) * MM_TO_INCHES
         };
 
         ValidateFinite(payload.SafeCarriageRetractRadiusMM);
         return payload;
+    }
+
+    /// <summary>
+    /// Largest distance of any measured point from the spindle axis, checked for
+    /// both the current axis (0,0 at both ends) and the commanded axis, in mm.
+    ///
+    /// PointCloud X/Y are measured from the current spindle axis, Z = 0 is the
+    /// tail end. Every optimization mode builds the PLC command as the negative
+    /// of the selected axis position (Command = -SpindleMovement), so in
+    /// point-cloud coordinates the commanded axis is at -Command. A command of
+    /// zero is the current axis. The axis is interpolated from
+    /// tail (minimum Z) to head (maximum Z), the same way as the optimizer and
+    /// the virtual peel.
+    ///
+    /// Returns NaN when there are no usable points.
+    /// </summary>
+    internal static double LargestSwingRadiusMM(
+        List<Point3D>? pointCloud,
+        double commandTailXMM,
+        double commandTailYMM,
+        double commandHeadXMM,
+        double commandHeadYMM)
+    {
+        if (pointCloud is null || pointCloud.Count == 0)
+            return double.NaN;
+
+        double minZ = double.PositiveInfinity;
+        double maxZ = double.NegativeInfinity;
+
+        foreach (Point3D point in pointCloud)
+        {
+            if (!double.IsFinite(point.Z))
+                continue;
+
+            if (point.Z < minZ)
+                minZ = point.Z;
+
+            if (point.Z > maxZ)
+                maxZ = point.Z;
+        }
+
+        if (!double.IsFinite(minZ) || !double.IsFinite(maxZ))
+            return double.NaN;
+
+        double length = Math.Max(maxZ - minZ, 0.0001);
+
+        double axisTailX = -commandTailXMM;
+        double axisTailY = -commandTailYMM;
+        double axisHeadX = -commandHeadXMM;
+        double axisHeadY = -commandHeadYMM;
+
+        double largestSquared = double.NaN;
+
+        foreach (Point3D point in pointCloud)
+        {
+            if (!double.IsFinite(point.X) ||
+                !double.IsFinite(point.Y) ||
+                !double.IsFinite(point.Z))
+            {
+                continue;
+            }
+
+            double t = Math.Clamp((point.Z - minZ) / length, 0.0, 1.0);
+
+            double currentSquared = point.X * point.X + point.Y * point.Y;
+
+            double dx = point.X - (axisTailX + (axisHeadX - axisTailX) * t);
+            double dy = point.Y - (axisTailY + (axisHeadY - axisTailY) * t);
+            double commandedSquared = dx * dx + dy * dy;
+
+            double pointLargest = Math.Max(currentSquared, commandedSquared);
+
+            if (double.IsNaN(largestSquared) || pointLargest > largestSquared)
+                largestSquared = pointLargest;
+        }
+
+        return double.IsNaN(largestSquared)
+            ? double.NaN
+            : Math.Sqrt(largestSquared);
     }
 
     /// <summary>

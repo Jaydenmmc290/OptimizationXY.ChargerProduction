@@ -389,13 +389,27 @@ public static class ProductionReadinessEvaluator
                 : ProductionCheckStatus.Block,
             $"Configured {configuredClearanceMM:F3} mm; required at least 10 x {veneerThicknessMM:F3} mm = {requiredClearanceMM:F3} mm.");
 
+        // The PLC payload carries inches (PlcPayloadBuilder converts mm to
+        // inches), while requiredClearanceMM is in millimetres. Convert the
+        // payload back to millimetres before comparing; comparing inches with
+        // millimetres made this check fail on every scan whenever
+        // ReadKnifeClearanceFromPlc was switched off.
+        const double InchesToMM = 25.4;
+
+        double payloadKnifeClearanceMM =
+            (state.PlcPayload?.KnifeClearanceMM ?? 0.0) * InchesToMM;
+        double payloadSafeRetractRadiusMM =
+            (state.PlcPayload?.SafeCarriageRetractRadiusMM ?? 0.0) * InchesToMM;
+        double payloadLargestRadiusMM =
+            (state.PlcPayload?.LargestMeasuredRadiusMM ?? 0.0) * InchesToMM;
+
         bool safePayloadClearance =
             settings.Safety.ReadKnifeClearanceFromPlc
                 ? true  // Skip validation, trust PLC configuration
                 : (state.PlcPayload is not null &&
-                   state.PlcPayload.KnifeClearanceMM + 1e-9 >= requiredClearanceMM &&
-                   state.PlcPayload.SafeCarriageRetractRadiusMM + 1e-9 >=
-                       state.PlcPayload.LargestMeasuredRadiusMM + requiredClearanceMM);
+                   payloadKnifeClearanceMM + 1e-6 >= requiredClearanceMM &&
+                   payloadSafeRetractRadiusMM + 1e-6 >=
+                       payloadLargestRadiusMM + requiredClearanceMM);
 
         Add(
             report,
@@ -408,7 +422,7 @@ public static class ProductionReadinessEvaluator
                 : (state.PlcPayload is null
                     ? "The restricted PLC payload has not been built."
                     : safePayloadClearance
-                        ? $"Safe retract radius {state.PlcPayload.SafeCarriageRetractRadiusMM:F3} mm includes at least the required {requiredClearanceMM:F3} mm beyond the measured largest radius."
+                        ? $"Safe retract radius {payloadSafeRetractRadiusMM:F3} mm includes at least the required {requiredClearanceMM:F3} mm beyond the measured largest radius."
                         : "The PLC carriage-retract payload does not preserve the required ten-peel-thickness knife clearance."));
 
         bool reservedRotationSlotsZero =
