@@ -186,6 +186,22 @@ public class RepeatabilityTests
     }
 
     [Fact]
+    public void SameBlock_MatchesDateAndBlockFolders()
+    {
+        var rows = new List<BatchReplayRunner.Row>
+        {
+            Row(Path.Combine("09", "11", "Block_0001", "Scan_0001"), 2.0, 423.2, 33, "Largest Inscribed Cylinder"),
+            Row(Path.Combine("09", "11", "Block_0002", "Scan_0001"), 4.7, 425.2, 34, "Largest Inscribed Cylinder"),
+            Row(Path.Combine("10", "05", "Block_0001", "Scan_0001"), 2.9, 377.6, 25, "Largest Inscribed Cylinder")
+        };
+
+        var groups = BatchReplayRunner.GroupRepeatScans(rows, [new[] { "09\\11\\Block_0001", "09/11/Block_0002" }]);
+
+        Assert.Single(groups);
+        Assert.Equal(2, groups[0].Scans.Count);   // 10\05\Block_0001 is a different block
+    }
+
+    [Fact]
     public void ReadCsv_AcceptsSummariesWrittenBeforeTheNewColumns()
     {
         string folder = Path.Combine(Path.GetTempPath(), "batch-old-csv-" + Guid.NewGuid().ToString("N"));

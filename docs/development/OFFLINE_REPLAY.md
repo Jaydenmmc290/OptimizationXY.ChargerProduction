@@ -67,10 +67,10 @@ sits differently on the spindles each time and the machine commands are *expecte
 Scans in one folder (`Scan_0001`, `Scan_0002`, ...) are one group. Otherwise list them:
 
 ```
---replay-batch "<SavedScans>" --same-block "B01,B02,B03,B04,B05,B06,B07" --same-block "B08,B09,B10,B11"
+--replay-batch "<SavedScans>" --same-block "09\11\Block_0001,09\11\Block_0002,09\11\Block_0003" --same-block "09\11\Block_0008,09\11\Block_0009"
 ```
 
-A name matches the scan's block folder, its own folder name, or its path relative to the scans folder.
+A name can be a block folder with its date (`09\11\Block_0001`, matches every scan under it), a scan folder name, or a path relative to the scans folder.
 
 ### Options to compare (all off by default)
 
