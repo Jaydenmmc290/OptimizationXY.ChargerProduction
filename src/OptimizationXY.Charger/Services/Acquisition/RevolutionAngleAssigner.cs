@@ -362,6 +362,9 @@ public static class RevolutionAngleAssigner
                 ? count
                 : profiled[restPosition];
 
+        // Where the final rest appears to begin (before any reset below).
+        int restStartFrame = fallbackEnd;
+
         if (fallbackEnd - start < minimumFrames)
         {
             start = 0;
@@ -399,13 +402,16 @@ public static class RevolutionAngleAssigner
         // not within the strict tolerance (rough or oval blocks, or a block that
         // settles slightly on the chucks). That frame marks the end of the turn
         // far better than the start of the final rest, which is found too early
-        // while the block is still slowing down.
+        // while the block is still slowing down. The closing frame must lie at or
+        // after that apparent rest start: a block that stopped short of a full
+        // turn has its closest match earlier, and is left to the fallback.
         double approximateToleranceMM = settings.ApproximateClosureToleranceMM;
         differences.Sort();
         double medianDifferenceMM = differences.Count > 0 ? differences[differences.Count / 2] : double.NaN;
 
         if (approximateToleranceMM > closureToleranceMM &&
             bestClosureFrame >= 0 &&
+            bestClosureFrame >= restStartFrame - 2 &&
             bestClosureErrorMM <= approximateToleranceMM &&
             bestClosureErrorMM <= 0.35 * medianDifferenceMM)
         {

@@ -113,6 +113,7 @@ public class RepeatabilityTests
         RevolutionAngleResult result = RevolutionAngleAssigner.Assign(frames, settings);
 
         Assert.False(result.RevolutionVerified);
+        Assert.Equal("RotatingFramesEvenly", result.Method);   // a short turn is never taken as an approximate closure
         Assert.True(result.BestClosureFrame >= 20);
         Assert.True(result.BestClosureErrorMM > settings.RevolutionClosureToleranceMM);
         Assert.True(result.EndRestDifferenceMM > 1.0);
@@ -144,8 +145,9 @@ public class RepeatabilityTests
             return frames;
         }
 
-        var off = new RotatingScanSettings { StationaryProfileChangeMM = 0.3 };
-        Assert.Equal(0.0, off.ApproximateClosureToleranceMM);   // off by default
+        Assert.Equal(2.5, new RotatingScanSettings().ApproximateClosureToleranceMM);   // on by default
+
+        var off = new RotatingScanSettings { StationaryProfileChangeMM = 0.3, ApproximateClosureToleranceMM = 0.0 };
 
         RevolutionAngleResult before = RevolutionAngleAssigner.Assign(Frames(), off);
         Assert.Equal("RotatingFramesEvenly", before.Method);

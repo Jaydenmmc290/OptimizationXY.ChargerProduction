@@ -248,9 +248,11 @@ public sealed class RotatingScanSettings
     /// the frames up to the final rest are spread over 360 degrees, and the rest is
     /// detected while the block is still slowing down (80 frames instead of 86-87
     /// on the saved scans that missed closure by 0.1-0.7 mm).
-    /// 0 = off (the behaviour before this setting).
+    /// Default 2.5 (checked on 22 saved scans: the 4 near-miss scans went from
+    /// 80-82 to 86-87 frames, Block 8's axis offset from 8.9 to 2.0 mm, +2 usable
+    /// sheets, no other scan changed). 0 = off (the behaviour before this setting).
     /// </summary>
-    public double ApproximateClosureToleranceMM { get; set; }
+    public double ApproximateClosureToleranceMM { get; set; } = 2.5;
 
     /// <summary>
     /// A revolution is never accepted with fewer frames than this.
