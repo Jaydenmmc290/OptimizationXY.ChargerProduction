@@ -18,7 +18,8 @@ public static class RadiusFieldBinner
  List<RadiusFieldPoint> rawField,
  double zBinSizeMM,
  double angleBinSizeDeg,
- int minPointsPerBin)
+ int minPointsPerBin,
+ int ignoreLowestReadings = 0)
     {
         if (rawField == null || rawField.Count == 0)
             return [];
@@ -62,7 +63,7 @@ public static class RadiusFieldBinner
 
                 MeanRadiusMM = radii.Mean(),
                 MedianRadiusMM = radii.Median(),
-                MinRadiusMM = radii.Minimum(),
+                MinRadiusMM = RobustMinimum(radii, ignoreLowestReadings),
                 MaxRadiusMM = radii.Maximum(),
                 StdDevRadiusMM = stdDev,
 
@@ -73,6 +74,23 @@ public static class RadiusFieldBinner
         return [.. binned
             .OrderBy(p => p.ZBinMM)
             .ThenBy(p => p.AngleBinDeg)];
+    }
+
+    /// <summary>
+    /// The lowest reading of a cell, optionally ignoring the N lowest readings.
+    /// N = 0 is the plain minimum. Readings are only ignored when the cell has at
+    /// least 2 x N + 3 of them, so a sparse cell keeps its true minimum.
+    /// </summary>
+    /// <param name="sortedRadii">The cell's radii, sorted ascending.</param>
+    internal static double RobustMinimum(List<double> sortedRadii, int ignoreLowestReadings)
+    {
+        if (ignoreLowestReadings <= 0 ||
+            sortedRadii.Count < 2 * ignoreLowestReadings + 3)
+        {
+            return sortedRadii.Minimum();
+        }
+
+        return sortedRadii[ignoreLowestReadings];
     }
 
     /// <summary>

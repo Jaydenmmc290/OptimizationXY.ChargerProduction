@@ -126,7 +126,11 @@ public sealed class LogProcessingPipeline
 
         List<LaserProfileColumn> laserProfile = RunTimed(
             $"{stepPrefix} - Detect Laser Stripe",
-            () => LaserStripeDetector.Detect(frame.BinaryImage));
+            () => LaserStripeDetector.Detect(
+                frame.BinaryImage,
+                gray,
+                keepAllAlignedSegments: _state.Settings.RotatingScan.KeepAllStripeSegments,
+                subPixelCenter: _state.Settings.RotatingScan.SubPixelStripeCenter));
 
         if (laserProfile.Count == 0)
             throw new InvalidOperationException("No laser stripe points detected.");
@@ -834,7 +838,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             _state.OptimizationRadiusField,
             zBinSizeMM: settings.Geometry.RadiusFieldZBinSizeMM,
             angleBinSizeDeg: settings.Geometry.RadiusFieldAngleBinSizeDeg,
-            minPointsPerBin: settings.Geometry.MinPointsPerRadiusBin);
+            minPointsPerBin: settings.Geometry.MinPointsPerRadiusBin,
+            ignoreLowestReadings: settings.Geometry.OptimizationCellIgnoreLowestReadings);
 
         _state.PointCloudOverlay?.Dispose();
         _state.PointCloudOverlay =
@@ -2548,6 +2553,11 @@ BuildFinalSpindleRecommendation(
             $"Head X: {FormatLength(geometry.SpindleMovement.HeadMoveXMM)}\r\n" +
             $"Head Y: {FormatLength(geometry.SpindleMovement.HeadMoveYMM)}\r\n" +
             centerlineLines +
+            (geometry.CertifiedGapMM.HasValue
+                ? $"Certified Search: {geometry.CertifiedEvaluations} positions tested over the full machine travel; " +
+                  $"no position can score more than {geometry.CertifiedGapMM.Value:F2} mm better" +
+                  (geometry.CertifiedSearchImproved ? " (improved on the grid search)" : " (grid search answer kept)") + "\r\n"
+                : string.Empty) +
             $"Tested Candidates: {geometry.TestedCandidates}\r\n" +
             $"Usable Full 50-in Sheets: {peel.UsableFullSheets} of {peel.TotalFullSheets}\r\n" +
             $"Rejected Full 50-in Sheets: {peel.RejectedFullSheets}\r\n" +

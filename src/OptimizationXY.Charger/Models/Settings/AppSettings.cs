@@ -262,6 +262,22 @@ public sealed class RotatingScanSettings
     /// interpolate or estimate missing data points based on available information; if false, missing points will remain unfilled.
     /// </summary>
     public bool FillMissingPoints { get; internal set; }
+
+    /// <summary>
+    /// Off (default): only the longest unbroken piece of the laser line in each
+    /// frame is used, as before. On: other pieces that line up with it are kept
+    /// too, so a knot, check or bark gap that breaks the line no longer throws
+    /// away the rest of the line in that frame. Compare with --replay-batch first.
+    /// </summary>
+    public bool KeepAllStripeSegments { get; set; }
+
+    /// <summary>
+    /// Off (default): the laser line centre is the middle of the thresholded
+    /// stripe (half-pixel steps), as before. On: the brightness-weighted centre
+    /// of the stripe in the grey image is used (about a tenth of a pixel).
+    /// Compare with --replay-batch first.
+    /// </summary>
+    public bool SubPixelStripeCenter { get; set; }
 }
 
 
@@ -297,6 +313,15 @@ public sealed class GeometrySettings
     /// </summary>
     public int MinPointsPerRadiusBin { get; set; } = 1;  
 
+
+    /// <summary>
+    /// 0 (default): the spindle search treats each 10 mm x 10 deg cell as being
+    /// as small as its single lowest reading, as before. 1 or 2: ignore that many
+    /// of the lowest readings in a cell (only when the cell has at least
+    /// 2 x N + 3 readings), so one noisy low reading cannot decide the position.
+    /// Affects only the spindle search field. Compare with --replay-batch first.
+    /// </summary>
+    public int OptimizationCellIgnoreLowestReadings { get; set; }
 }
 
 /// <summary>
@@ -744,6 +769,21 @@ public sealed class InscribedGeometrySettings
     /// positions and slightly less diameter; 1.0 or more effectively selects the centreline itself.
     /// </summary>
     public double CenterlinePullWeight { get; set; } = 0.5;
+
+    /// <summary>
+    /// Off (default): coarse-medium-fine grid search, as before. On: after the
+    /// grid search, the largest-inscribed-cylinder search is finished with a
+    /// branch-and-bound search over the whole machine travel that proves how far
+    /// from the best possible score the answer can be (reported as the
+    /// "certified gap"). Compare with --replay-batch first.
+    /// </summary>
+    public bool UseCertifiedCylinderSearch { get; set; }
+
+    /// <summary>The certified search stops once the answer is proven within this many mm of the best possible score.</summary>
+    public double CertifiedSearchToleranceMM { get; set; } = 0.25;
+
+    /// <summary>Upper limit on positions the certified search may test (bounds its time).</summary>
+    public int CertifiedSearchMaxEvaluations { get; set; } = 150000;
 }
 
 /// <summary>

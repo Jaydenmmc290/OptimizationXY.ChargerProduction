@@ -192,6 +192,50 @@ public static class InscribedGeometryOptimizer
             ?? throw new InvalidOperationException(
                 $"The {kind} search did not produce a valid geometry.");
 
+        double? certifiedGapMM = null;
+        int certifiedEvaluations = 0;
+        bool certifiedImproved = false;
+
+        if (kind == InscribedGeometryKind.Cylinder &&
+            geometrySettings.UseCertifiedCylinderSearch)
+        {
+            Candidate incumbent = EvaluateCandidate(
+                samples,
+                kind,
+                geometrySettings,
+                machineLimits,
+                reference,
+                pullWeight,
+                fine.OffsetXMM,
+                fine.OffsetYMM,
+                fine.SweepXMM,
+                fine.SweepYMM,
+                out _) ?? throw new InvalidOperationException(
+                    "The grid search result could not be re-evaluated for the certified search.");
+
+            CertifiedOutcome outcome = CertifiedCylinderSearch(
+                samples,
+                geometrySettings,
+                machineLimits,
+                reference,
+                pullWeight,
+                incumbent,
+                token);
+
+            if (!ReferenceEquals(outcome.Best, incumbent))
+            {
+                result = outcome.Best.Geometry;
+                certifiedImproved = true;
+            }
+
+            certifiedGapMM = outcome.GapMM;
+            certifiedEvaluations = outcome.Evaluations;
+        }
+
+        result.CertifiedGapMM = certifiedGapMM;
+        result.CertifiedEvaluations = certifiedEvaluations;
+        result.CertifiedSearchImproved = certifiedImproved;
+
         if (reference is not null)
         {
             result.CenterlineAnchorUsed = true;
@@ -422,6 +466,193 @@ public static class InscribedGeometryOptimizer
             Geometry = geometry,
             Score = equivalentRadiusMM - pullWeight * deviationMM
         };
+    }
+
+    private sealed record CertifiedOutcome(Candidate Best, double GapMM, int Evaluations);
+
+    /// <summary>
+    /// Branch-and-bound search for the largest-inscribed-cylinder score over the
+    /// whole machine travel, started from the grid-search answer.
+    ///
+    /// Why a bound exists: the cylinder radius of an axis is the smallest
+    /// distance from any surface sample to that axis (the per-bin envelope and
+    /// its conservative fill only ever copy sample distances, so their minimum is
+    /// the minimum over all samples), minus the safety margin. Moving the tail or
+    /// head end of the axis by at most d moves the axis by at most d at every
+    /// point along the block, so the radius changes by at most d. The centreline
+    /// pull term changes by at most pullWeight x d. So the score of any axis in a
+    /// box is at most the score at the box centre plus (1 + pullWeight) x d,
+    /// where d is the largest tail/head distance from the centre to a corner.
+    ///
+    /// Boxes whose bound cannot beat the best answer by more than the tolerance
+    /// are dropped; the others are split in half along all four coordinates. The
+    /// angular-coverage requirement is checked only on candidate answers (the
+    /// bound ignores it, which can only make the bound higher, so the reported
+    /// gap stays valid). A better answer replaces the grid answer only when it
+    /// scores more than GeometryTieToleranceMM higher.
+    /// </summary>
+    private static CertifiedOutcome CertifiedCylinderSearch(
+        SurfaceSample[] samples,
+        InscribedGeometrySettings settings,
+        MachineLimitSettings limits,
+        ReferenceAxis? reference,
+        double pullWeight,
+        Candidate incumbent,
+        CancellationToken token)
+    {
+        double lipschitz = 1.0 + Math.Max(0.0, pullWeight);
+        double tolerance = Math.Max(0.01, settings.CertifiedSearchToleranceMM);
+        int maxEvaluations = Math.Max(1000, settings.CertifiedSearchMaxEvaluations);
+        double tieTolerance = Math.Max(0.0, settings.GeometryTieToleranceMM);
+
+        double[] sampleX = [.. samples.Select(sample => sample.XMM)];
+        double[] sampleY = [.. samples.Select(sample => sample.YMM)];
+        double[] sampleT = [.. samples.Select(sample => sample.NormalizedZ)];
+
+        // Score ignoring the angular-coverage requirement (upper-bound side).
+        double RelaxedScore(double tx, double ty, double hx, double hy)
+        {
+            double minimumSquared = double.PositiveInfinity;
+
+            for (int i = 0; i < sampleX.Length; i++)
+            {
+                double t = sampleT[i];
+                double dx = sampleX[i] - (tx + (hx - tx) * t);
+                double dy = sampleY[i] - (ty + (hy - ty) * t);
+                double squared = dx * dx + dy * dy;
+
+                if (squared < minimumSquared)
+                    minimumSquared = squared;
+            }
+
+            double radius = Math.Max(0.0, Math.Sqrt(minimumSquared) - settings.SafetyMarginMM);
+
+            if (reference is null || pullWeight <= 0.0)
+                return radius;
+
+            double tailDeviation = Math.Sqrt(
+                (tx - reference.TailXMM) * (tx - reference.TailXMM) +
+                (ty - reference.TailYMM) * (ty - reference.TailYMM));
+            double headDeviation = Math.Sqrt(
+                (hx - reference.HeadXMM) * (hx - reference.HeadXMM) +
+                (hy - reference.HeadYMM) * (hy - reference.HeadYMM));
+
+            return radius - pullWeight * Math.Max(tailDeviation, headDeviation);
+        }
+
+        Candidate best = incumbent;
+        int evaluations = 0;
+
+        // Box = centre (tx, ty, hx, hy) and half-widths per coordinate.
+        var queue = new PriorityQueue<double[], double>();
+
+        void Push(double[] box, double centreScore)
+        {
+            double tailReach = Math.Sqrt(box[4] * box[4] + box[5] * box[5]);
+            double headReach = Math.Sqrt(box[6] * box[6] + box[7] * box[7]);
+            double bound = centreScore + lipschitz * Math.Max(tailReach, headReach);
+
+            if (bound > best.Score + tolerance)
+                queue.Enqueue(box, -bound);
+        }
+
+        double[] root =
+        [
+            0.0, 0.0, 0.0, 0.0,
+            limits.MaxTailMoveXMM, limits.MaxTailMoveYMM,
+            limits.MaxHeadMoveXMM, limits.MaxHeadMoveYMM
+        ];
+
+        Push(root, RelaxedScore(0.0, 0.0, 0.0, 0.0));
+        evaluations++;
+
+        while (queue.Count > 0 && evaluations < maxEvaluations)
+        {
+            token.ThrowIfCancellationRequested();
+
+            queue.TryPeek(out _, out double negativeBound);
+            if (-negativeBound <= best.Score + tolerance)
+                break;
+
+            double[] box = queue.Dequeue();
+
+            // 16 children: halve all four coordinates.
+            var children = new double[16][];
+            var scores = new double[16];
+
+            for (int child = 0; child < 16; child++)
+            {
+                double[] c = new double[8];
+
+                for (int axis = 0; axis < 4; axis++)
+                {
+                    double half = box[4 + axis] / 2.0;
+                    double sign = ((child >> axis) & 1) == 0 ? -1.0 : 1.0;
+                    c[axis] = box[axis] + sign * half;
+                    c[4 + axis] = half;
+                }
+
+                children[child] = c;
+            }
+
+            Parallel.For(0, 16, child =>
+            {
+                double[] c = children[child];
+                scores[child] = RelaxedScore(c[0], c[1], c[2], c[3]);
+            });
+
+            evaluations += 16;
+
+            for (int child = 0; child < 16; child++)
+            {
+                double[] c = children[child];
+
+                if (scores[child] > best.Score + tieTolerance)
+                {
+                    // Possible better answer: evaluate it exactly as the grid
+                    // search does (including the angular-coverage requirement).
+                    double offsetX = (c[0] + c[2]) / 2.0;
+                    double offsetY = (c[1] + c[3]) / 2.0;
+                    double sweepX = c[0] - c[2];
+                    double sweepY = c[1] - c[3];
+
+                    Candidate? candidate = EvaluateCandidate(
+                        samples,
+                        InscribedGeometryKind.Cylinder,
+                        settings,
+                        limits,
+                        reference,
+                        pullWeight,
+                        offsetX,
+                        offsetY,
+                        sweepX,
+                        sweepY,
+                        out _);
+
+                    if (candidate is not null &&
+                        candidate.Score > best.Score + tieTolerance)
+                    {
+                        best = candidate;
+                    }
+                }
+
+                Push(c, scores[child]);
+            }
+        }
+
+        double gap = 0.0;
+
+        if (queue.Count > 0)
+        {
+            queue.TryPeek(out _, out double topNegativeBound);
+            gap = Math.Max(0.0, -topNegativeBound - best.Score);
+        }
+
+        // Within the tolerance counts as proven.
+        if (gap <= tolerance)
+            gap = Math.Min(gap, tolerance);
+
+        return new CertifiedOutcome(best, gap, evaluations);
     }
 
     /// <summary>

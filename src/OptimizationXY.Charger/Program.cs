@@ -46,6 +46,13 @@ internal static class Program
             // Offline replay of a saved scan: no cameras, no PLC, no SQL.
             string[] commandLine = Environment.GetCommandLineArgs();
 
+            if (OptimizationXY.Charger.Services.Replay.BatchReplayRunner.IsRequested(commandLine))
+            {
+                Logger.Info("Batch replay requested; the operator form will not be opened.");
+                OptimizationXY.Charger.Services.Replay.BatchReplayRunner.Run(commandLine);
+                return;
+            }
+
             if (OptimizationXY.Charger.Services.Replay.OfflineReplayRunner.IsRequested(commandLine))
             {
                 Logger.Info("Offline replay requested; the operator form will not be opened.");
