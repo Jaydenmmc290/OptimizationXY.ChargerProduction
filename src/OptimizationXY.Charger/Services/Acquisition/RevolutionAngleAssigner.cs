@@ -355,6 +355,8 @@ public static class RevolutionAngleAssigner
             }
         }
 
+        int rotationStart = start;
+
         int fallbackEnd =
             restPosition == profiled.Count - 1
                 ? count
@@ -366,27 +368,62 @@ public static class RevolutionAngleAssigner
             fallbackEnd = count;
         }
 
-        // Diagnostics only: how close did any frame come to closing the turn,
-        // and where did the block come to rest? Does not change the angles.
+        // How close did any frame come to closing the turn, and where did the
+        // block come to rest?
         int bestClosureFrame = -1;
         double bestClosureErrorMM = double.NaN;
+        List<double> differences = [];
 
         for (int position = startPosition + 1; position < profiled.Count; position++)
         {
-            if (profiled[position] - start < minimumFrames)
+            if (profiled[position] - rotationStart < minimumFrames)
                 continue;
 
-            double difference = Difference(profiles[start], profiles[profiled[position]]);
+            double difference = Difference(profiles[rotationStart], profiles[profiled[position]]);
 
-            if (double.IsFinite(difference) &&
-                (!double.IsFinite(bestClosureErrorMM) || difference < bestClosureErrorMM))
+            if (!double.IsFinite(difference))
+                continue;
+
+            differences.Add(difference);
+
+            if (!double.IsFinite(bestClosureErrorMM) || difference < bestClosureErrorMM)
             {
                 bestClosureErrorMM = difference;
                 bestClosureFrame = profiled[position];
             }
         }
 
-        double endRestDifferenceMM = Difference(profiles[start], profiles[lastFrame]);
+        double endRestDifferenceMM = Difference(profiles[rotationStart], profiles[lastFrame]);
+
+        // Approximate closure: the profile came back close to the start, just
+        // not within the strict tolerance (rough or oval blocks, or a block that
+        // settles slightly on the chucks). That frame marks the end of the turn
+        // far better than the start of the final rest, which is found too early
+        // while the block is still slowing down.
+        double approximateToleranceMM = settings.ApproximateClosureToleranceMM;
+        differences.Sort();
+        double medianDifferenceMM = differences.Count > 0 ? differences[differences.Count / 2] : double.NaN;
+
+        if (approximateToleranceMM > closureToleranceMM &&
+            bestClosureFrame >= 0 &&
+            bestClosureErrorMM <= approximateToleranceMM &&
+            bestClosureErrorMM <= 0.35 * medianDifferenceMM)
+        {
+            ApplyAngles(frames, rotationStart, bestClosureFrame, settings, result);
+            result.RevolutionVerified = false;
+            result.ClosureErrorMM = bestClosureErrorMM;
+            result.BestClosureFrame = bestClosureFrame;
+            result.BestClosureErrorMM = bestClosureErrorMM;
+            result.EndRestDifferenceMM = endRestDifferenceMM;
+            result.Method = "ApproximateProfileClosure";
+            result.Message =
+                $"The surface came back to the starting profile within {bestClosureErrorMM:F2} mm RMS at frame {bestClosureFrame} " +
+                $"(strict tolerance {closureToleranceMM:F2} mm, approximate tolerance {approximateToleranceMM:F2} mm), so the revolution " +
+                $"was taken as frames {rotationStart} to {bestClosureFrame - 1} ({result.FramesPerRevolution} frames, {result.AngleStepDeg:F3} deg/frame). " +
+                $"Not counted as verified. Without this the frames up to the final rest " +
+                $"({fallbackEnd - rotationStart} frames) would have been spread over 360 degrees.";
+            return result;
+        }
 
         ApplyAngles(frames, start, fallbackEnd, settings, result);
         result.RevolutionVerified = false;
@@ -398,7 +435,7 @@ public static class RevolutionAngleAssigner
             $"The surface did not return to the starting profile, so a full revolution could not be verified. " +
             $"Frames {start} to {fallbackEnd - 1} ({result.FramesPerRevolution} frames) were divided evenly over 360 degrees." +
             (bestClosureFrame >= 0
-                ? $" Closest return to the start profile: frame {bestClosureFrame} ({bestClosureFrame - start} frames after the start), " +
+                ? $" Closest return to the start profile: frame {bestClosureFrame} ({bestClosureFrame - rotationStart} frames after the start), " +
                   $"{bestClosureErrorMM:F2} mm RMS (tolerance {closureToleranceMM:F2} mm)."
                 : " No later frame could be compared with the start profile.") +
             (double.IsFinite(endRestDifferenceMM)
