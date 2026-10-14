@@ -3383,11 +3383,29 @@ double maxSpindleMovementMM)
         finally
         {
             stopwatch.Stop();
+            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds);
+        }
+    }
 
-            _state.TimingEntries.Add(new PipelineTimingEntry  // Record the elapsed time in milliseconds along with the step name in the pipeline state for later reporting
+    /// <summary>
+    /// Guards <see cref="PipelineState.TimingEntries"/>. RunTimed is called from
+    /// inside the parallel per-frame loop, and List.Add is not thread-safe:
+    /// two frames adding at the same time can lose an entry or throw, and a
+    /// throw there used to mark a good frame invalid.
+    /// </summary>
+    private static readonly object TimingEntriesLock = new();
+
+    /// <summary>
+    /// Adds one timing entry. Safe to call from several threads at once.
+    /// </summary>
+    private void RecordTiming(string stepName, double elapsedMilliseconds)
+    {
+        lock (TimingEntriesLock)
+        {
+            _state.TimingEntries.Add(new PipelineTimingEntry
             {
                 StepName = stepName,
-                ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds
+                ElapsedMilliseconds = elapsedMilliseconds
             });
         }
     }
@@ -3411,12 +3429,7 @@ double maxSpindleMovementMM)
         finally
         {
             stopwatch.Stop();
-
-            _state.TimingEntries.Add(new PipelineTimingEntry
-            {
-                StepName = stepName,
-                ElapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds
-            });
+            RecordTiming(stepName, stopwatch.Elapsed.TotalMilliseconds);
         }
     }
 
@@ -3618,35 +3631,18 @@ double maxSpindleMovementMM)
             "Binning radius field...",
             () => BinRotatingScanRadiusField(token));
 
-        // Parallelize independent analysis stages
-        // AnalyzeOvality and AnalyzeRadiusDefects are independent and can run in parallel
-        progress?.Invoke("Analyzing ovality and defects...");
-        RunTimed(
-            "Analyze Ovality And Radius Defects (Parallel)",
-            () =>
-            {
-                var ovalityTask = Task.Run(() =>
-                {
-                    token.ThrowIfCancellationRequested();
-                    AnalyzeOvality(token);
-                }, token);
-
-                var defectsTask = Task.Run(() =>
-                {
-                    token.ThrowIfCancellationRequested();
-                    AnalyzeRadiusDefects(token);
-                }, token);
-
-                // Wait for both to complete before proceeding
-                try
-                {
-                    Task.WaitAll([ovalityTask, defectsTask], token);
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-            });
+        // Ovality and radius defects run one after the other. Both append a
+        // section to _state.DiagnosticsReport; run in parallel, the two
+        // appends could overlap and one section was silently lost. Both
+        // stages take only milliseconds, so nothing is gained by overlapping.
+        RunStage(
+            "Analyze Ovality",
+            "Analyzing ovality...",
+            () => AnalyzeOvality(token));
+        RunStage(
+            "Analyze Radius Defects",
+            "Analyzing radius defects...",
+            () => AnalyzeRadiusDefects(token));
 
         RunStage(
             "Analyze Defect Patches",

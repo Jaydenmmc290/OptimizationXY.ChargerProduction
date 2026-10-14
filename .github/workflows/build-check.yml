@@ -20,11 +20,12 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The dotnet command line cannot embed licenses.licx (error MSB4803).
-      # It is removed in this build machine's copy only, for the compile check.
-      - name: Remove licenses.licx (build machine copy only)
-        shell: pwsh
-        run: Remove-Item src/OptimizationXY.Charger/licenses.licx
-
+      # SkipLicx: the dotnet command line cannot embed licenses.licx (MSB4803).
+      # Visual Studio / ClickOnce builds still embed it.
       - name: Build (no Sapera)
-        run: dotnet build src/OptimizationXY.Charger/OptimizationXY.Charger.csproj -c Release -p:UseSapera=false -p:Platform=x64
+        shell: pwsh
+        run: |
+          dotnet build src/OptimizationXY.Charger/OptimizationXY.Charger.csproj -c Release -p:UseSapera=false -p:SkipLicx=true -p:Platform=x64 -clp:NoSummary 2>&1 | Tee-Object -FilePath build.log
+          $code = $LASTEXITCODE
+          Select-String -Path build.log -Pattern ': error ' | Select-Object -First 40 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+          exit $code

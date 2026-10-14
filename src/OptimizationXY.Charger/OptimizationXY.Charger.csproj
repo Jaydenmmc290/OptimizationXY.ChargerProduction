@@ -106,7 +106,8 @@
 
   
   <ItemGroup>
-    <EmbeddedResource Include="licenses.licx">
+    <!-- SkipLicx=true is only for command-line compile checks (dotnet build cannot embed .licx, MSB4803). Visual Studio and ClickOnce builds are unchanged. -->
+    <EmbeddedResource Include="licenses.licx" Condition="'$(SkipLicx)' != 'true'">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
