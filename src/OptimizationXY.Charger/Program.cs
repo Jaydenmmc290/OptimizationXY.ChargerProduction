@@ -46,6 +46,14 @@ internal static class Program
             // Offline replay of a saved scan: no cameras, no PLC, no SQL.
             string[] commandLine = Environment.GetCommandLineArgs();
 
+            // Build a calibration from saved reference images: no cameras, no PLC.
+            if (OptimizationXY.Charger.Services.Calibration.CalibrationImageImportRunner.IsRequested(commandLine))
+            {
+                Logger.Info("Calibration image import requested; the operator form will not be opened.");
+                OptimizationXY.Charger.Services.Calibration.CalibrationImageImportRunner.Run(commandLine);
+                return;
+            }
+
             if (OptimizationXY.Charger.Services.Replay.BatchReplayRunner.IsRequested(commandLine))
             {
                 Logger.Info("Batch replay requested; the operator form will not be opened.");

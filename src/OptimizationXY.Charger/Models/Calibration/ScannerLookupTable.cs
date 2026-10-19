@@ -84,7 +84,9 @@ public sealed class ScannerLookupTable
                 LengthPixelsPerMM <= 0 ||
                 !double.IsFinite(MinimumCalibratedRadiusMM) ||
                 !double.IsFinite(MaximumCalibratedRadiusMM) ||
-                MinimumCalibratedRadiusMM <= 0 ||
+                // 0 is allowed: a home-position reference (the cable on the
+                // spindle axis) is a measured band at radius 0.
+                MinimumCalibratedRadiusMM < 0 ||
                 MaximumCalibratedRadiusMM <= MinimumCalibratedRadiusMM)
             {
                 return false;
@@ -98,7 +100,7 @@ public sealed class ScannerLookupTable
                 point.LaserY < 0 ||
                 point.LaserY >= ImageHeight ||
                 !double.IsFinite(point.RadiusMM) ||
-                point.RadiusMM <= 0))
+                point.RadiusMM < 0))
             {
                 return false;
             }

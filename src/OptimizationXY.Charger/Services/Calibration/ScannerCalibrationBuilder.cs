@@ -34,6 +34,61 @@ public static class ScannerCalibrationBuilder
     {
         ArgumentNullException.ThrowIfNull(batch);
 
+        return ExtractReferenceCore(
+            batch.ConcatenatedFrames,
+            batch.CapturedUtc,
+            referenceName,
+            measuredDiameterMM,
+            radiusBandId,
+            minimumFrames: 3,
+            isHomeAxisReference: false);
+    }
+
+    /// <summary>
+    /// Extracts a calibration reference from saved, already concatenated
+    /// reference images (for example the small-tube, large-tube and cable
+    /// images from another calibration). Uses the same laser detection as a
+    /// live capture. One image per reference is accepted; with fewer than three
+    /// images there is no held-out repeatability check for that reference.
+    /// </summary>
+    /// <param name="frames">The concatenated grayscale reference images.</param>
+    /// <param name="capturedUtc">When the images were captured.</param>
+    /// <param name="referenceName">The name of the calibration reference.</param>
+    /// <param name="measuredDiameterMM">The measured diameter in millimeters; 0 for the home-position reference.</param>
+    /// <param name="radiusBandId">The radius band identifier.</param>
+    /// <param name="isHomeAxisReference">
+    /// True for the home-position reference (the cable on the spindle axis),
+    /// which is stored as a band at radius 0.
+    /// </param>
+    public static CalibrationReferenceCapture ExtractReferenceFromImages(
+        IReadOnlyList<Mat> frames,
+        DateTime capturedUtc,
+        string referenceName,
+        double measuredDiameterMM,
+        int radiusBandId,
+        bool isHomeAxisReference)
+    {
+        ArgumentNullException.ThrowIfNull(frames);
+
+        return ExtractReferenceCore(
+            frames,
+            capturedUtc,
+            referenceName,
+            measuredDiameterMM,
+            radiusBandId,
+            minimumFrames: 1,
+            isHomeAxisReference);
+    }
+
+    private static CalibrationReferenceCapture ExtractReferenceCore(
+        IReadOnlyList<Mat> concatenatedFrames,
+        DateTime capturedUtc,
+        string referenceName,
+        double measuredDiameterMM,
+        int radiusBandId,
+        int minimumFrames,
+        bool isHomeAxisReference)
+    {
         if (string.IsNullOrWhiteSpace(referenceName))
         {
             throw new ArgumentException(
@@ -41,7 +96,16 @@ public static class ScannerCalibrationBuilder
                 nameof(referenceName));
         }
 
-        if (!double.IsFinite(measuredDiameterMM) || measuredDiameterMM <= 0)
+        if (isHomeAxisReference)
+        {
+            if (measuredDiameterMM != 0.0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(measuredDiameterMM),
+                    "The home-position reference is the spindle axis and must use diameter 0.");
+            }
+        }
+        else if (!double.IsFinite(measuredDiameterMM) || measuredDiameterMM <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(measuredDiameterMM),
@@ -50,17 +114,18 @@ public static class ScannerCalibrationBuilder
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radiusBandId);
 
-        if (batch.ConcatenatedFrames.Count < 3)
+        if (concatenatedFrames.Count < minimumFrames)
         {
-            throw new InvalidOperationException(
-                "At least three concatenated frames are required for calibration extraction.");
+            throw new InvalidOperationException(minimumFrames == 3
+                ? "At least three concatenated frames are required for calibration extraction."
+                : $"At least {minimumFrames} reference image(s) are required for calibration extraction.");
         }
 
-        int imageWidth = batch.ConcatenatedFrames[0].Width;
-        int imageHeight = batch.ConcatenatedFrames[0].Height;
+        int imageWidth = concatenatedFrames[0].Width;
+        int imageHeight = concatenatedFrames[0].Height;
 
         if (imageWidth <= 0 || imageHeight <= 0 ||
-            batch.ConcatenatedFrames.Any(frame =>
+            concatenatedFrames.Any(frame =>
                 frame.Width != imageWidth || frame.Height != imageHeight))
         {
             throw new InvalidOperationException(
@@ -70,7 +135,7 @@ public static class ScannerCalibrationBuilder
         double knownRadiusMM = measuredDiameterMM / 2.0;
         var profiles = new List<IReadOnlyDictionary<int, double>>();
 
-        foreach (Mat frame in batch.ConcatenatedFrames)
+        foreach (Mat frame in concatenatedFrames)
         {
             using Mat binary = ImagePreprocessingService.BuildBinary(frame);
             var profile = LaserStripeDetector.Detect(binary)
@@ -82,23 +147,37 @@ public static class ScannerCalibrationBuilder
             }
         }
 
-        if (profiles.Count < 3)
+        if (profiles.Count < minimumFrames)
         {
-            throw new InvalidOperationException(
-                "Laser detection succeeded on fewer than three calibration frames. Check laser brightness, exposure, focus, and obstruction.");
+            throw new InvalidOperationException(minimumFrames == 3
+                ? "Laser detection succeeded on fewer than three calibration frames. Check laser brightness, exposure, focus, and obstruction."
+                : $"Laser detection succeeded on fewer than {minimumFrames} reference image(s). Check the image shows the laser line.");
         }
 
-        int trainingCount = Math.Max(2, (int)Math.Ceiling(profiles.Count * 0.75));
-        trainingCount = Math.Min(trainingCount, profiles.Count - 1);
+        List<IReadOnlyDictionary<int, double>> trainingProfiles;
+        IReadOnlyList<IReadOnlyDictionary<int, double>> heldOutProfiles;
+        int minimumSamplesPerColumn;
 
-        List<IReadOnlyDictionary<int, double>> trainingProfiles = [.. profiles.Take(trainingCount)];
+        if (profiles.Count >= 3)
+        {
+            int trainingCount = Math.Max(2, (int)Math.Ceiling(profiles.Count * 0.75));
+            trainingCount = Math.Min(trainingCount, profiles.Count - 1);
 
-        IReadOnlyList<IReadOnlyDictionary<int, double>> heldOutProfiles =
-            [.. profiles.Skip(trainingCount)];
+            trainingProfiles = [.. profiles.Take(trainingCount)];
+            heldOutProfiles = [.. profiles.Skip(trainingCount)];
 
-        int minimumSamplesPerColumn = Math.Max(
-            2,
-            (int)Math.Ceiling(trainingProfiles.Count * 0.5));
+            minimumSamplesPerColumn = Math.Max(
+                2,
+                (int)Math.Ceiling(trainingProfiles.Count * 0.5));
+        }
+        else
+        {
+            // Only reachable for saved reference images (one or two per
+            // reference): every image is used, none is held out.
+            trainingProfiles = profiles;
+            heldOutProfiles = [];
+            minimumSamplesPerColumn = profiles.Count;
+        }
 
         var allColumns = trainingProfiles
             .SelectMany(profile => profile.Keys)
@@ -170,7 +249,7 @@ public static class ScannerCalibrationBuilder
                 AcceptedPointCount = points.Count,
                 MeanDetectedLaserY = meanLaserY,
                 LaserYStandardDeviation = standardDeviation,
-                CapturedUtc = batch.CapturedUtc
+                CapturedUtc = capturedUtc
             },
             Points = points,
             HeldOutSamples = heldOutSamples
