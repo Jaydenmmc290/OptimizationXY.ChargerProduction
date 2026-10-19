@@ -77,7 +77,7 @@ public static class LookupTableStore
         {
             throw new InvalidDataException(
                 "Scanner calibration must contain a positive finite LengthPixelsPerMM value, " +
-                "at least two distinct physical radius bands, and finite positive radius points.");
+                "at least two distinct physical radius bands, and finite non-negative radius points.");
         }
 
         if (table.Points.Any(point =>
