@@ -16,6 +16,13 @@ public sealed record DiscoveredCamera
     /// </summary>
     public IReadOnlyList<string> IdentityStrings { get; init; } = [];
 
+    /// <summary>
+    /// True when the camera could be opened during probing, so its own serial
+    /// number features were read. False when it could not be opened (for example
+    /// because it was still in use) and only Sapera's location serial is known.
+    /// </summary>
+    public bool IdentityProbed { get; init; }
+
     public string IdentityDescription =>
         IdentityStrings.Count == 0
             ? "<no identity reported>"

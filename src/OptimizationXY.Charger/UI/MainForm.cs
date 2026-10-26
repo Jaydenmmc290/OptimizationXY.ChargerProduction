@@ -1439,6 +1439,27 @@ public partial class MainForm : Form
         List<DiscoveredCamera> matches = [.. cameras.Where(c =>
             CameraSerialNumber.MatchesAny(settings.ExpectedSerialNumber, c.IdentityStrings))];
 
+        // Some camera could not be opened to read its serial number (usually
+        // because it was still in use). Rather than fail, open the calibrated
+        // location: the camera's serial number is checked again as soon as it
+        // is opened, so the wrong camera can still never be used.
+        if (matches.Count == 0 && cameras.Any(c => !c.IdentityProbed))
+        {
+            DiscoveredCamera? calibratedLocation = cameras.FirstOrDefault(c =>
+                string.Equals(c.ServerName, settings.ServerName, StringComparison.OrdinalIgnoreCase) &&
+                c.DeviceIndex == settings.DeviceIndex);
+
+            if (calibratedLocation is not null)
+            {
+                AppendDiagnostics(
+                    $"{settings.Position} camera serial {settings.ExpectedSerialNumber} could not be read during start-up " +
+                    "(a camera could not be opened, it may still have been in use). " +
+                    $"Opening the calibrated location {calibratedLocation.DisplayName}; the serial number is verified when it opens.");
+
+                return calibratedLocation;
+            }
+        }
+
         if (matches.Count == 1)
         {
             DiscoveredCamera match = matches[0];
