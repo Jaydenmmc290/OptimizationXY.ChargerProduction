@@ -14,6 +14,12 @@ namespace OptimizationXY.Charger.Services.Camera;
 public sealed class GenieNanoCameraService : IDisposable
 {
     private SapAcqDevice? _acqDevice;
+
+    // A GigE camera stays reserved for a few seconds after the program that
+    // had it open closes (or after a crash). Opening is retried for that long
+    // instead of failing on the first try.
+    private const int CameraOpenAttempts = 6;
+    private const int CameraOpenRetryDelayMilliseconds = 2000;
     private SapBuffer? _buffer;
     private SapTransfer? _transfer;
     private SapView? _view;
@@ -83,13 +89,14 @@ public sealed class GenieNanoCameraService : IDisposable
                 $"Opening {settings.Position} Sapera device '{openServerName}' resource {openDeviceIndex} using {settings.InitializationMode} initialization...");
 
             byte[]? legacySnapshot = null;
+            string? configurationFilePath = null;
             if (settings.InitializationMode == CameraInitializationMode.ConfigurationFile)
             {
-                string path = settings.GetConfigurationFilePath();
-                legacySnapshot = File.ReadAllBytes(path);
+                configurationFilePath = settings.GetConfigurationFilePath();
+                legacySnapshot = File.ReadAllBytes(configurationFilePath);
                 if (legacySnapshot.Length == 0)
-                    throw new InvalidDataException($"Camera CCF is empty: {path}");
-                _acqDevice = new SapAcqDevice(location, path);
+                    throw new InvalidDataException($"Camera CCF is empty: {configurationFilePath}");
+                _acqDevice = new SapAcqDevice(location, configurationFilePath);
             }
             else
             {
@@ -98,8 +105,37 @@ public sealed class GenieNanoCameraService : IDisposable
 
             // Sapera requires the acquisition device to be created before
             // feature access and before the transfer object is created.
-            if (!_acqDevice.Create())
-                throw new InvalidOperationException("Failed to create SapAcqDevice.");
+            // A camera that is still reserved (just released by a closing
+            // program) refuses for a few seconds, so opening is retried.
+            bool created = _acqDevice.Create();
+
+            for (int attempt = 2; !created && attempt <= CameraOpenAttempts; attempt++)
+            {
+                LogDiagnostics(
+                    $"{settings.Position} camera at '{openServerName}' [{openDeviceIndex}] could not be opened yet " +
+                    $"(it may still be held by a program that just closed). Retrying, attempt {attempt} of {CameraOpenAttempts}...");
+
+                try { _acqDevice.Destroy(); } catch { /* not created */ }
+                _acqDevice.Dispose();
+
+                Thread.Sleep(CameraOpenRetryDelayMilliseconds);
+
+                _acqDevice = configurationFilePath is null
+                    ? new SapAcqDevice(location)
+                    : new SapAcqDevice(location, configurationFilePath);
+
+                created = _acqDevice.Create();
+            }
+
+            if (!created)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to open the {settings.Position} camera at '{openServerName}' [{openDeviceIndex}] " +
+                    $"after {CameraOpenAttempts} attempts. The camera is probably in use by another program " +
+                    "(CamExpert, the other optimization program, or a second copy of this program). " +
+                    "Close any other program using the cameras, wait 30 seconds, and start again; " +
+                    "if it still fails, power-cycle the cameras.");
+            }
 
             ConnectedSerialNumber = ReadCameraSerialNumber(_acqDevice, location);
             ConnectedModelName = ReadStringFeature(_acqDevice, "DeviceModelName");

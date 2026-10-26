@@ -98,6 +98,9 @@ public static class SaperaCameraDiscoveryService
     /// briefly to read the serial-number / device-ID strings it reports. Call it
     /// only while this program has no camera open (before connecting).
     /// </summary>
+    private const int ProbeAttempts = 5;
+    private const int ProbeRetryDelayMilliseconds = 2000;
+
     public static IReadOnlyList<DiscoveredCamera> DiscoverWithIdentity()
     {
         var probed = new List<DiscoveredCamera>();
@@ -106,26 +109,40 @@ public static class SaperaCameraDiscoveryService
         {
             var location = new SapLocation(camera.ServerName, camera.DeviceIndex);
             IReadOnlyList<string> identities = [];
+            bool opened = false;
 
-            SapAcqDevice? device = null;
-            try
+            // A camera that a closing program has just released stays reserved
+            // for a few seconds, so the probe is retried before giving up.
+            for (int attempt = 1; attempt <= ProbeAttempts && !opened; attempt++)
             {
-                device = new SapAcqDevice(location);
-                identities = device.Create()
-                    ? ReadIdentityStrings(device, location)
-                    : ReadLocationSerialOnly(location);
+                if (attempt > 1)
+                    Thread.Sleep(ProbeRetryDelayMilliseconds);
+
+                SapAcqDevice? device = null;
+                try
+                {
+                    device = new SapAcqDevice(location);
+                    if (device.Create())
+                    {
+                        identities = ReadIdentityStrings(device, location);
+                        opened = true;
+                    }
+                }
+                catch
+                {
+                    // Try again, then fall back below.
+                }
+                finally
+                {
+                    try { device?.Destroy(); } catch { /* probe only */ }
+                    device?.Dispose();
+                }
             }
-            catch
-            {
+
+            if (!opened)
                 identities = ReadLocationSerialOnly(location);
-            }
-            finally
-            {
-                try { device?.Destroy(); } catch { /* probe only */ }
-                device?.Dispose();
-            }
 
-            probed.Add(camera with { IdentityStrings = identities });
+            probed.Add(camera with { IdentityStrings = identities, IdentityProbed = opened });
         }
 
         return probed;
