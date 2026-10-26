@@ -20,7 +20,7 @@ public sealed class OperatorViewSettings
     public double GoodMinimumFramePercent { get; set; } = 99.0;
     public double WarningMinimumFramePercent { get; set; } = 80.0;
     public double GoodMinimumProfileCoveragePercent { get; set; } = 70.0;
-    public double WarningMinimumProfileCoveragePercent { get; set; } = 75.0;
+    public double WarningMinimumProfileCoveragePercent { get; set; } = 65.0;
     public double GoodMinimumValidSlicePercent { get; set; } = 90.0;
     public double WarningMinimumValidSlicePercent { get; set; } = 70.0;
     public double MinimumAngularCoveragePercentPerSlice { get; set; } = 70.0;
