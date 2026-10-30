@@ -8,11 +8,23 @@ namespace OptimizationXY.Charger.Services.Operator;
 /// <summary>
 /// Analyzes the quality of a scan based on the pipeline state and settings, producing a result that indicates whether
 /// the scan is good, warning, or failed, along with relevant metrics and messages for the operator.
+/// <para>
+/// It judges whether the BLOCK WAS SCANNED COMPLETELY, not whether the log is
+/// good wood. Uses the centreline-relative binned radius field:
+/// frame percent (valid frames / nominal 36), profile coverage (Z slices with
+/// any data / all slices between the ends), valid-slice percent (slices with
+/// at least MinimumAngularCoveragePercentPerSlice of their angle bins), the
+/// longest run of slices with no valid data (mm), and the largest arc of the
+/// revolution with no data at all. Limits are in OperatorViewSettings. The
+/// result is the scan-quality gate for the PLC write (called by MainForm after
+/// processing).
+/// </para>
 /// </summary>
 public sealed class OperatorScanQualityAnalyzer
 {
     /// <summary>
     /// Analyzes the scan quality based on the provided pipeline state and returns an OperatorScanQualityResult containing
+    /// the Good/Warning/Failed status, the numbers behind it and the side-view profile points.
     /// </summary>
     /// <param name="state">The current state of the pipeline.</param>
     /// <returns>An OperatorScanQualityResult containing the analysis of the scan quality.</returns>
@@ -57,6 +69,8 @@ public sealed class OperatorScanQualityAnalyzer
                 expectedAngularBins *
                 view.MinimumAngularCoveragePercentPerSlice / 100.0));
 
+        // One summary per Z slice: median radius, min/max radius and how many
+        // distinct angle bins have data.
         var grouped = validCells
             .GroupBy(cell => (int)Math.Round(cell.ZBinMM / zBinMM))
             .ToDictionary(
@@ -83,6 +97,8 @@ public sealed class OperatorScanQualityAnalyzer
         int currentGapBins = 0;
         int largestGapBins = 0;
 
+        // Walk every slice position between the two ends (including empty ones)
+        // to count measured/valid slices and the longest run of invalid slices.
         for (int index = minimumIndex; index <= maximumIndex; index++)
         {
             bool hasSlice = grouped.TryGetValue(index, out SliceSummary slice);
@@ -194,6 +210,8 @@ public sealed class OperatorScanQualityAnalyzer
             validSlicePercent >= view.WarningMinimumValidSlicePercent &&
             largestGapMM <= view.WarningMaximumMissingGapMM;
 
+        // A large missing arc always fails; otherwise Good if every Good limit is
+        // met, Warning if every Warning limit is met, else Failed.
         ScanQualityStatus status = angularGapTooLarge
             ? ScanQualityStatus.Failed
             : good

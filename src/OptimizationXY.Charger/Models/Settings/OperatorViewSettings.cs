@@ -24,8 +24,10 @@ public sealed class OperatorViewSettings
     /// <summary>
     /// Good/Warning limits. A scan is Good when every value meets its "Good"
     /// limit, Warning when every value meets at least its "Warning" limit, and
-    /// Failed otherwise (see OperatorScanQualityAnalyzer). Frame percent =
-    /// frames used / frames expected.
+    /// Failed otherwise (see OperatorScanQualityAnalyzer). A scan also Fails if
+    /// the missing arc is larger than MaximumAngularGapDeg. Frame percent =
+    /// valid frames / Acquisition.TargetFramePairsPerLog (36), so a normal
+    /// 85-100 frame production scan is well over 100%.
     /// </summary>
     public double GoodMinimumFramePercent { get; set; } = 99.0;
     public double WarningMinimumFramePercent { get; set; } = 80.0;
