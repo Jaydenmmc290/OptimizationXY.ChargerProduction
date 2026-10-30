@@ -2,7 +2,9 @@ namespace OptimizationXY.Charger.Models.Operator;
 
 
 /// <summary>
-/// Represents the runtime status of an operator, including PLC connection status, calibration status, scan progress, and captured pairs information.
+/// Live status shown on the lathe-operator screen (OperatorScanQualityForm):
+/// calibration loaded, PLC enabled/connected, the PLC ScanStart/ScanComplete
+/// signals, and how many head/tail pairs have been captured so far.
 /// </summary>
 public sealed class OperatorRuntimeStatus
 {
@@ -29,12 +31,12 @@ public sealed class OperatorRuntimeStatus
     public bool PlcConnected { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the scan has started.
+    /// Gets or sets whether the PLC ScanStart signal is currently on (the log is turning and frames are being captured).
     /// </summary>
     public bool ScanStart { get; init; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the scan is complete.
+    /// Gets or sets whether the PLC ScanComplete signal is on (capture for this log is finished).
     /// </summary>
     public bool ScanComplete { get; init; }
 
@@ -44,7 +46,9 @@ public sealed class OperatorRuntimeStatus
     public int CapturedPairs { get; init; }
 
     /// <summary>
-    /// Gets or sets the expected number of pairs to be captured during the scan process.
+    /// Gets or sets the nominal pair count (Acquisition.TargetFramePairsPerLog). A
+    /// production scan captures every pair until ScanComplete, so the real count
+    /// is normally higher than this (typically 85-100).
     /// </summary>
     public int ExpectedPairs { get; init; }
 }
