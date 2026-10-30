@@ -8,12 +8,19 @@ using System.Text.Json.Nodes;
 using OptimizationXY.Charger.Models.Production;
 using OptimizationXY.Charger.Services.Core;
 
-/// <summary>
-/// Provides functionality to write a production audit record to disk, capturing the state of the pipeline and relevant
-/// information for traceability and debugging.
-/// </summary>
+// ProductionAuditWriter.cs - writes the production audit files into a saved scan folder.
 namespace OptimizationXY.Charger.Services.Production;
 
+/// <summary>
+/// Writes the production audit record into the saved Scan_#### folder:
+/// capture-audit.json, plc-payload.json (INCHES), production-readiness.json,
+/// plc-transmission.json, machine-feedback.json, settings-snapshot.json (with
+/// the database connection string redacted), direct-recovery-search.json,
+/// final-spindle-recommendation.json, kinematic-visualization-state.json,
+/// software-build.json, production-summary.txt and a sha256-manifest.txt of
+/// every file in the folder. Called again after the PLC write so the record
+/// always includes the transmission result.
+/// </summary>
 public static class ProductionAuditWriter
 {
 

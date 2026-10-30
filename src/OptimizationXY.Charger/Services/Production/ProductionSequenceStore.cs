@@ -5,6 +5,8 @@ namespace OptimizationXY.Charger.Services.Production;
 /// <summary>
 /// Provides functionality to manage the production sequence number, ensuring that it is persisted across application runs and
 /// that it does not exceed the maximum representable value for PLC FLOATs.
+/// The last number used is kept in Config\production-sequence.txt; each
+/// production scan takes the next one (it is sent to the PLC as the block count).
 /// </summary>
 public static class ProductionSequenceStore
 {
@@ -54,6 +56,8 @@ public static class ProductionSequenceStore
             File.WriteAllText(
                 temporaryPath,
                 next.ToString(CultureInfo.InvariantCulture));
+            // Write to a temporary file, then rename over the real one, so a power cut
+            // can never leave a half-written sequence file.
             File.Move(temporaryPath, SequencePath, overwrite: true);
             return next;
         }
