@@ -7,23 +7,30 @@ The setup wizard now configures both Genie Nano cameras directly through Sapera 
 The Production Setup Wizard automatically discovers acquisition cameras currently
 visible to Sapera. Camera server names are not manually entered.
 
-For each discovered camera the wizard displays:
-
-- current Sapera server name;
-- current device/resource index;
-- physical camera serial number.
+Each discovered camera is listed as `ServerName [DeviceIndex]` (its current
+Sapera server name and device/resource index). The list does not show the
+serial number.
 
 Assign one discovered physical camera to **Head / Dog** and one to **Tail**.
 
 The application saves the Sapera server name and device index of each selected
 camera as the Head / Dog and Tail assignment. The serial number is read from the
-camera and stored in the camera configuration snapshot.
+camera each time it connects and stored in the camera configuration snapshot
+(`Identity.DeviceSerialNumber`). The wizard does not save the serial number in
+the settings.
+
+Optional serial-number binding: if `ExpectedSerialNumber` is typed into
+`appsettings.json` for a camera, start-up finds that camera by its serial number
+instead of by server name and device index, and connecting fails if the opened
+camera reports a different serial number. The saved server name and device index
+are not changed by this (they remain part of the calibration fingerprint).
 
 On application startup or camera reconnect, the software:
 
 1. discovers the currently available Sapera acquisition devices;
-2. finds the camera at the saved server name and device index for Head / Dog;
-3. finds the camera at the saved server name and device index for Tail;
+2. finds the camera at the saved server name and device index for Head / Dog
+   (or, with `ExpectedSerialNumber` set, the camera with that serial number);
+3. does the same for Tail;
 4. connects to those devices and reads their serial numbers;
 5. if either camera is not found, reports it so Production Setup can be used to reassign.
 

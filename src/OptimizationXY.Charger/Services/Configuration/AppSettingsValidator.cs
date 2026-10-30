@@ -482,7 +482,7 @@ public static class AppSettingsValidator
     /// Validates the machine limits settings, ensuring that maximum tail and head movements and warning moves are within valid ranges.
     /// </summary>
     /// <param name="settings">The application settings containing the machine limits settings to validate.</param>
-    /// <exception cref="InvalidOperationException">Thrown if the machine limits settings are missing or inconsistent.</exception>  
+    /// <exception cref="InvalidOperationException">Thrown if the machine limits settings are missing or inconsistent.</exception>
     private static void ValidateMachineLimits(AppSettings settings)
     {
         if (settings.MachineLimits == null)
@@ -650,7 +650,7 @@ public static class AppSettingsValidator
     /// Validates the storage settings, ensuring that the number of days to keep saved scans is positive.
     /// </summary>
     /// <param name="settings">The application settings containing the storage settings to validate.</param>
-    /// <exception cref="InvalidOperationException">Thrown if the storage settings are missing or inconsistent.</exception> 
+    /// <exception cref="InvalidOperationException">Thrown if the storage settings are missing or inconsistent.</exception>
     private static void ValidateStorage(AppSettings settings)
     {
         if (settings.Storage == null)
@@ -716,12 +716,15 @@ public static class AppSettingsValidator
         }
     }
 
+    /// <summary>True for a real number greater than zero.</summary>
     private static bool IsPositiveFinite(double value) =>
         double.IsFinite(value) && value > 0.0;
 
+    /// <summary>True for a real number of zero or more.</summary>
     private static bool IsNonNegativeFinite(double value) =>
         double.IsFinite(value) && value >= 0.0;
 
+    /// <summary>True for a real number from 0 to 100.</summary>
     private static bool IsPercent(double value) =>
         double.IsFinite(value) && value >= 0.0 && value <= 100.0;
 

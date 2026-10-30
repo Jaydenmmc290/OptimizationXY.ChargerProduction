@@ -3,6 +3,12 @@ using OptimizationXY.Charger.Models.Geometry;
 
 namespace OptimizationXY.Charger.Services.Geometry;
 
+/// <summary>
+/// Groups raw radius-field points into a regular grid of cells (Z bins along
+/// the log x angle bins around it) and stores statistics for each cell.
+/// Binning removes most single-reading noise and gives every later stage a
+/// regular surface to work with.
+/// </summary>
 public static class RadiusFieldBinner
 {
 
@@ -14,6 +20,10 @@ public static class RadiusFieldBinner
     /// <param name="angleBinSizeDeg">The size of each angle bin in degrees.</param>
     /// <param name="minPointsPerBin">The minimum number of points required per bin.</param>
     /// <returns>A list of BinnedRadiusFieldPoint objects representing the binned radius field.</returns>
+    /// <param name="ignoreLowestReadings">
+    /// How many of the lowest readings in each cell to ignore when computing the
+    /// cell's minimum radius (see <see cref="RobustMinimum"/>). 0 = plain minimum.
+    /// </param>
     public static List<BinnedRadiusFieldPoint> Bin(
  List<RadiusFieldPoint> rawField,
  double zBinSizeMM,
@@ -29,6 +39,9 @@ public static class RadiusFieldBinner
                 p.RadiusMM > 0 &&
                 !double.IsNaN(p.RadiusMM) &&
                 !double.IsInfinity(p.RadiusMM))
+            // Cell key = lower edge of the Z bin and of the angle bin (floor to the bin
+            // size). E.g. with 10 mm / 5 degree bins, Z 123 mm and 47 degrees go in the
+            // cell (120 mm, 45 degrees).
             .GroupBy(p => new
             {
                 ZBin = Math.Floor(p.Z / zBinSizeMM) * zBinSizeMM,
@@ -45,6 +58,7 @@ public static class RadiusFieldBinner
                 .OrderBy(v => v)
                 .ToList();
 
+            // Too few readings for a trustworthy cell: leave it out (treated as no data).
             if (radii.Count < minPointsPerBin)
                 continue;
 

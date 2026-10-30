@@ -3,13 +3,17 @@ using System.Text.Json;
 using OptimizationXY.Charger.Infrastructure;
 using OptimizationXY.Charger.Models.Calibration;
 
-/// <summary>
-/// Provides storage and retrieval of the scanner lookup table used for calibration.
-/// </summary>
+// LookupTableStore.cs - loads the ACTIVE scanner calibration for a scan.
 namespace OptimizationXY.Charger.Services.Calibration;
 
+/// <summary>
+/// Loads the active scanner lookup table (Config\Calibration\scanner-lookup-table.json)
+/// once per scan. Missing or invalid calibration is a hard failure - no
+/// estimated table is ever made up.
+/// </summary>
 public static class LookupTableStore
 {
+    // One load at a time (the calibration wizard may be activating a package).
     private static readonly Lock Sync = new();
 
 
@@ -38,6 +42,7 @@ public static class LookupTableStore
         lock (Sync)
         {
             ApplicationPaths.EnsureCreated();
+            // Check the active package's files and hashes are intact before reading them.
             CalibrationPackageStore.EnsureActivePackageValid();
 
             if (!File.Exists(FilePath))
@@ -66,7 +71,8 @@ public static class LookupTableStore
 
 
     /// <summary>
-    /// Validates the loaded scanner lookup table to ensure it meets production requirements.
+    /// Validates the loaded scanner lookup table (<see cref="ScannerLookupTable.IsValid"/>)
+    /// and rejects tables made by the old "estimated scanner-orientation grid" fallback.
     /// </summary>
     /// <param name="table">The scanner lookup table to validate.</param>
     /// <exception cref="InvalidDataException">Thrown if the table is null or not valid for production use.</exception>

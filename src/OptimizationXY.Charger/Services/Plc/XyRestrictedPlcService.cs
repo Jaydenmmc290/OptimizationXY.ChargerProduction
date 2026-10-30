@@ -13,6 +13,21 @@ namespace OptimizationXY.Charger.Services.Plc;
 /// The restricted surface exposes only the five approved tags. This service
 /// never writes ScanStart or ScanComplete and contains no rotation command.
 /// </summary>
+/// <remarks>
+/// Handshake (see docs/plc/PLC_INTEGRATION.md):
+/// <list type="number">
+/// <item><description>The PLC raises ScanStart (low -> high edge) when the log starts turning:
+/// <see cref="ScanStartRequested"/> fires and MainForm starts capturing.</description></item>
+/// <item><description>The PLC raises ScanComplete when the turn is done:
+/// <see cref="WaitForScanCompleteAsync"/> returns and processing starts.</description></item>
+/// <item><description><see cref="SendPayloadAsync"/> writes CarriageRetract, then RoundupComplete,
+/// then ScannedBlockData LAST (the "result ready" packet), reading each back
+/// and comparing it before the next one (when readback is required).</description></item>
+/// </list>
+/// The value read at start-up only sets a baseline - a ScanStart that is
+/// already high when the program starts is never treated as a new cycle.
+/// Tag changes arrive on the PLC library's thread (OnTagDataChanged).
+/// </remarks>
 public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : IDisposable
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
@@ -34,14 +49,21 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
     private TaskCompletionSource<bool>? _scanCompleteWaiter;
     private bool _disposed;
 
+    /// <summary>PLC log messages (also written to NLog).</summary>
     public event EventHandler<string>? DiagnosticsMessage;
+    /// <summary>Raised on a ScanStart rising edge: a new log is turning and capture should start.</summary>
     public event EventHandler? ScanStartRequested;
+    /// <summary>Raised whenever the ScanStart value changes (for the status display).</summary>
     public event EventHandler<bool>? ScanStartChanged;
+    /// <summary>Raised whenever the ScanComplete value changes (for the status display and capture stop).</summary>
     public event EventHandler<bool>? ScanCompleteChanged;
+    /// <summary>Raised when the connection is made or lost (true = connected).</summary>
     public event EventHandler<bool>? ConnectionStateChanged;
 
+    /// <summary>True when the PLC library reports a live connection.</summary>
     public bool IsConnected => _xy?.IsConnected == true;
 
+    /// <summary>True between a ScanStart rising edge and the end of that cycle.</summary>
     public bool IsScanCycleActive
     {
         get
@@ -63,6 +85,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
     {
         ThrowIfDisposed();
 
+        // Bench/development: processing does not wait for the PLC.
         if (!_settings.RequireScanCompleteBeforeProcessing)
             return;
 
@@ -82,6 +105,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
                     "No PLC ScanStart cycle is active. A fresh low-to-high ScanStart edge is required before production capture.");
             }
 
+            // Already complete (and good quality): nothing to wait for.
             if (_scanCompleteState &&
                 (!_settings.RequireGoodQuality || _scanCompleteGood))
             {
@@ -110,9 +134,6 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
     }
 
-    /// <summary>
-    /// Initializes the XYRestricted connection and subscribes to tag change events.
-    /// </summary>
     /// <summary>
     /// Initializes the single XYRestricted connection used for the application lifetime.
     /// Before creating XY, the service briefly waits for the required PLC network.
@@ -248,6 +269,8 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
 
         try
         {
+            // Default order: the carriage retract radius goes first so the carriage
+            // can clear the block before the new head/tail position is acted on.
             if (_settings.WriteCarriageRetractFirst)
             {
                 await WriteAndVerifyAsync(
@@ -286,6 +309,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
             }
 
             record.Success = true;
+            // Reaching here means every write (and readback, if required) succeeded.
             record.ReadbackVerified = _settings.RequireReadbackVerification;
             record.TagsWritten = [.. written];
             record.Message = _settings.RequireReadbackVerification
@@ -336,6 +360,8 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         if (!_settings.RequireReadbackVerification)
             return;
 
+        // Register a waiter for this tag, ask the PLC to read it, and wait for the
+        // value to arrive through OnTagDataChanged (or time out).
         var tcs = new TaskCompletionSource<TagDataChangedEventArgs>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -392,6 +418,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         if (_disposed)
             return;
 
+        // Hand the value to a waiting readback, if there is one.
         if (_pendingReadbacks.TryGetValue(e.TagName, out var readbackWaiter))
             readbackWaiter.TrySetResult(e);
 
@@ -416,6 +443,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
                 return;
             }
 
+            // Only a low -> high change starts a new cycle.
             bool risingEdge = current && !_lastScanStart;
             _lastScanStart = current;
             ScanStartChanged?.Invoke(this, current);

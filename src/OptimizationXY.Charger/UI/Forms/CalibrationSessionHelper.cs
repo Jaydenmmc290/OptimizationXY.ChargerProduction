@@ -6,6 +6,13 @@ namespace OptimizationXY.Charger.UI.Forms;
 
 /// <summary>
 /// Helper class for integrating calibration session save/load functionality into the ProductionSetupWizardForm.
+/// <para>
+/// A calibration session is the half-finished wizard work (operator, seam
+/// settings, length-scale picture, references captured so far). It is saved
+/// so a calibration interrupted part-way (program closed, power cut) can be
+/// resumed instead of started again. Pictures are stored inside the session
+/// file as base64 PNG text. The file itself is handled by CalibrationSessionStore.
+/// </para>
 /// </summary>
 internal static class CalibrationSessionHelper
 {

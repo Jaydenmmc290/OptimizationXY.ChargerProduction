@@ -6,7 +6,7 @@
 - Physical camera identity binding: the setup wizard saves the head/tail assignment as Sapera server name and device index; the serial number is recorded in the camera snapshot, and a snapshot that differs from the calibrated one blocks processing.
 - Required-feature fail-closed behavior with per-feature diagnostics.
 - Immutable, deterministic camera-configuration snapshots for calibration and production audit hashing.
-- Setup-wizard fields for server, resource index, acquisition mode, and trigger source.
+- Setup-wizard selection of the head and tail cameras (saved as server name and resource index) and of the acquisition mode. The trigger source is not a separate field: it follows the mode (Encoder → `Line1`, FrameRate → `FixedRate`).
 - Calibration invalidation whenever camera identity/features or acquisition geometry changes.
 - Separate full-screen operator form with processed radius profile, missing-section highlighting, scan metrics, and PLC tag state.
 - Scan-quality analyzer built from the existing `PipelineState.BinnedRadiusField`, `ScanFrames`, geometry bin sizes, and acquisition frame target.

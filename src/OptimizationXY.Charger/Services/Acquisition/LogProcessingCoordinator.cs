@@ -14,16 +14,26 @@ using OptimizationXY.Charger.Models.Calibration;
 namespace OptimizationXY.Charger.Services.Acquisition;
 
 /// <summary>
-/// Coordinates the transition from a completed capture to the processing pipeline.
-/// Handles setup, pipeline execution, result formatting, and cleanup.
+/// The hand-off point between capture, processing, the PLC write and saving
+/// for one scan. MainForm calls it in this order:
+/// <list type="number">
+/// <item><description><see cref="ProcessCompletedCaptureAsync"/> - check the frames match the active calibration and run the pipeline (on a background thread).</description></item>
+/// <item><description><see cref="PrepareProductionCommand"/> - build the PLC payload and run the production readiness checks.</description></item>
+/// <item><description>MainForm writes to the PLC (XyRestrictedPlcService), then <see cref="RecordPlcTransmission"/>.</description></item>
+/// <item><description><see cref="SaveResultsAfterPlcWriteAsync"/> (send-then-save, default) or <see cref="SaveResultsAsync"/> before the write (save-then-send).</description></item>
+/// </list>
+/// All results live in the shared <see cref="PipelineState"/>; only one scan
+/// is processed or saved at a time.
 /// </summary>
 public sealed class LogProcessingCoordinator
 {
+    /// <summary>Progress / diagnostic text for the log window and log files.</summary>
     public event EventHandler<string>? DiagnosticsMessage;
 
     /// <summary>
     /// Processes a completed log capture through the full optimization pipeline.
-    /// Updates PipelineState and returns formatted diagnostics.
+    /// Updates PipelineState and returns formatted diagnostics. On any error the
+    /// pipeline state is cleared so no half-finished result can be sent.
     /// </summary>
     public async Task<string> ProcessCompletedCaptureAsync(
         CompletedLogCapture capture,
@@ -72,6 +82,9 @@ public sealed class LogProcessingCoordinator
                 "The completed capture contained no readable concatenated frames.");
         }
 
+        // NOTE: PreferredValidFrames defaults to 36 (the old fixed-frame design). A
+        // production scan now has every pair up to ScanComplete (85-100), so this
+        // warning appears on normal scans and can be ignored.
         int preferredFrames =
             PipelineState.Instance.Settings.RotatingScan.PreferredValidFrames;
 
@@ -111,6 +124,8 @@ public sealed class LogProcessingCoordinator
             state.ScanFrames = [.. validFrames];
 
             LogDiagnostics("Loading scanner calibration...");
+            // Load the active calibration and refuse to continue if this capture was
+            // not taken with the same camera settings / image geometry it was built for.
             var lookupTable = LookupTableStore.Load();
             VerifyCaptureMatchesCalibration(
                 lookupTable,
@@ -164,6 +179,13 @@ public sealed class LogProcessingCoordinator
 
 
 
+    /// <summary>
+    /// Throws unless the capture matches the active calibration: both camera
+    /// settings snapshots present, the same crop/flip/overlap geometry hash, one
+    /// consistent image size equal to the calibration's, and (when recorded) the
+    /// same SHA-256 hash of each camera's settings snapshot. This is what stops a
+    /// changed camera setup from silently producing wrong radii.
+    /// </summary>
     private static void VerifyCaptureMatchesCalibration(
       ScannerLookupTable calibration,
       byte[]? headConfiguration,
@@ -237,6 +259,7 @@ public sealed class LogProcessingCoordinator
 
         if (!string.IsNullOrWhiteSpace(
                 calibration.HeadCameraConfigurationSha256) &&
+            // Compare the raw hash bytes (case of the hex text does not matter).
             !CryptographicOperations.FixedTimeEquals(
                 Convert.FromHexString(
                     calibration.HeadCameraConfigurationSha256),
@@ -262,12 +285,14 @@ public sealed class LogProcessingCoordinator
 
     /// <summary>
     /// Prepares the production command by building the PLC payload and evaluating production readiness.
-    /// 
+    ///
     /// Process:
-    /// 1. If FinalSpindleRecommendation exists, present operator with kinematic selection choice
-    /// 2. Operator selects either "Use Kinematic Rotation" or "Continue With Current XY"
+    /// 1. Only if Kinematic.EnableKinematicPositionSelection is on (default OFF):
+    ///    ask the operator to choose kinematic rotation or the current XY result
+    /// 2. (With the prompt off, the optimizer's recommendation is used unchanged.)
     /// 3. Selected recommendation (original or kinematic-adjusted) is used for PLC payload
-    /// 4. Build PLC payload and evaluate production readiness
+    /// 4. Build PLC payload and evaluate production readiness. If the payload
+    ///    cannot be built, a blocking "PLC payload" check is added so nothing is sent.
     /// </summary>
     /// <param name="plcConnected">Indicates whether the PLC is connected.</param>
     /// <returns>A report detailing the production readiness status.</returns>
@@ -356,7 +381,9 @@ public sealed class LogProcessingCoordinator
     }
 
     /// <summary>
-    /// Records a PLC transmission event.
+    /// Stores the result of a PLC write in the pipeline state, adds it (and the
+    /// scan timeline) to the diagnostics report, and - if the scan folder already
+    /// exists - rewrites the audit record and diagnostics file.
     /// </summary>
     /// <param name="record">The PLC transmission record to log.</param>
     public static void RecordPlcTransmission(PlcTransmissionRecord record)
@@ -390,7 +417,8 @@ public sealed class LogProcessingCoordinator
     }
 
     /// <summary>
-    /// Saves the current processing results.
+    /// Saves the current processing results (scan folder, and SQL when enabled)
+    /// synchronously and returns the folder path.
     /// </summary>
     public string SaveResults()
     {

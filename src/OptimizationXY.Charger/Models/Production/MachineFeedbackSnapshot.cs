@@ -7,9 +7,12 @@ namespace OptimizationXY.Charger.Models.Production;
 /// </summary>
 public sealed class MachineFeedbackSnapshot
 {
+    /// <summary>When the snapshot was taken (UTC).</summary>
     public DateTime CapturedUtc { get; set; } = DateTime.UtcNow;
+    /// <summary>True when the command tags read back from the PLC equal what was written.</summary>
     public bool CommandReadbackVerified { get; set; }
 
+    /// <summary>Actual machine positions - always null today (no approved read tags yet).</summary>
     public double? ActualHeadXMM { get; set; }
     public double? ActualHeadYMM { get; set; }
     public double? ActualTailXMM { get; set; }
@@ -18,6 +21,7 @@ public sealed class MachineFeedbackSnapshot
     public double? ActualPeelDiameterMM { get; set; }
     public long? EncoderCount { get; set; }
 
+    /// <summary>Names of the signals above that the PLC library cannot provide yet.</summary>
     public string[] UnavailableSignals { get; set; } =
     [
         "ActualHeadXMM",

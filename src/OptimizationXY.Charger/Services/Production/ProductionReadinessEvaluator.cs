@@ -8,8 +8,21 @@ using OptimizationXY.Charger.Services.Core;
 namespace OptimizationXY.Charger.Services.Production;
 
 /// <summary>
-/// Evaluates the production readiness of the system based on the current pipeline state and configuration settings.
+/// Builds the production readiness checklist that decides whether THIS scan's
+/// command may be written to the PLC (called by LogProcessingCoordinator.
+/// PrepareProductionCommand, after the payload is built).
 /// </summary>
+/// <remarks>
+/// Every check is added as Pass / Warning / Block. With
+/// Production.EnforceOnlyEssentialReadinessChecks = true (default), only the
+/// checks named in <see cref="EssentialCheckNames"/> can block; every other
+/// failed check is turned into a Warning marked "NOT ENFORCED (would have
+/// blocked)" and is still written to the report and log. The essential checks
+/// are: operating mode, PLC connection, PLC write order, operator scan-quality
+/// gate, final spindle recommendation, finite command values, hard travel
+/// limits, knife clearance, carriage-retract payload, reserved PLC fields and
+/// the PLC payload itself.
+/// </remarks>
 public static class ProductionReadinessEvaluator
 {
     /// <summary>
@@ -301,6 +314,8 @@ public static class ProductionReadinessEvaluator
 
         var recommendation = state.FinalSpindleRecommendation;
         OperatorScanQualityResult? operatorScan = state.OperatorScanQuality;
+        // The scan-quality gate: Good always passes; Warning passes only when
+        // Plc.RequireGoodQuality is off; Failed or missing never passes.
         bool operatorScanUsable = operatorScan is not null &&
             (operatorScan.Status == ScanQualityStatus.Good ||
              (!settings.Plc.RequireGoodQuality && operatorScan.Status == ScanQualityStatus.Warning));
@@ -489,6 +504,7 @@ public static class ProductionReadinessEvaluator
     private const string SavedRecordDeferredMessage =
         "Deferred: the result is sent to the PLC first and this record is saved immediately afterwards.";
 
+    /// <summary>One check of the saved scan record: its name, whether it passed, and the pass/fail messages.</summary>
     private sealed record SavedRecordCheck(
         string Name,
         bool Ok,

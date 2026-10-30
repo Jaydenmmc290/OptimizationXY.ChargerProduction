@@ -2,6 +2,10 @@ using OptimizationXY.Charger.Services.Core;
 
 namespace OptimizationXY.Charger.Services.Storage;
 
+/// <summary>
+/// Outcome of saving one scan: the Scan_#### folder path, the SQL scan id
+/// (null when database saving is off or failed) and a text status.
+/// </summary>
 public sealed record ScanSaveResult(string FolderPath,int? DatabaseScanId,string DatabaseStatus);
 
 /// <summary>

@@ -1,3 +1,24 @@
+// =============================================================================
+// GenieNanoCameraService.cs - talks to ONE Teledyne DALSA Genie Nano camera
+// -----------------------------------------------------------------------------
+// The program creates one instance for the head camera and one for the tail.
+// This file is only compiled when the Sapera SDK is present (the SAPERA
+// symbol, set by the .csproj). Without the SDK, GenieNanoCameraService.
+// Unavailable.cs provides a stand-in with the same public members so the rest
+// of the program still builds (used by the GitHub build check).
+//
+// Sapera objects used (in creation order):
+//   SapAcqDevice  - the camera itself (open by server name + resource index)
+//   SapBuffer     - a ring of image buffers the camera writes into
+//   SapTransfer   - moves each finished image from the camera into a buffer
+//   SapView       - draws the live picture in a WinForms panel
+// When a frame finishes, OnFrameReady copies it into a managed Emgu CV Mat
+// and raises FrameAcquired (only while managed capture is switched on).
+//
+// DO NOT change the feature writes in this file without re-checking the
+// production camera setup - the calibration depends on the camera images.
+// =============================================================================
+
 #if SAPERA
 using System.Text.Json;
 using DALSA.SaperaLT.SapClassBasic;
@@ -9,7 +30,10 @@ namespace OptimizationXY.Charger.Services.Camera;
 /// <summary>
 /// Production Genie Nano service. In programmatic mode it opens the Sapera
 /// acquisition device directly by server name/resource index, verifies camera
-/// identity, and writes only the TriggerSource feature before creating buffers.
+/// identity (serial number), and writes only the trigger features (TriggerMode,
+/// and in Encoder mode TriggerSelector/TriggerSource/TriggerActivation) before
+/// creating buffers. Exposure, gain and image size are left as saved in the
+/// camera; their actual values are read back into the capture snapshot.
 /// </summary>
 public sealed class GenieNanoCameraService : IDisposable
 {
@@ -30,20 +54,32 @@ public sealed class GenieNanoCameraService : IDisposable
     private readonly Lock _frameCounterLock = new();
     private bool _isCapturingManagedFrames;
 
-    // Original camera settings to restore on disconnect
+    // Trigger settings found in the camera before this program changed them;
+    // put back on disconnect so other programs (e.g. CamExpert) see the camera as it was.
     private string? _originalTriggerMode;
     private string? _originalTriggerSource;
 
+    /// <summary>True after a successful <see cref="Connect"/> until <see cref="Disconnect"/>.</summary>
     public bool IsConnected { get; private set; }
+    /// <summary>Serial number the connected camera reported (DeviceSerialNumber, or Sapera's location serial).</summary>
     public string ConnectedSerialNumber { get; private set; } = string.Empty;
+    /// <summary>Model name the connected camera reported (DeviceModelName).</summary>
     public string ConnectedModelName { get; private set; } = string.Empty;
+    /// <summary>The WinForms panel the live view is drawn in.</summary>
     public Control? PanelCameraView { get; private set; }
+    /// <summary>
+    /// JSON snapshot (programmatic mode) or .ccf file bytes (legacy mode) describing
+    /// how the camera was opened. Saved with every capture and hashed into the
+    /// calibration fingerprint.
+    /// </summary>
     public ReadOnlyMemory<byte> LoadedConfigurationSnapshot =>
         _loadedConfigurationSnapshot is null
             ? ReadOnlyMemory<byte>.Empty
             : new ReadOnlyMemory<byte>(_loadedConfigurationSnapshot);
 
+    /// <summary>Raised on a Sapera thread for every frame while managed capture is on. The handler owns (must dispose) the frame.</summary>
     public event EventHandler<CameraFrameEventArgs>? FrameAcquired;
+    /// <summary>Connection and acquisition messages for the log.</summary>
     public event EventHandler<string>? DiagnosticsMessage;
 
 
@@ -52,8 +88,8 @@ public sealed class GenieNanoCameraService : IDisposable
     /// </summary>
     /// <param name="settings">The camera device settings to use for the connection.</param>
     /// <param name="panelCameraView">The panel control to display the live camera view.</param>
-    /// <param name="argumentOutOfRangeException">An exception to be thrown if an argument is out of range.</param>
-    /// <param name="argumentOutOfRangeException1">An additional exception to be thrown if an argument is out of range.</param>
+    /// <param name="argumentOutOfRangeException1">Exception thrown by ApplyAcquisitionMode if settings.Mode is not a known value (callers pass a ready-made exception).</param>
+    /// <param name="argumentOutOfRangeException">Not used inside this method.</param>
     /// <exception cref="InvalidDataException">Thrown if the camera configuration file is empty.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the camera cannot be created or the serial number cannot be read.</exception>
     /// <param name="openLocation">Sapera location to open on this start-up when it was found by serial
@@ -81,6 +117,8 @@ public sealed class GenieNanoCameraService : IDisposable
             _frameCounter = 0;
             PanelCameraView = panelCameraView;
 
+            // Normally open the configured location. When the camera was found by
+            // serial number at start-up, open where it actually is today.
             string openServerName = openLocation?.ServerName ?? settings.ServerName;
             int openDeviceIndex = openLocation?.DeviceIndex ?? settings.DeviceIndex;
 
@@ -137,6 +175,7 @@ public sealed class GenieNanoCameraService : IDisposable
                     "if it still fails, power-cycle the cameras.");
             }
 
+            // Read identity first so a wrong camera is caught before any setting is written.
             ConnectedSerialNumber = ReadCameraSerialNumber(_acqDevice, location);
             ConnectedModelName = ReadStringFeature(_acqDevice, "DeviceModelName");
 
@@ -166,6 +205,8 @@ public sealed class GenieNanoCameraService : IDisposable
                     "The camera could not be initialized. Verify the Sapera configuration.");
             }
 
+            // Everything written to or read back from the camera is recorded here and
+            // becomes part of the configuration snapshot.
             var appliedFeatures = new SortedDictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["Identity.DeviceSerialNumber"] = ConnectedSerialNumber,
@@ -186,6 +227,8 @@ public sealed class GenieNanoCameraService : IDisposable
                     appliedFeatures);
             }
 
+            // "WithTrash" buffer: if the program falls behind, Sapera writes into a
+            // spare "trash" buffer instead of stopping the transfer.
             _buffer = new SapBufferWithTrash(
                 settings.BufferCount,
                 _acqDevice,
@@ -198,6 +241,7 @@ public sealed class GenieNanoCameraService : IDisposable
             _view.SetScalingMode(true);
             _view.OnSize();
 
+            // Call OnFrameReady at the end of every frame.
             _transfer.Pairs[0].EventType = SapXferPair.XferEventType.EndOfFrame;
             _transfer.XferNotify += OnFrameReady;
             _transfer.XferNotifyContext = _view;
@@ -265,7 +309,7 @@ public sealed class GenieNanoCameraService : IDisposable
     }
     
     /// <summary>
-    /// Configures the specified SapAcqDevice for FrameRate acquisition mode, updating the applied features dictionary accordingly.
+    /// Configures the camera for free-running (FrameRate) mode: TriggerMode=Off only.
     /// </summary>
     /// <param name="device">The SapAcqDevice to configure.</param>
     /// <param name="settings">The camera device settings to apply.</param>
@@ -323,7 +367,9 @@ public sealed class GenieNanoCameraService : IDisposable
     }
 
     /// <summary>
-    /// Configures the specified SapAcqDevice for Encoder acquisition mode, updating the applied features dictionary accordingly.
+    /// Configures the camera for triggered (Encoder) mode: TriggerMode=On,
+    /// TriggerSelector=FrameStart, TriggerSource=Line1, TriggerActivation=RisingEdge.
+    /// Each value is read back to confirm the camera accepted it.
     /// </summary>
     /// <param name="device">The SapAcqDevice to configure.</param>
     /// <param name="settings">The camera device settings to apply.</param>
@@ -479,7 +525,7 @@ public sealed class GenieNanoCameraService : IDisposable
     }
 
     /// <summary>
-    /// Returns a display-friendly representation of the given feature value, substituting "<unavailable>" for null or whitespace values.
+    /// Returns a display-friendly representation of the given feature value, substituting "&lt;unavailable&gt;" for null or whitespace values.
     /// </summary>
     /// <param name="value">The feature value to display.</param>
     /// <returns>A display-friendly representation of the feature value.</returns>
@@ -493,7 +539,8 @@ public sealed class GenieNanoCameraService : IDisposable
 
 
     /// <summary>
-    /// Reads a string feature value from the specified SapAcqDevice, throwing an exception if the feature is unavailable or cannot be read.
+    /// Reads the camera's serial number: the DeviceSerialNumber feature, or if
+    /// that is empty Sapera's serial for the location. Returns "" if neither works.
     /// </summary>
     /// <param name="device">The SapAcqDevice from which to read the feature.</param>
     /// <param name="location">The SapLocation associated with the device.</param>
@@ -673,6 +720,8 @@ options);
         if (args.Context is SapView view)
             view.Show();
 
+        // The live view always updates; frames are only copied out for processing
+        // while a capture is running (StartManagedFrameCapture).
         if (!_isCapturingManagedFrames)
             return;
 
@@ -731,6 +780,8 @@ options);
             if (sourceAddress == IntPtr.Zero)
                 throw new InvalidOperationException("Sapera returned a null buffer address.");
 
+            // Wrap the Sapera buffer memory without copying, then Clone() it so the Mat
+            // stays valid after Sapera reuses the buffer for the next frame.
             using Mat saperaView = new(
                 height,
                 width,
@@ -749,6 +800,7 @@ options);
 
     /// <summary>
     /// Handles the SizeChanged event of the camera view host control. When the size of the host changes, this method
+    /// tells the Sapera view to re-fit the picture to the panel.
     /// </summary>
     /// <param name="sender">The source of the event.</param>
     /// <param name="e">The EventArgs instance containing event data.</param>

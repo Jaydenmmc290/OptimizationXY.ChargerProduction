@@ -1,15 +1,38 @@
 using OptimizationXY.Charger.Models.Calibration;
 
 
-/// <summary>
-/// Provides interpolation of radius values from a scanner lookup table based on image X and laser Y coordinates.
-/// </summary>
+// =============================================================================
+// LookupTableInterpolator.cs - laser row -> real radius (the core calibration maths)
+// -----------------------------------------------------------------------------
+// The cameras look down at the log at an angle, so where the laser line
+// appears in the image (its row, "laser Y") depends on how far the surface is
+// from the spindle axis. Calibration photographs reference objects of known
+// radius (two tubes and the home cable at radius 0) and records, for every
+// image column X, which laser row each radius produced. Each reference gives
+// one "band" per column.
+//
+// At run time, for a detected laser point (X, laserY):
+//   1. take the bands near column X (within 24 columns), each band reduced to
+//      its median laser row and its known radius;
+//   2. find the two bands whose laser rows bracket laserY;
+//   3. interpolate the radius in a straight line between them.
+// Points slightly outside the calibrated rows (2 px tolerance) are clamped.
+// Points beyond the LARGEST reference may be extrapolated a little (see
+// GetRadiusMMFromValidatedTable); anything else outside the range is rejected.
+// =============================================================================
 namespace OptimizationXY.Charger.Services.Calibration;
 
+/// <summary>
+/// Converts a detected laser point (image column, laser row) into a radius in
+/// millimetres using the active scanner lookup table.
+/// </summary>
 public static class LookupTableInterpolator
 {
+    // At most this many calibration points are used for one column.
     private const int MaximumNearbyPoints = 600;
+    // Calibration points within this many columns of X count as "near".
     private const int NearbyXWindowPixels = 24;
+    // Laser rows up to this far outside the calibrated rows are accepted (clamped).
     private const double BoundaryTolerancePixels = 2.0;
 
 
@@ -18,7 +41,11 @@ public static class LookupTableInterpolator
     /// </summary>
     /// <param name="table">The scanner lookup table.</param>
     /// <param name="x">The image X coordinate.</param>
-    /// <param name="laserY">The laser Y coordinate.</param>
+    /// <param name="laserY">The detected laser row (pixels, sub-pixel allowed).</param>
+    /// <param name="maximumLargeRadiusExtrapolationPixels">
+    /// How many laser pixels beyond the LARGEST reference may be extrapolated
+    /// (RotatingScan.MaximumCalibrationExtrapolationPixels). 0 = no extrapolation.
+    /// </param>
     /// <returns>The interpolated radius in millimeters.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the lookup table is invalid or does not contain enough data for interpolation.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the provided coordinates are outside the valid range.</exception>
@@ -97,6 +124,8 @@ public static class LookupTableInterpolator
                 ? Math.Max(0.0, maximumLargeRadiusExtrapolationPixels)
                 : 0.0;
 
+        // Which end of the laser-row range is the big-radius end depends on the
+        // camera geometry; work it out from the bands instead of assuming.
         bool largestRadiusAtLowLaserY =
             bands[0].RadiusMM >= bands[^1].RadiusMM;
 
@@ -132,6 +161,7 @@ public static class LookupTableInterpolator
                 if (Math.Abs(edgeDeltaY) < 0.0001)
                     return edge.RadiusMM;
 
+                // Continue the straight line through the two outermost (largest) references.
                 double slopeMMPerPixel =
                     (edge.RadiusMM - inner.RadiusMM) / edgeDeltaY;
 
@@ -149,6 +179,8 @@ public static class LookupTableInterpolator
                 "Use a reference range that covers this block or recalibrate before production processing.");
         }
 
+        // Inside the tolerance: clamp to the calibrated rows, then find the
+        // bracketing pair of bands (bands are sorted by laser row).
         double clampedLaserY = Math.Clamp(
             laserY,
             minimumCalibratedLaserY,
@@ -173,6 +205,7 @@ public static class LookupTableInterpolator
             return (lower.RadiusMM + upper.RadiusMM) / 2.0;
         }
 
+        // Linear interpolation: 0 at the lower band, 1 at the upper band.
         double interpolation =
             (clampedLaserY - lower.LaserY) / deltaY;
 
@@ -204,6 +237,8 @@ public static class LookupTableInterpolator
                 LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
+        // Copies of the table's points, point count and image width, plus the bands
+        // of every column (built on first use).
         public List<LookupPoint> Points { get; }
         public int PointCount { get; }
         public int ImageWidth { get; }
@@ -293,6 +328,8 @@ public static class LookupTableInterpolator
             .OrderBy(point => Math.Abs(point.X - x))
             .Take(MaximumNearbyPoints)];
 
+        // Fewer than two calibration points near this column (e.g. at the image
+        // edge): take the closest points from each reference band instead.
         if (nearbyByX.Count < 2)
         {
             // Fallback: Get points from different bands, prioritizing band diversity over proximity
@@ -327,6 +364,8 @@ public static class LookupTableInterpolator
             }
         }
 
+        // One band per reference: median laser row (robust to a few bad points)
+        // and the reference's radius, sorted by laser row.
         return [.. nearbyByX
             .GroupBy(point => point.RadiusBandId > 0
                 ? point.RadiusBandId
@@ -338,7 +377,8 @@ public static class LookupTableInterpolator
     }
 
     /// <summary>
-    /// Calculates a stable legacy band ID from a radius in millimeters.
+    /// Band id for old calibration points that have no RadiusBandId: the radius in
+    /// thousandths of a millimetre, so points of the same reference group together.
     /// </summary>
     /// <param name="radiusMM">The radius in millimeters.</param>
     /// <returns>The stable legacy band ID.</returns>

@@ -6,10 +6,18 @@ namespace OptimizationXY.Charger.Models.Optimization.Geometry;
 /// Result of a geometry-only spindle search. No defect, adaptive-risk,
 /// movement-penalty, or final penalty score is used to select this result.
 /// </summary>
+/// <remarks>
+/// "Inscribed" means the shape fits completely INSIDE the measured log along
+/// the whole block, so it is the guaranteed wood around that spindle axis.
+/// The search compares many candidate head/tail spindle positions; this is
+/// the winning one. Lengths in millimetres.
+/// </remarks>
 public sealed class InscribedGeometryResult
 {
+    /// <summary>Cylinder or oval search.</summary>
     public InscribedGeometryKind Kind { get; set; }
 
+    /// <summary>The selected head/tail spindle position and the move from the current axis.</summary>
     public OptimizedSpindleMovement SpindleMovement { get; set; } = new();
 
     /// <summary>
@@ -21,18 +29,20 @@ public sealed class InscribedGeometryResult
 
 
     /// <summary>
-    /// Guaranteed major semi-axis for the oval result. For a cylinder result, this is
+    /// Guaranteed major (long) semi-axis for the oval result. For a cylinder result
+    /// this equals the radius.
     /// </summary>
     public double MajorSemiAxisMM { get; set; }
 
     /// <summary>
-    /// Guaranteed minor semi-axis for the oval result. For a cylinder result, this is
+    /// Guaranteed minor (short) semi-axis for the oval result. For a cylinder result
+    /// this equals the radius.
     /// </summary>
     public double MinorSemiAxisMM { get; set; }
 
     /// <summary>
-    /// Orientation of the inscribed geometry in degrees. For a cylinder result, this is the orientation
-    /// of the cylinder axis. For an oval result, this is the orientation of the major semi-axis.
+    /// Direction of the oval's major semi-axis, in degrees (radius-field angle frame).
+    /// Always 0 for a cylinder result (a circle has no direction).
     /// </summary>
     public double OrientationDeg { get; set; }
 
@@ -44,7 +54,8 @@ public sealed class InscribedGeometryResult
 
 
     /// <summary>
-    /// Number of angular bins that were valid for the inscribed geometry search. This is a measure of how many orientations were considered during the search process.
+    /// Number of angle bins around the log that had valid radius data for the
+    /// search. Few valid bins means the answer rests on less of the surface.
     /// </summary>
     public int ValidAngularBins { get; set; }
 
@@ -74,32 +85,30 @@ public sealed class InscribedGeometryResult
     public bool CertifiedSearchImproved { get; set; }
 
     /// <summary>
-    /// Number of candidate orientations that were tested during the inscribed geometry search.
-    /// This is a measure of how many potential orientations were evaluated to find the optimal inscribed geometry.
+    /// Total number of candidate spindle positions evaluated (all search levels).
     /// </summary>
     public int TestedCandidates { get; set; }
 
     /// <summary>
-    /// Number of candidate orientations that were considered at a coarse level during the inscribed geometry search.
+    /// Candidate positions tested in the coarse (wide, big-step) grid.
     /// </summary>
     public int CoarseCandidates { get; set; }
 
     /// <summary>
-    /// Number of candidate orientations that were considered at a medium level during the inscribed geometry search.
+    /// Candidate positions tested in the medium refinement around the coarse winner.
     /// </summary>
     public int MediumCandidates { get; set; }
 
 
     /// <summary>
-    /// Number of candidate orientations that were considered at a fine level during the inscribed geometry search.
+    /// Candidate positions tested in the fine refinement around the medium winner.
     /// </summary>
     public int FineCandidates { get; set; }
 
 
     /// <summary>
-    /// Maximum spindle movement in millimeters required to achieve the inscribed geometry. This value
-    /// represents the maximum distance the spindle must move to accommodate the inscribed shape,
-    /// which can be important for assessing the feasibility of the machining process.
+    /// Largest single spindle move (head or tail, mm) needed to reach the selected
+    /// position from the current axis.
     /// </summary>
     public double MaxSpindleMovementMM { get; set; }
 

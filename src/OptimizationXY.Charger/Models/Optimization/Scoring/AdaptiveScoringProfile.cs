@@ -1,12 +1,16 @@
 using OptimizationXY.Charger.Models.Settings;
 
 
-/// <summary >
-/// Represents the adaptive scoring profile for a log, including scoring settings,
-/// defect settings, optimization settings, and wane settings.
-/// </summary>
+// AdaptiveScoringProfile.cs - per-log copy of the scoring settings.
 namespace OptimizationXY.Charger.Models.Optimization.Scoring;
 
+/// <summary>
+/// The scoring, defect, optimization and wane settings to use for THIS log in
+/// the legacy PenaltyScored search. AdaptiveScoringProfileBuilder starts from
+/// the saved settings and adjusts weights for the kind of log measured (for
+/// example a crooked log or an oval log). Not used to choose the position in
+/// the inscribed-geometry modes.
+/// </summary>
 public sealed class AdaptiveScoringProfile
 {
 
@@ -16,7 +20,7 @@ public sealed class AdaptiveScoringProfile
     public bool Enabled { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the log class for the adaptive scoring profile, which can be used to categorize logs based on their characteristics.
+    /// Gets or sets the class name the builder gave this log (e.g. "Balanced"); shown in diagnostics.
     /// </summary>
     public string LogClass { get; set; } = "Balanced";
 
@@ -32,7 +36,7 @@ public sealed class AdaptiveScoringProfile
 
     /// <summary>
     /// Gets or sets the defect settings for the adaptive scoring profile.
-    /// </summary>  
+    /// </summary>
     public DefectSettings Defects { get; set; } = new();
 
     /// <summary>

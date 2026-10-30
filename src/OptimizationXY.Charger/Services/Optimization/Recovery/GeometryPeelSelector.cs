@@ -6,6 +6,14 @@ namespace OptimizationXY.Charger.Services.Optimization.Recovery;
 /// <summary>
 /// Selects the geometry-only spindle result using actual fixed-axis circular
 /// virtual-peel recovery. Geometry size is used only after peel-recovery ties.
+///
+/// Used by the production CompareInscribedGeometry mode. Order of comparison:
+/// (1) more usable full sheets, (2) more usable veneer length, (3) fewer
+/// rejected full sheets, (4) less severe wane, (5) less total wane. If the
+/// oval wins ONLY on wane and by less than
+/// InscribedGeometry.OvalMinimumWaneAdvantagePercent, the cylinder is kept (so
+/// repeat scans of the same block do not flip between the two). On a complete
+/// tie the bigger guaranteed circular radius wins, then the smaller move.
 /// </summary>
 public static class GeometryPeelSelector
 {
@@ -30,6 +38,7 @@ public static class GeometryPeelSelector
         ArgumentNullException.ThrowIfNull(oval);
         ArgumentNullException.ThrowIfNull(ovalPeel);
 
+        // > 0: cylinder peel is better; < 0: oval peel is better; 0: identical.
         int comparison = ComparePeels(cylinderPeel, ovalPeel);
 
         InscribedGeometryKind selectedKind;
@@ -103,15 +112,6 @@ public static class GeometryPeelSelector
     }
 
     /// <summary>
-    /// Compares two peel simulation results to determine which is better based on
-    /// usable full sheets, usable veneer length, rejected full sheets, and wane.
-    /// </summary>
-    /// <param name="left">The first peel simulation result to compare.</param>
-    /// <param name="right">The second peel simulation result to compare.</param>
-    /// <returns>
-    /// A positive value if the first result is better, a negative value if the second result is better, or zero if they are equal.
-    /// </returns>
-    /// <summary>
     /// True when the oval matches the cylinder on everything except wane and
     /// beats it on wane by less than the margin. A margin of 0 or less turns the
     /// rule off.
@@ -137,6 +137,15 @@ public static class GeometryPeelSelector
         return severeGain < marginPercent && totalGain < marginPercent;
     }
 
+    /// <summary>
+    /// Compares two peel simulation results to determine which is better based on
+    /// usable full sheets, usable veneer length, rejected full sheets, and wane.
+    /// </summary>
+    /// <param name="left">The first peel simulation result to compare.</param>
+    /// <param name="right">The second peel simulation result to compare.</param>
+    /// <returns>
+    /// A positive value if the first result is better, a negative value if the second result is better, or zero if they are equal.
+    /// </returns>
     private static int ComparePeels(
         PeelSimulationResult left,
         PeelSimulationResult right)

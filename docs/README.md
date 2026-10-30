@@ -37,6 +37,7 @@ New to the project? Read [Start here](getting-started/START_HERE.md) first.
 
 ### Design
 
+- [Code map](design/CODE_MAP.md): what every source file does, the words used in the code, and where to look for common questions.
 - [Architecture](design/ARCHITECTURE.md): system architecture and major components.
 - [Optimization modes](design/OPTIMIZATION_MODES.md): optimization strategy behavior.
 - [Implementation and validation report](design/IMPLEMENTATION_VALIDATION_REPORT.md): what was implemented and what must be validated on the machine.
@@ -95,7 +96,7 @@ The wizard can:
 - create or upgrade the local OptimizationXY SQL Express database when database saving is enabled;
 - discover Sapera acquisition cameras;
 - assign the physical Head / Dog and Tail cameras;
-- read each camera's serial number and save the Head/Tail assignment by Sapera server name and device index;
+- save the Head/Tail assignment by Sapera server name and device index (each camera's serial number is read when it connects and recorded in its configuration snapshot);
 - reconnect the final head/tail cameras;
 - open separate head/tail previews for physical-side confirmation;
 - configure and verify camera crop, orientation, vertical registration, overlap, and seam;

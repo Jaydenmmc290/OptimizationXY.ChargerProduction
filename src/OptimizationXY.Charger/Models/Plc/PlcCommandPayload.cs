@@ -1,13 +1,18 @@
 namespace OptimizationXY.Charger.Models.Plc;
 
 /// <summary>
-/// Exact restricted PLC payload. This application intentionally contains no
+/// The exact numbers written to the PLC for one scan (built by
+/// PlcPayloadBuilder, written by XyRestrictedPlcService). This application
+/// intentionally contains no
 /// rotation command; log rotation remains exclusively in the PLC program.
 /// </summary>
 public sealed class PlcCommandPayload
 {
     /// <summary>
-    /// Gets or sets the number of blocks in the scanned data.
+    /// Gets or sets the block (scan) sequence number for this command. It
+    /// increments every production scan and is sent in every array so the PLC and
+    /// the readback check can tell this command from the previous one. Must stay
+    /// at or below 16,000,000 so it is exact when sent as a 32-bit FLOAT.
     /// </summary>
     public int BlockCount { get; set; }
 
@@ -35,7 +40,11 @@ public sealed class PlcCommandPayload
 
 
     /// <summary>
-    /// Gets the scanned block data as an array of floats, including head and tail coordinates, diameters, radii, and block count.
+    /// The "scanned block data" array, in this exact order (all INCHES except the count):
+    /// [0] head X, [1] head Y, [2] tail X, [3] tail Y, [4] small diameter,
+    /// [5] large diameter, [6] safe carriage retract radius, [7] smallest measured
+    /// radius, [8] spare (0), [9] block count. The PLC reads by position, so do
+    /// not reorder. See docs/plc/PLC_TAG_PAYLOADS.txt.
     /// </summary>
     public float[] ScannedBlockData =>
     [
@@ -52,7 +61,8 @@ public sealed class PlcCommandPayload
     ];
 
     /// <summary>
-    /// Gets the carriage retract data as an array of floats, including the safe carriage retract radius and block count.
+    /// The "carriage retract" array: [0] safe carriage retract radius (inches),
+    /// [1..3] spare (0), [4] block count.
     /// </summary>
     public float[] CarriageRetract =>
     [
@@ -64,7 +74,8 @@ public sealed class PlcCommandPayload
     ];
 
     /// <summary>
-    /// Gets the roundup complete data as an array of floats, including the smallest measured radius and block count.
+    /// The "roundup complete" array: [0] smallest measured radius (inches),
+    /// [1..3] spare (0), [4] block count.
     /// </summary>
     public float[] RoundupComplete =>
     [

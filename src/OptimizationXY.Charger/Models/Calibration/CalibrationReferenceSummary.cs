@@ -2,12 +2,13 @@ namespace OptimizationXY.Charger.Models.Calibration;
 
 
 /// <summary>
-/// Represents a summary of a calibration reference, including its properties and statistics.
+/// Summary of one calibration reference object (a tube of known diameter, or
+/// the home cable at radius 0) and how well its laser line was detected.
 /// </summary>
 public sealed class CalibrationReferenceSummary
 {
 
-    //RadiusBandId is the unique identifier for the radius band associated with this calibration reference.
+    // RadiusBandId: number identifying this reference's radius "band"; every lookup point made from it carries the same id.
     public int RadiusBandId { get; set; }
 
     // Name is the name of the calibration reference.
@@ -16,25 +17,24 @@ public sealed class CalibrationReferenceSummary
     // DiameterMM is the diameter of the calibration reference in millimeters.
     public double DiameterMM { get; set; }
 
-    // RadiusMM is the radius of the calibration reference in millimeters.
+    // RadiusMM: DiameterMM / 2 - the radius every lookup point from this reference maps to.
     public double RadiusMM { get; set; }
 
-    // ImageWidth is the width of the image captured during calibration.
+    // ImageWidth / ImageHeight: size (pixels) of the joined calibration images.
     public int ImageWidth { get; set; }
 
-    // ImageHeight is the height of the image captured during calibration.
     public int ImageHeight { get; set; }
 
-    // CapturedFrameCount is the number of frames captured during the calibration process.
+    // CapturedFrameCount: number of joined frames captured of this reference.
     public int CapturedFrameCount { get; set; }
 
-    // AcceptedPointCount is the number of points accepted during the calibration process.
+    // AcceptedPointCount: number of lookup points kept after filtering out bad detections.
     public int AcceptedPointCount { get; set; }
 
-    // MeanDetectedLaserX is the mean X coordinate of the detected laser points during calibration.
+    // MeanDetectedLaserY: average image row (pixels) of the detected laser line on this reference.
     public double MeanDetectedLaserY { get; set; }
 
-    // MeanDetectedLaserY is the mean Y coordinate of the detected laser points during calibration.
+    // LaserYStandardDeviation: spread (pixels) of the detected laser row - a noise / steadiness measure.
     public double LaserYStandardDeviation { get; set; }
 
     // CapturedUtc is the UTC timestamp when the calibration reference was captured.

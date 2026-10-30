@@ -1,3 +1,32 @@
+// =============================================================================
+// LogProcessingPipeline.cs - THE processing pipeline (frames in -> spindle position out)
+// -----------------------------------------------------------------------------
+// One shared instance (Instance) works on the shared PipelineState. Live
+// capture, folder processing and offline replay all call the SAME ordered
+// method, RunCurrentFramesPipeline, so no workflow can skip a stage.
+//
+// Stage order (see RunCurrentFramesPipeline):
+//   1. Profiles     - per frame, in parallel: threshold image -> find laser
+//                     line -> calibrated radius per column -> trim bad ends.
+//   2. Angles       - RevolutionAngleAssigner gives every frame its angle and
+//                     drops frames outside the one measured revolution.
+//   3. Point cloud  - measured points (and a separate display-only cloud).
+//   4. Centreline   - PCA axis, slice centres, sweep/bow, refined axis.
+//   5. Radius fields- centreline-relative field (shape diagnostics) AND the
+//                     spindle-axis field (used for choosing the position).
+//   6. Binning, ovality, defect map and defect patches (diagnostics).
+//   7. Optimization - the branch chosen by Settings.OptimizationMode
+//                     (production: CompareInscribedGeometry) produces the
+//                     FinalSpindleRecommendation.
+// After the pipeline, MainForm runs OperatorScanQualityAnalyzer (the
+// scan-quality gate for the PLC write). Peel pictures are queued and drawn
+// after the PLC write, when SimpleScanSaveService saves the scan.
+//
+// Coordinates: point-cloud X/Y across the log with (0,0) = the current
+// spindle axis; Z along the log with Z = 0 at the TAIL end. Spindle moves are
+// offsets from (0,0), and the PLC command is the negative of the chosen axis.
+// =============================================================================
+
 using System.Globalization;
 using Emgu.CV;
 using OptimizationXY.Charger.Models.Calibration;
@@ -31,7 +60,8 @@ using OptimizationXY.Charger.Models.Analysis;
 namespace OptimizationXY.Charger.Services.Core;
 
 /// <summary>
-/// Represents the main processing pipeline for log scanning and analysis. This class is responsible for loading
+/// The main processing pipeline for one log scan (see the file header for the
+/// stage order). This class is responsible for loading
 /// scan frames, processing them to build profiles, constructing point clouds, fitting centerlines, building
 /// radius fields, binning radius data, analyzing ovality, and detecting defects.
 /// It maintains the state of the pipeline and provides methods to execute each step in the processing workflow.
@@ -42,7 +72,10 @@ public sealed class LogProcessingPipeline
         new(() => new LogProcessingPipeline());
 
     /// <summary>
-    /// Filters out bad profile ends from the given log profile based on a minimum valid end diameter fraction.
+    /// Trims the unreliable ends of one frame's profile: from each end, skip
+    /// columns until 5 in a row have a diameter of at least MinValidEndDiameterFraction
+    /// x the profile's largest diameter. (Fixture, glare or a collapsing laser
+    /// line at the block ends gives small, wrong diameters.)
     /// </summary>
     /// <param name="profile">The log profile to filter.</param>
     /// <param name="MinValidEndDiameterFraction">The minimum valid end diameter fraction.</param>
@@ -101,6 +134,7 @@ public sealed class LogProcessingPipeline
             ? $"Frame {frame.FrameIndex}"
             : Path.GetFileName(frame.ImagePath);
 
+        // Live frames already carry their image in memory; replays load it from disk.
         Mat gray;
         if (frame.GrayImage is not null && !frame.GrayImage.IsEmpty)
         {
@@ -117,6 +151,7 @@ public sealed class LogProcessingPipeline
         }
 
         frame.BinaryImage?.Dispose();
+        // Stage 1a: threshold the grey image into a laser mask.
         frame.BinaryImage = RunTimed(
             $"{stepPrefix} - Build Binary Image",
             () => ImagePreprocessingService.BuildBinary(gray));
@@ -124,6 +159,7 @@ public sealed class LogProcessingPipeline
         if (frame.BinaryImage.IsEmpty)
             throw new InvalidOperationException("Could not build binary image.");
 
+        // Stage 1b: find the laser row in every image column.
         List<LaserProfileColumn> laserProfile = RunTimed(
             $"{stepPrefix} - Detect Laser Stripe",
             () => LaserStripeDetector.Detect(
@@ -138,6 +174,8 @@ public sealed class LogProcessingPipeline
         if (!lookupTable.IsValid)
             throw new InvalidOperationException("Scanner calibration is invalid.");
 
+        // Stage 1c: laser row -> calibrated radius (mm) per column, median-smoothed
+        // over 9 columns.
         List<LogProfileColumn> profile = RunTimed(
             $"{stepPrefix} - Build Radius Profile",
             () => LaserRadiusProfileBuilder.BuildFromLookupTable(
@@ -150,6 +188,7 @@ public sealed class LogProcessingPipeline
         if (profile.Count == 0)
             throw new InvalidOperationException("Profile build failed.");
 
+        // Stage 1d: trim unreliable columns at both ends of the block.
         return RunTimed(
             $"{stepPrefix} - Filter Bad Profile Ends",
             () => FilterBadProfileEnds(
@@ -158,7 +197,9 @@ public sealed class LogProcessingPipeline
     }
 
     /// <summary>
-    /// Trims the ends of the local centerline slices to remove unreliable data at the log ends.
+    /// Removes trimFraction of the slices from each end (at least 1, at most a
+    /// tenth) so ragged block ends do not distort the sweep/bow numbers. Lists
+    /// of fewer than 10 slices are returned unchanged.
     /// </summary>
     /// <param name="slices">The list of local centerline slices to trim.</param>
     /// <param name="trimFraction">The fraction of slices to trim from each end.</param>
@@ -245,7 +286,9 @@ public sealed class LogProcessingPipeline
     }
 
     /// <summary>
-    /// Validates the proposed tail/head spindle movements against machine limits and warnings.
+    /// Checks each proposed head/tail X/Y move against MachineLimits. A move over
+    /// the hard limit adds a "BLOCKED:" message; a move over WarningMoveMM adds a
+    /// "WARNING:" message. Returns all messages (empty = fine).
     /// </summary>
     /// <param name="tailXMM">The tail X movement in millimeters.</param>
     /// <param name="tailYMM">The tail Y movement in millimeters.</param>
@@ -269,11 +312,11 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     /// <summary>
     /// Checks a single axis movement against its maximum allowed and warning thresholds, adding messages to the warnings list as appropriate.
     /// </summary>
-    /// <param name="name"></param>
-    /// <param name="valueMM"></param>
-    /// <param name="maxAllowedMM"></param>
-    /// <param name="warningMM"></param>
-    /// <param name="warnings"></param>
+    /// <param name="name">Axis label for the message, e.g. "Tail X".</param>
+    /// <param name="valueMM">Proposed move, mm (sign ignored).</param>
+    /// <param name="maxAllowedMM">Hard travel limit, mm.</param>
+    /// <param name="warningMM">Warning level, mm.</param>
+    /// <param name="warnings">List the message is added to.</param>
     private static void CheckAxis(
         string name,
         double valueMM,
@@ -366,6 +409,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             return values[values.Count / 2];
         }
 
+        // The median first and last stripe column over all frames = the agreed
+        // block ends in the image.
         int consensusFirstX = MedianOf([.. framesWithProfiles.Select(frame => frame.Profile.Min(column => column.X))]);
         int consensusLastX = MedianOf([.. framesWithProfiles.Select(frame => frame.Profile.Max(column => column.X))]);
 
@@ -404,6 +449,12 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"tolerance {tolerancePixels} px)\r\n";
     }
 
+    /// <summary>
+    /// Stage 1: builds the calibrated profile of every frame in parallel (frames
+    /// are independent). A frame that fails is marked invalid with the reason
+    /// instead of stopping the scan. Then frames are trimmed to the agreed block
+    /// length and the frame angles are assigned.
+    /// </summary>
     internal void ProcessRotatingScanFrames(ScannerLookupTable lookupTable, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -455,6 +506,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
                 }
             });
 
+        // After all frames are done: cut stripe columns that run past the block end
+        // agreed by most frames (reflections / fixtures beyond the wood).
         string lengthConsensusReport = TrimFramesBeyondConsensusLength(lookupTable);
 
         totalProfilePoints = _state.ScanFrames
@@ -475,6 +528,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         // Reports how much of the scan lies beyond the largest measured
         // calibration reference (values there are extrapolated).
         // ------------------------------------------------------------
+        // Count how many measured points needed extrapolation beyond the largest
+        // calibration reference (diagnostic only - the values are already used).
         double largestCalibratedRadiusMM = lookupTable.MaximumCalibratedRadiusMM;
         int extrapolatedPoints = 0;
         int measuredPoints = 0;
@@ -559,6 +614,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Frames Used For Geometry: {framesUsedForGeometry}\r\n" +
             $"{revolution.Message}\r\n\r\n";
 
+        // List the first 10 frames that failed for a real reason (resting frames
+        // outside the revolution are expected and not listed).
         foreach (var bad in _state.ScanFrames.Where(f => !f.IsValid && !f.ExcludedFromRevolution).Take(10))
         {
             _state.DiagnosticsReport +=
@@ -577,7 +634,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // _state.DisplayPointCloud = filled / averaged display-only data
     // ------------------------------------------------------------
     /// <summary>
-    /// Builds the rotating scan point cloud from the processed scan frames, using the calibration data and application settings.
+    /// Stage 3: builds the MEASURED point cloud (used for everything) and a
+    /// separate display-only cloud (may contain filled points) from the frames.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the scan frames or calibration data are missing or invalid.</exception>
@@ -654,7 +712,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Fits the centerline of the log from the rotating scan point cloud using PCA (Principal Component Analysis) and local centerline fitting.
+    /// Stage 4: fits the log centreline - PCA axis, per-slice circle centres,
+    /// sweep/bow from the trimmed slices, then the PCA axis refined through the
+    /// slice centres. The centreline is for SHAPE analysis only; spindle moves
+    /// are measured from the current spindle axis (0,0), not from it.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud is missing or the centerline fit fails.</exception>
@@ -718,6 +779,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
 
         // Where the block centreline sits relative to the machine origin
         // (current spindle axis = 0, 0) at each end of the scanned length.
+        // Evaluate the centreline line at the tail (min Z) and head (max Z) ends:
+        // position = origin + slope x (Z - originZ), with slope = direction / dirZ.
         double centerlineDirectionZ =
             Math.Abs(_state.Centerline.DirectionZ) > 1e-9
                 ? _state.Centerline.DirectionZ
@@ -753,7 +816,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Builds the radius field from the raw point cloud and fitted centerline, producing a list of radius field points with Z and angle information.
+    /// Stage 5: builds BOTH radius fields from the measured point cloud - the
+    /// centreline-relative field (RadiusField, shape diagnostics) and the
+    /// spindle-axis field (OptimizationRadiusField, used to choose the position) -
+    /// and fills the min/average/max diameter in the log model.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud is missing or the centerline fit fails.</exception>
@@ -788,6 +854,9 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
                 "Machine-frame optimization radius field returned no points.");
         }
 
+        // These diameters are 2 x the min / mean / max centreline radius of ALL
+        // points. The min and max are later sent to the PLC (in inches) as the
+        // small and large diameter.
         double minRadius = _state.RadiusField.Min(p => p.RadiusMM);  // Calculate the minimum radius from the radius field points
         double maxRadius = _state.RadiusField.Max(p => p.RadiusMM);  // Calculate the maximum radius from the radius field points
         double avgRadius = _state.RadiusField.Average(p => p.RadiusMM);  // Calculate the average radius from the radius field points
@@ -825,7 +894,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Bins the radius field points into discrete Z and angle bins based on the application settings, producing a binned radius field for further analysis.
+    /// Stage 6a: bins both radius fields into Z x angle cells. The optimization
+    /// field may ignore the lowest reading(s) in each cell
+    /// (Geometry.OptimizationCellIgnoreLowestReadings) so one bad reading cannot
+    /// decide the spindle position. Also builds the section and head-end pictures.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the radius field is missing or empty.</exception>
@@ -882,6 +954,7 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
                 "Binned machine-frame optimization field returned no points.");
         }
 
+        // Report how well the spindle-axis field covers the log (diagnostics only).
         var optimizationZBins = _state.OptimizationBinnedRadiusField
             .GroupBy(point => point.ZBinMM)
             .ToList();
@@ -929,7 +1002,10 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // Supports folders with fewer than 36 rotating images.
     // ------------------------------------------------------------
     /// <summary>
-    /// Analyzes the binned radius field for ovality patterns.
+    /// Stage 6b: ovality (out-of-roundness) report. Diagnostic only - it does not
+    /// move the spindles. The angle coverage a slice needs is lowered for scans
+    /// with few frames, and lowered again if no slice qualifies, so this report
+    /// can never fail a scan on its own.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the binned radius field is missing or empty.</exception>
@@ -1008,7 +1084,9 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Analyzes the binned radius field for radius defects based on the defect thresholds specified in the application settings.
+    /// Stage 6c: classifies every centreline-field cell as normal / low wood /
+    /// severe low wood / high spot (relative to its slice median) and builds the
+    /// defect heat-map picture. Diagnostic in the inscribed-geometry modes.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the binned radius field is missing or empty.</exception>
@@ -1057,7 +1135,8 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     }
 
     /// <summary>
-    /// Analyzes the radius defect patches from the radius defect map, grouping connected low-wood areas into individual patches for further analysis and reporting.
+    /// Stage 6d: groups connected low-wood cells into patches and reports the
+    /// largest and the deepest. Diagnostic in the inscribed-geometry modes.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the radius defect map is missing or empty.</exception>
@@ -1134,8 +1213,11 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
-    /// scoring profile, producing the final spindle setup for the log.
+    /// LEGACY penalty-scored search (PenaltyScored mode, and the "penalty"
+    /// candidate in RecoveryOptimized mode). Scores many candidate head/tail axes
+    /// using the spindle-axis field, the defect patches and the adaptive
+    /// scoring profile, and builds the FinalSpindleRecommendation from the best.
+    /// NOT used to choose the position in the production CompareInscribedGeometry mode.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
@@ -1221,6 +1303,8 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         // Baseline measurement: current spindle axis, no movement.
         // This wane value is a real measured average radius spread.
         // ------------------------------------------------------------
+        // Score of the CURRENT axis (no move, all offsets 0). Every candidate is
+        // compared against this baseline.
         double baselineAxisWaneScore =
 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
     _state.OptimizationBinnedRadiusField,
@@ -1592,8 +1676,15 @@ BuildFinalSpindleRecommendation(
 
 
     /// <summary>
-    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
-    /// scoring profile, producing the final spindle setup for the log.
+    /// Stage 7 for the inscribed-geometry modes (PRODUCTION: CompareInscribedGeometry).
+    /// <list type="number">
+    /// <item><description>Search the largest inscribed cylinder and/or oval on the spindle-axis field (both at once in Compare mode).</description></item>
+    /// <item><description>Virtually peel the log around each found axis (numbers only, no pictures).</description></item>
+    /// <item><description>Compare mode: GeometryPeelSelector keeps the one with more usable veneer.</description></item>
+    /// <item><description>Check the move against the hard travel limits; if any is exceeded the command is all zeros and MachineMoveAllowed = false (so no PLC payload is built).</description></item>
+    /// <item><description>Build the FinalSpindleRecommendation with Command = -SpindleMovement.</description></item>
+    /// </list>
+    /// Defect/penalty numbers are calculated for the report only.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
@@ -1787,6 +1878,7 @@ BuildFinalSpindleRecommendation(
 
             // The peels above are numbers only. Queue the images; they are
             // drawn after the PLC write when the scan is saved.
+            // Queue pictures: cylinder, oval, and the selected one (as "Unwrapped").
             DeferPeelView(PeelViewSlot.Cylinder, cylinderPeel);
             DeferPeelView(PeelViewSlot.Oval, ovalPeel);
             DeferPeelView(PeelViewSlot.Unwrapped, selectedPeel);
@@ -1802,6 +1894,7 @@ BuildFinalSpindleRecommendation(
                     move.HeadMoveYMM,
                     _state.Settings.MachineLimits);
 
+            // Any "BLOCKED" message (hard travel limit exceeded) stops the move.
             bool machineMoveAllowed =
                 machineWarnings.All(
                     warning =>
@@ -1809,6 +1902,8 @@ BuildFinalSpindleRecommendation(
                             "BLOCKED",
                             StringComparison.CurrentCulture));
 
+            // Report-only numbers: wane score and defect penalty on the current axis
+            // versus the chosen axis. They do not affect the choice.
             double baselineWaneScore =
                 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
                     _state.OptimizationBinnedRadiusField,
@@ -1887,6 +1982,8 @@ BuildFinalSpindleRecommendation(
                     BaselineRiskRating = "NOT USED",
                     RiskScoreReductionPercent = 0.0,
 
+                    // THE PLC COMMAND: the negative of the selected axis offset (see
+                    // FinalSpindleRecommendation remarks). Zero when the move is not allowed.
                     CommandTailXMM =
                         machineMoveAllowed
                             ? -move.TailMoveXMM
@@ -2013,6 +2110,7 @@ BuildFinalSpindleRecommendation(
                       surfaceTotal
                     : 0.0;
 
+            // Plain-language summary placed at the top of the diagnostics report.
             string operatorSummary =
                 "=== OPERATOR SUMMARY ===\r\n" +
                 $"Optimization Mode: {mode}\r\n" +
@@ -2090,8 +2188,11 @@ BuildFinalSpindleRecommendation(
 
 
     /// <summary>
-    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
-    /// scoring profile, producing the final spindle setup for the log.
+    /// Stage 7 for RecoveryOptimized mode: collects candidate axes from every
+    /// enabled strategy (baseline = no move, penalty search, cylinder, oval, and a
+    /// direct recovery search around them), virtually peels each, and keeps the
+    /// one with the best veneer recovery (RecoveryStrategySelector). Requires the
+    /// penalty search (OptimizeSpindleAxis) to have run first.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
@@ -2469,11 +2570,6 @@ BuildFinalSpindleRecommendation(
     }
 
     /// <summary>
-    /// Builds a peel simulation result for a given spindle movement, using the current point cloud and settings.
-    /// </summary>
-    /// <param name="movement">The optimized spindle movement to simulate.</param>
-    /// <returns>A peel simulation result for the given spindle movement.</returns>
-    /// <summary>
     /// Queues the image for a numbers-only peel. Any image left in that slot
     /// from earlier is released now; the new one is drawn when the scan is saved.
     /// </summary>
@@ -2495,6 +2591,13 @@ BuildFinalSpindleRecommendation(
             _state.DeferredPeelViews.Add(new DeferredPeelView(slot, peel));
     }
 
+    /// <summary>
+    /// Virtual peel (numbers only, no picture) of the measured point cloud around
+    /// the axis given by a spindle movement (tail/head X/Y offsets from the
+    /// current axis, point-cloud frame).
+    /// </summary>
+    /// <param name="movement">The candidate axis to simulate.</param>
+    /// <returns>Sheet counts and wane for that axis.</returns>
     private PeelSimulationResult BuildPeelForMovement(OptimizedSpindleMovement movement)
     {
         return UnwrappedPeelViewBuilder.ComputeMetrics(
@@ -2509,7 +2612,9 @@ BuildFinalSpindleRecommendation(
     }
 
     /// <summary>
-    /// Builds a peel simulation result for a given inscribed geometry result, using the current point cloud and settings.
+    /// Virtual peel (numbers only) around the axis an inscribed-geometry search
+    /// selected. The lathe always peels in a CIRCLE around that axis, even for the
+    /// oval result.
     /// </summary>
     /// <param name="geometry">The inscribed geometry result to simulate.</param>
     /// <returns>A peel simulation result for the given inscribed geometry result.</returns>
@@ -3292,7 +3397,10 @@ double centerlineSweepMM)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Builds the final spindle recommendation based on the optimizer results, machine warnings, and movement constraints.
+    /// LEGACY PenaltyScored mode: builds the final recommendation from the penalty
+    /// search result. The command (negative of the best axis offset) is only
+    /// filled in when the search says the move is worth it (IsRecommended);
+    /// otherwise the command is zero = stay on the current axis.
     /// </summary>
     /// <param name="finalSetup">The final optimizer setup result.</param>
     /// <param name="machineWarnings">A list of machine warnings.</param>
@@ -3589,6 +3697,7 @@ double maxSpindleMovementMM)
                 "Scanner calibration is invalid or incomplete.");
         }
 
+        // Times the whole run (frames in hand to position chosen) for the report.
         _runClock.Restart();
         TimingDepth.Value = 0;
 
@@ -3627,6 +3736,9 @@ double maxSpindleMovementMM)
         Action<string>? progress,
         CancellationToken token)
     {
+        // Stage 0: remember the calibration used. A full copy of the table is
+        // kept in the state so the saved scan records exactly which values were
+        // used, even if the calibration file is replaced later.
         void RunStage(
             string timingName,
             string progressMessage,
@@ -3745,6 +3857,7 @@ double maxSpindleMovementMM)
             "Analyzing defect patches...",
             () => AnalyzeDefectPatches(token));
 
+        // Stage 7: the optimization branch for the configured mode.
         if (_state.Settings.OptimizationMode ==
             SpindleOptimizationMode.PenaltyScored)
         {

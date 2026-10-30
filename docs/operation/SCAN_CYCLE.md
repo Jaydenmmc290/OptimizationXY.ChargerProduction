@@ -22,7 +22,8 @@ application log, but only these can stop a PLC write:
 
 - Operating mode is Production
 - PLC connection
-- Operator scan-quality gate (a scan with large gaps or a Failed status is not sent)
+- Operator scan-quality gate (Good is sent; Failed is never sent; Warning is not sent while
+  `Plc.RequireGoodQuality` is `true`, the default)
 - PLC payload could be built
 - Final spindle recommendation exists and is allowed
 - Finite command values

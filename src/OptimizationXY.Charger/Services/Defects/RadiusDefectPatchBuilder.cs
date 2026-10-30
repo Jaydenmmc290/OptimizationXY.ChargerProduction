@@ -2,6 +2,10 @@ using OptimizationXY.Charger.Models.Defects;
 
 namespace OptimizationXY.Charger.Services.Defects;
 
+/// <summary>
+/// Groups neighbouring low-radius defect points into connected "patches"
+/// (regions of missing wood) using a flood fill over the Z/angle grid.
+/// </summary>
 public static class RadiusDefectPatchBuilder
 {
 
@@ -19,6 +23,8 @@ public static class RadiusDefectPatchBuilder
         if (map == null || map.Points == null || map.Points.Count == 0)
             return [];
 
+        // Only missing-wood points (LowRadius/SevereLowRadius) can form patches;
+        // Good and HighRadius points are ignored.
         var candidates = map.Points
             .Where(p =>
                 p.DefectType == RadiusDefectType.LowRadius ||
@@ -33,6 +39,9 @@ public static class RadiusDefectPatchBuilder
 
         int nextId = 1;
 
+        // Start a flood fill from every point not yet assigned to a patch. Each
+        // fill collects one connected region. Regions smaller than
+        // minCellsPerPatch (isolated single cells) are dropped as noise.
         foreach (var seed in candidates)
         {
             if (visited.Contains(seed))
@@ -56,6 +65,7 @@ public static class RadiusDefectPatchBuilder
             nextId++;
         }
 
+        // Largest patches first; equal sizes ordered deepest first.
         return [.. patches
             .OrderByDescending(p => p.CellCount)
             .ThenBy(p => p.WorstErrorMM)];
@@ -84,6 +94,9 @@ public static class RadiusDefectPatchBuilder
             var current = queue.Dequeue();
             patchPoints.Add(current);
 
+            // NOTE: this scans every candidate for each point (O(n^2)). Fine for the
+            // usual few hundred defect cells; a grid lookup would be faster for very
+            // large defect maps.
             var neighbors = candidates
                 .Where(p =>
                     !visited.Contains(p) &&
@@ -187,6 +200,7 @@ public static class RadiusDefectPatchBuilder
 
             WorstErrorMM = worstError,
 
+            // Simple severity: number of cells x average depth.
             SeverityScore =
                 points.Count * Math.Abs(avgError)
         };

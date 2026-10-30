@@ -5,17 +5,33 @@ using OptimizationXY.Charger.Models.Geometry;
 namespace OptimizationXY.Charger.Services.PointCloud;
 
 /// <summary>
-/// Builds a 3D point cloud from a series of rotating scan frames.
+/// Turns the per-frame laser profiles into a 3D point cloud of the log
+/// surface (pipeline step "Build raw and display point clouds").
 /// </summary>
+/// <remarks>
+/// Idea: each frame sees ONE line along the log (the laser line) at one
+/// rotation angle. Stacking the frames by angle gives a grid of
+/// radius[frame, image column]. Each grid cell becomes a 3D point:
+/// <code>
+///   X = r cos(angle),  Y = r sin(angle),  Z = column converted to mm
+/// </code>
+/// with Z = 0 at the TAIL end. (0,0) in X/Y is the spindle axis the
+/// calibration measures radius from.
+/// </remarks>
 public static class RotatingScanPointCloudBuilder
 {
     /// <summary>
-    /// Builds a 3D point cloud from a series of rotating scan frames.
+    /// Builds the 3D point cloud from the scan frames.
     /// </summary>
     /// <param name="frames">The list of scan frames.</param>
     /// <param name="lengthPixelsPerMM">The length in pixels per millimeter.</param>
     /// <param name="settings">The application settings.</param>
-    /// <param name="fillMissingPoints">Whether to fill missing points.</param>
+    /// <param name="fillMissingPoints">
+    /// True only for the DISPLAY point cloud: small gaps are filled by
+    /// interpolation (and only if RotatingScan.FillMissingPoints is also on).
+    /// The measured cloud used for geometry and optimization passes false, so it
+    /// contains real measurements only.
+    /// </param>
     /// <returns>A list of 3D points representing the point cloud.</returns>
     public static List<Point3D> BuildFromFrames(
         List<ScanFrame> frames,
@@ -29,6 +45,8 @@ public static class RotatingScanPointCloudBuilder
         if (lengthPixelsPerMM <= 0)
             throw new InvalidOperationException("LengthPixelsPerMM must be greater than zero.");
 
+        // Use only valid frames that produced a profile, sorted by rotation angle so
+        // neighbouring rows in the grid are neighbouring angles.
         var usableFrames = frames
             .Where(f => f.IsValid)
             .Where(f => f.Profile != null)
@@ -47,12 +65,15 @@ public static class RotatingScanPointCloudBuilder
             .SelectMany(f => f.Profile)
             .Max(p => p.X);
 
+        // The profile may be sampled every N columns; find that step so the grid
+        // has one column per sampled image column across all frames.
         int xStep = EstimateTypicalXStep(usableFrames);
         var xColumns = BuildXColumns(globalMinX, globalMaxX, xStep);
 
         int frameCount = usableFrames.Count;
         int xCount = xColumns.Count;
 
+        // radiusGrid[frame, column] = radius in mm, or NaN where nothing was measured.
         double[,] radiusGrid = new double[frameCount, xCount];
 
         for (int i = 0; i < frameCount; i++)
@@ -76,6 +97,7 @@ public static class RotatingScanPointCloudBuilder
 
             var groupedColumns = frame.Profile
                 .Where(p => IsValidRadius(p.RadiusMM))
+                // If a frame has more than one value for the same column, average them.
                 .GroupBy(p => p.X)
                 .Select(g => new
                 {
@@ -92,6 +114,7 @@ public static class RotatingScanPointCloudBuilder
             }
         }
 
+        // Display-only gap filling: first along the log, then from neighbouring angles.
         if (fillMissingPoints && settings.RotatingScan.FillMissingPoints)
         {
             FillSmallLengthwiseGaps(
@@ -136,10 +159,13 @@ public static class RotatingScanPointCloudBuilder
                 if (!IsValidRadius(radius))
                     continue;
 
+                // Z in mm from the tail end. With the head on the image's left, the tail
+                // is at the right edge (globalMaxX), so measure from there.
                 double z = headOnImageLeft
                     ? (globalMaxX - xColumns[xIndex]) / lengthPixelsPerMM
                     : (xColumns[xIndex] - globalMinX) / lengthPixelsPerMM;
 
+                // Polar (radius, rotation angle) -> Cartesian X/Y across the log.
                 double x = radius * cos;
                 double y = radius * sin;
 
@@ -152,14 +178,15 @@ public static class RotatingScanPointCloudBuilder
             }
         }
 
+        // Sort along the log, then around it, so later steps get a tidy order.
         return [.. points
             .OrderBy(p => p.Z)
             .ThenBy(p => Math.Atan2(p.Y, p.X))];
     }
 
     /// <summary>
-    /// Converts the raw point cloud into a cylindrical field in the scanner /
-    /// current-spindle coordinate frame. The current spindle axis is (0,0).
+    /// Converts the raw point cloud into a cylindrical (radius, angle, Z) field in
+    /// the scanner / current-spindle coordinate frame. The current spindle axis is (0,0).
     ///
     /// This is intentionally separate from RadiusFieldGenerator.Build, which
     /// creates the fitted-centerline-relative field used for shape diagnostics.
@@ -211,13 +238,14 @@ public static class RotatingScanPointCloudBuilder
     }
 
     // ------------------------------------------------------------
-    // Fills missing radius values along the log length.
+    // FillSmallLengthwiseGaps - fills missing radius values along the log length
+    // (within one frame) by straight-line interpolation.
     //
     // Example:
     // known radius ---- missing ---- known radius
     //
-    // It linearly blends between the two nearby good values.
-    // This is safe for small gaps.
+    // It linearly blends between the two nearby good values, but only when the
+    // gap is at most maxLinearGapPixels wide. This is safe for small gaps.
     // ------------------------------------------------------------
     /// <summary>
     /// Fills missing radius values along the log length.
@@ -273,10 +301,13 @@ public static class RotatingScanPointCloudBuilder
     }
 
     // ------------------------------------------------------------
-    // Fills missing values by looking at nearby rotation frames.
+    // FillSmallAngularGaps - fills a missing value from the same column in the
+    // nearest frames before and after it (wrapping round the revolution).
     //
     // This helps when one angle missed a point but the neighboring
-    // angles saw roughly the same area.
+    // angles saw roughly the same area. Closer frames count more (weight 1/offset).
+    // Results are written to a copy first so a filled value is never used to
+    // fill another one.
     // ------------------------------------------------------------
     /// <summary>
     /// Fills missing values by looking at nearby rotation frames.
@@ -399,7 +430,8 @@ public static class RotatingScanPointCloudBuilder
     }
 
     /// <summary>
-    /// Estimates the typical step size between x values in the scan frames.
+    /// Estimates the typical step between sampled image columns: the median gap
+    /// between the distinct column numbers used by all frames (at least 1).
     /// </summary>
     /// <param name="frames">The list of scan frames.</param>
     /// <returns>The estimated typical step size between x values.</returns>

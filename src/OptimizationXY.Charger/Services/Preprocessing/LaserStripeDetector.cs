@@ -4,8 +4,21 @@ using OptimizationXY.Charger.Models.Geometry;
 namespace OptimizationXY.Charger.Services.Preprocessing;
 
 /// <summary>
-/// Detects the laser stripe in a binary image and returns a list of LaserProfileColumn objects representing the detected stripe.
+/// Finds the laser line in the black/white mask made by ImagePreprocessingService.
 /// </summary>
+/// <remarks>
+/// For every image column (X) it looks down the column for runs of white
+/// pixels 1-25 pixels tall (taller runs are glare, not the laser). If a column
+/// has several runs, the one closest to the previous column's line is taken
+/// (or the top-most one in the first column), so the line is followed
+/// smoothly across the image. The centre row of the run is the laser row.
+/// Then the column results are split into smooth pieces (no gap over 3
+/// columns, no jump over 12 rows) and, by default, only the LONGEST piece of
+/// at least 30 columns is kept; anything else is treated as a reflection.
+/// Optional (off by default, compare with --replay-batch first):
+/// KeepAllStripeSegments also keeps pieces that line up with the longest one;
+/// SubPixelStripeCenter refines each centre from the grey image brightness.
+/// </remarks>
 public static class LaserStripeDetector
 {
     /// <summary>
@@ -52,8 +65,10 @@ public static class LaserStripeDetector
             data2 is not null ? data2[y, x] : data3![y, x, 0];
 
         const int minStripeHeightPixels = 1;
+        // Runs taller than this are glare/reflections, not the thin laser line.
         const int maxStripeHeightPixels = 25;
 
+        // Laser row of the previous column; used to follow the same line.
         double? previousCenterY = null;
 
         for (int x = 0; x < binaryImage.Width; x++)
@@ -108,6 +123,7 @@ public static class LaserStripeDetector
                 BottomY = BottomY,
                 StripeHeightPixels = Height,
                 LaserCenterY = CenterY,
+                // Thinner stripe = sharper laser = higher confidence (1 for a 1-pixel run).
                 Confidence = 1.0 / Height
             });
         }
@@ -276,6 +292,11 @@ public static class LaserStripeDetector
         return [.. kept.SelectMany(piece => piece).OrderBy(column => column.X)];
     }
 
+    /// <summary>
+    /// Splits the column results into smooth pieces: a new piece starts at a gap
+    /// of more than 3 columns or a jump of more than <paramref name="maxCenterJumpPixels"/>
+    /// rows. Pieces shorter than <paramref name="minSegmentColumns"/> are dropped.
+    /// </summary>
     private static List<List<LaserProfileColumn>> SplitSmoothSegments(
         List<LaserProfileColumn> profile,
         double maxCenterJumpPixels,
@@ -318,7 +339,8 @@ public static class LaserStripeDetector
     }
 
     /// <summary>
-    /// Keeps the longest smooth segment of the laser profile based on continuity in X and smoothness in Y.
+    /// Keeps the longest smooth segment of the laser profile (default behaviour).
+    /// Same splitting rule as <see cref="SplitSmoothSegments"/>.
     /// </summary>
     /// <param name="profile">The list of LaserProfileColumn objects representing the laser profile.</param>
     /// <param name="maxCenterJumpPixels">The maximum allowed jump in the laser center Y position between consecutive columns.</param>

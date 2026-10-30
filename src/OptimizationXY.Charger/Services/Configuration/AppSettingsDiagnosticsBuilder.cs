@@ -6,6 +6,11 @@ namespace OptimizationXY.Charger.Services.Configuration;
 
 /// <summary>
 /// Provides a summary of the application settings for diagnostic purposes.
+/// <para>
+/// The text is put at the start of the diagnostics report of each scan (and of
+/// a replay) when Diagnostics.IncludeSettingsSummary is true, so a saved report
+/// shows which settings produced its result.
+/// </para>
 /// </summary>
 public static class AppSettingsDiagnosticsBuilder
 {

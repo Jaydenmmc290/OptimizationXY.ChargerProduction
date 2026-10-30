@@ -20,7 +20,7 @@ public sealed class RecoverySearchMetrics
 
 
     /// <summary>
-    /// Gets or sets the number of revolutions required for the recovery candidate.
+    /// Gets or sets the number of lathe revolutions in the simulated peel.
     /// </summary>
     public int Revolutions { get; set; }
 
@@ -40,12 +40,12 @@ public sealed class RecoverySearchMetrics
     public int RejectedFullSheets { get; set; }
 
     /// <summary>
-    /// Gets or sets the outer diameter of the recovery candidate in millimeters.
+    /// Gets or sets the diameter (mm) where the first veneer is cut around this candidate axis.
     /// </summary>
     public double OuterDiameterMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the core diameter of the recovery candidate in millimeters.
+    /// Gets or sets the core diameter (mm) left when the simulated peel stops.
     /// </summary>
     public double CoreDiameterMM { get; set; }
 
@@ -61,18 +61,18 @@ public sealed class RecoverySearchMetrics
 
     /// <summary>
     /// Gets or sets the total wane area percentage of the recovery candidate, which indicates the proportion
-    /// of the veneer area that is affected by wane (defects or irregularities) relative to the total veneer area.
+    /// of the veneer ribbon area that is wane (no wood) relative to the total ribbon area.
     /// </summary>
     public double TotalWaneAreaPercent { get; set; }
 
     /// <summary>
     /// Gets or sets the severe wane area percentage of the recovery candidate, which indicates the proportion
-    /// of the veneer area that is severely affected by wane (defects or irregularities) relative to the total veneer area.
+    /// of the veneer ribbon area that is severe wane, relative to the total ribbon area.
     /// </summary>
     public double SevereWaneAreaPercent { get; set; }
 
     /// <summary>
-    /// Gets or sets the average usable coverage percentage of the recovery candidate, which indicates the proportion
+    /// Gets or sets the average wood coverage percentage across the full sheets (100 = no wane).
     /// </summary>
     public double AverageUsableCoveragePercent { get; set; }
 }

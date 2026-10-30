@@ -27,8 +27,13 @@ public static class DeferredPeelViewRenderer
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+    // Drawn and decision numbers must match exactly (same code, same axis).
     private const double MetricTolerance = 1e-9;
 
+    /// <summary>
+    /// Draws every queued peel image, stores each in its PipelineState slot,
+    /// writes a short report to the diagnostics, then clears the queue.
+    /// </summary>
     public static void RenderPending(PipelineState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -106,6 +111,7 @@ public static class DeferredPeelViewRenderer
         state.DeferredPeelViews.Clear();
     }
 
+    /// <summary>Runs the full (image-drawing) peel simulation for the axis the decision used.</summary>
     private static PeelSimulationResult DrawFor(
         PipelineState state,
         PeelSimulationResult metrics)
@@ -121,6 +127,7 @@ public static class DeferredPeelViewRenderer
             metrics.AxisHeadYMM);
     }
 
+    /// <summary>True when two results are for exactly the same head/tail axis (so the image can be copied).</summary>
     private static bool SameAxis(PeelSimulationResult a, PeelSimulationResult b) =>
         a.AxisTailXMM == b.AxisTailXMM &&
         a.AxisTailYMM == b.AxisTailYMM &&
@@ -152,6 +159,7 @@ public static class DeferredPeelViewRenderer
         return string.Join("; ", differences);
     }
 
+    /// <summary>Puts the image in the matching PipelineState property, disposing any old image there.</summary>
     private static void Assign(PipelineState state, PeelViewSlot slot, Mat image)
     {
         switch (slot)

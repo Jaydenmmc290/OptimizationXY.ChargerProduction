@@ -14,6 +14,10 @@ namespace OptimizationXY.Charger.Visualization;
 /// summary. Every cross-section is drawn as seen from the tail end of the block:
 /// right is toward the V's (+X), left is toward the lathe (-X), down is +Y and
 /// up is -Y. The centre of each panel is the fitted centreline of the block.
+/// The three sections are the Z bins at 15 %, 50 % and 85 % of the scanned
+/// length, measured from the tail. The three section panels use the same scale
+/// so they can be compared by eye. The pipeline stores this picture in
+/// PipelineState.PointCloudOverlay.
 ///
 /// This is drawing only. It reads the binned radius field that the pipeline has
 /// already produced and adds no measurement work of its own.
@@ -22,15 +26,18 @@ public static class RotatingRadiusSectionOverlayBuilder
 {
     private const double MillimetersPerInch = 25.4;
 
+    // Colours are OpenCV BGR (blue, green, red), not RGB.
     private static readonly MCvScalar White = new(255, 255, 255);
     private static readonly MCvScalar LightGray = new(185, 185, 185);
     private static readonly MCvScalar MidGray = new(120, 120, 120);
     private static readonly MCvScalar GridGray = new(55, 55, 55);
     private static readonly MCvScalar PanelBorder = new(90, 90, 90);
+    // Widest-diameter line, narrowest-diameter line, spindle-axis mark:
     private static readonly MCvScalar WidestColor = new(0, 215, 255);     // amber (BGR)
     private static readonly MCvScalar NarrowestColor = new(255, 200, 120); // light blue (BGR)
     private static readonly MCvScalar SpindleColor = new(0, 255, 255);    // yellow (BGR)
 
+    // One colour per section (tail, middle, head):
     private static readonly MCvScalar TailColor = new(70, 70, 255);       // red (BGR)
     private static readonly MCvScalar MiddleColor = new(70, 230, 70);     // green (BGR)
     private static readonly MCvScalar HeadColor = new(255, 150, 60);      // blue (BGR)
@@ -116,8 +123,11 @@ public static class RotatingRadiusSectionOverlayBuilder
     // Section data
     // ------------------------------------------------------------
 
+    /// <summary>One cross-section shown in the picture, with its measured numbers.</summary>
     private sealed class SectionData
     {
+        // Title ("TAIL"…), short note under it, drawing colour, and distance of the
+        // section from the tail end of the scanned length (mm).
         public string Name { get; init; } = string.Empty;
         public string Note { get; init; } = string.Empty;
         public MCvScalar Color { get; init; }
@@ -126,9 +136,12 @@ public static class RotatingRadiusSectionOverlayBuilder
         // Measured outline, ordered by angle. Angle in degrees, radius in mm.
         public List<(double AngleDeg, double RadiusMM)> Outline { get; init; } = [];
 
+        // Average and largest radius about the block centre (mm).
         public double MeanRadiusMM { get; init; }
         public double MaxRadiusMM { get; init; }
 
+        // Widest/narrowest diameter: a radius plus the radius opposite it. The angle is
+        // where it was found. HasDiameters is false when no opposite pairs exist.
         public bool HasDiameters { get; init; }
         public double WidestDiameterMM { get; init; }
         public double WidestAngleDeg { get; init; }
@@ -136,12 +149,18 @@ public static class RotatingRadiusSectionOverlayBuilder
         public double NarrowestAngleDeg { get; init; }
 
         // Spindle axis (machine origin) relative to the block centre, in mm.
+        // SpindleOffsetMM is the straight-line distance from the block centre to the axis.
         public bool HasSpindleAxis { get; init; }
         public double SpindleXMM { get; init; }
         public double SpindleYMM { get; init; }
         public double SpindleOffsetMM { get; init; }
     }
 
+    /// <summary>
+    /// Collects the outline of the Z bin nearest sectionZ, works out its mean/max
+    /// radius and widest/narrowest diameters, and (when a centreline is given)
+    /// where the spindle axis sits relative to the block centre at that Z.
+    /// </summary>
     private static SectionData BuildSection(
         List<BinnedRadiusFieldPoint> field,
         double targetZ,
@@ -377,6 +396,10 @@ public static class RotatingRadiusSectionOverlayBuilder
         }
     }
 
+    /// <summary>
+    /// Fourth panel: the three outlines overlaid on one grid, plus the
+    /// legend and the whole-block numbers.
+    /// </summary>
     private static void DrawSummaryPanel(
         Mat canvas,
         Rectangle panel,
@@ -515,6 +538,7 @@ public static class RotatingRadiusSectionOverlayBuilder
             centerY + (int)Math.Round(radiusMM * Math.Sin(theta) * scale));
     }
 
+    /// <summary>Draws reference rings every 2 in of radius (labelled in inches), the cross-hair and the ±X/±Y labels.</summary>
     private static void DrawGrid(
         Mat canvas,
         Rectangle panel,
@@ -590,6 +614,10 @@ public static class RotatingRadiusSectionOverlayBuilder
         }
     }
 
+    /// <summary>
+    /// Draws a section outline. Neighbouring points less than 30° apart are joined;
+    /// wider gaps are missing data and are left open so they are visible.
+    /// </summary>
     private static void DrawOutline(
         Mat canvas,
         SectionData section,
@@ -625,6 +653,7 @@ public static class RotatingRadiusSectionOverlayBuilder
         }
     }
 
+    /// <summary>Draws a dotted diameter line through the centre at the given angle.</summary>
     private static void DrawDiameter(
         Mat canvas,
         int centerX,
@@ -643,6 +672,7 @@ public static class RotatingRadiusSectionOverlayBuilder
         DrawDotted(canvas, from, to, color, dashPixels, gapPixels, thickness);
     }
 
+    /// <summary>Draws a dashed straight line (dash and gap lengths in pixels).</summary>
     private static void DrawDotted(
         Mat canvas,
         Point from,
@@ -677,6 +707,7 @@ public static class RotatingRadiusSectionOverlayBuilder
         }
     }
 
+    /// <summary>Draws one legend entry: a short coloured line and its label.</summary>
     private static void LegendLine(
         Mat canvas,
         int x,
@@ -688,6 +719,7 @@ public static class RotatingRadiusSectionOverlayBuilder
         Text(canvas, label, x + 34, y + 4, 0.42, color);
     }
 
+    /// <summary>Writes text with its baseline-left corner at (x, y).</summary>
     private static void Text(
         Mat canvas,
         string text,
@@ -751,9 +783,11 @@ public static class RotatingRadiusSectionOverlayBuilder
         return 0.0;
     }
 
+    /// <summary>Millimetres to inches (labels are shown in inches).</summary>
     private static double Inches(double millimeters) =>
         millimeters / MillimetersPerInch;
 
+    /// <summary>Wraps an angle into 0 ≤ angle &lt; 360 degrees.</summary>
     private static double NormalizeAngle(double angle)
     {
         angle %= 360.0;

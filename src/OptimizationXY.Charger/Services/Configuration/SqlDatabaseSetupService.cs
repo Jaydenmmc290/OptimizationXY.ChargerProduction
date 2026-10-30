@@ -297,6 +297,10 @@ public sealed class DatabaseSetupResult
     public int? SchemaVersion { get; set; }
 }
 
+/// <summary>
+/// The SQL script that creates the scan tables when they do not exist yet and
+/// records the schema version. It is safe to run again on an existing database.
+/// </summary>
 internal static class DatabaseSchemaDefinition
 {
     public const string Script = """

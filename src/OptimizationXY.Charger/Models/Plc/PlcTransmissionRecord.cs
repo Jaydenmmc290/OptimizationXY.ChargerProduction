@@ -1,10 +1,12 @@
 
-/// <summary>
-/// Represents a record of a PLC transmission attempt, including the timestamp,
-/// success status, readback verification, message, and tags written.
-/// </summary>
+// PlcTransmissionRecord.cs - what happened when the command was written to the PLC.
 namespace OptimizationXY.Charger.Models.Plc;
 
+/// <summary>
+/// Record of one attempt to write a command to the PLC: when, whether it
+/// worked, whether reading the tags back matched what was written, a
+/// message, and which tags were written. Saved with the scan for the audit trail.
+/// </summary>
 public sealed class PlcTransmissionRecord
 {
 
@@ -19,13 +21,13 @@ public sealed class PlcTransmissionRecord
     public bool Success { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the readback verification was successful.
+    /// Gets or sets whether the values read back from the PLC after the write matched what was sent.
     /// </summary>
     public bool ReadbackVerified { get; set; }
 
     /// <summary>
     /// Gets or sets the message associated with the transmission attempt.
-    /// </summary>  
+    /// </summary>
     public string Message { get; set; } = string.Empty;
 
     /// <summary>

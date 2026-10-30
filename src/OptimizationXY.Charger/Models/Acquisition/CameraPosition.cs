@@ -1,16 +1,19 @@
 namespace OptimizationXY.Charger.Models.Acquisition;
 
 
-/// Identifies the physical position of a camera in the acquisition system.
+/// <summary>
+/// Which end of the block a camera looks at. The two cameras each see about
+/// half of the log's length; their images are joined into one full-length image.
+/// </summary>
 
 public enum CameraPosition
 {
 
-    /// Head camera — captures from the beginning of the scan area.
+    /// <summary>Head camera - looks at the HEAD end of the block (the end nearest the lathe operator).</summary>
 
     Head,
 
-    /// Tail camera — captures from the end of the scan area.
+    /// <summary>Tail camera - looks at the TAIL end of the block (the end farthest from the lathe operator).</summary>
 
     Tail
 }

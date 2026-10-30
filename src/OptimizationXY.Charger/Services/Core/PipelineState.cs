@@ -19,6 +19,19 @@ using OptimizationXY.Charger.Models.Operator;
 namespace OptimizationXY.Charger.Services.Core
 {
 
+    /// <summary>
+    /// The ONE shared place where the current scan's data and results live.
+    /// </summary>
+    /// <remarks>
+    /// There is a single instance (<see cref="Instance"/>). The coordinator clears
+    /// it at the start of each scan (<see cref="Clear"/>, which keeps the
+    /// settings); each pipeline stage then fills in its part in order: frames ->
+    /// calibration -> point cloud -> centreline -> radius fields -> defects ->
+    /// optimization result -> final recommendation -> PLC payload -> readiness ->
+    /// PLC transmission. The save services and the UI read the results from here.
+    /// Only one scan is processed at a time, so there is no locking; never start a
+    /// new scan while the previous one is still saving (see LogProcessingCoordinator).
+    /// </remarks>
     public sealed class PipelineState
     {
 
@@ -54,13 +67,21 @@ namespace OptimizationXY.Charger.Services.Core
         /// started a second time.
         /// </summary>
         public bool ResultSaveStarted { get; set; }
+        /// <summary>Folder of the scan currently being worked on (replay / folder processing).</summary>
         public string CurrentLogFolder { get; set; } = string.Empty;
+        /// <summary>How the frames of this scan were captured (counts, timing, mode).</summary>
         public CaptureAuditRecord? CaptureAudit { get; set; }
+        /// <summary>Block number sent to the PLC for this scan (0 until PlcPayloadBuilder assigns it).</summary>
         public int ProductionRunSequence { get; set; }
+        /// <summary>Result of the production readiness checks for this scan.</summary>
         public ProductionReadinessReport? ProductionReadiness { get; set; }
+        /// <summary>The exact payload (inches) built for the PLC, or null if it could not be built.</summary>
         public PlcCommandPayload? PlcPayload { get; set; }
+        /// <summary>What happened when the payload was written to the PLC.</summary>
         public PlcTransmissionRecord? PlcTransmission { get; set; }
+        /// <summary>Feedback read back from the PLC after the write.</summary>
         public MachineFeedbackSnapshot? MachineFeedback { get; set; }
+        /// <summary>Scan-quality verdict shown to the operator; a Failed verdict blocks the PLC write.</summary>
         public OperatorScanQualityResult? OperatorScanQuality { get; set; }
 
         /// <summary>
@@ -70,13 +91,13 @@ namespace OptimizationXY.Charger.Services.Core
         /// </summary>
         public Kinematic.KinematicVisualizationState? KinematicVisualizationState { get; set; }
 
-        // Rotating scan input
+        // Rotating scan input: one joined (head+tail) frame per pair, in capture order.
         public List<ScanFrame> ScanFrames { get; set; } = new();
 
         // How rotation angles were assigned to the frames of the current scan.
         public OptimizationXY.Charger.Services.Acquisition.RevolutionAngleResult? RevolutionAngles { get; set; }
 
-        // Calibration
+        // Axial scale (pixels per mm along the log) used for this scan.
         public CalibrationResult? Calibration { get; set; }
 
         /// <summary>
@@ -93,14 +114,15 @@ namespace OptimizationXY.Charger.Services.Core
         /// </summary>
         public byte[]? HeadCameraConfigurationSnapshot { get; set; }
         public byte[]? TailCameraConfigurationSnapshot { get; set; }
+        // (Head first, tail second; both are copied into the saved scan folder.)
 
-        // Geometry
+        // Geometry. PointCloud = MEASURED points only (X/Y across the log, Z along it,
+        // mm, Z = 0 at the tail). This is the only cloud used for measurement,
+        // optimization and the PLC command.
         public List<Point3D> PointCloud { get; set; } = new();
 
-        // Display only.
-        // This can contain estimated / averaged fill points.
-        // Do not use this for final measurements or spindle optimization.
 
+        /// <summary>How long each pipeline step took (saved in the timing report).</summary>
         public List<PipelineTimingEntry> TimingEntries { get; set; } = new();
 
         /// <summary>
@@ -109,9 +131,16 @@ namespace OptimizationXY.Charger.Services.Core
         /// cannot be added up for this: frames are processed in parallel.
         /// </summary>
         public double ProcessingElapsedSeconds { get; set; }
+        /// <summary>
+        /// DISPLAY ONLY. May contain estimated / averaged fill points. Never use this
+        /// for measurements or spindle optimization - use <see cref="PointCloud"/>.
+        /// </summary>
         public List<Point3D> DisplayPointCloud { get; set; } = new();
+        /// <summary>Fitted straight centreline of the log (PCA refined through slice centres).</summary>
         public CenterlineResult? Centerline { get; set; }
+        /// <summary>Centre and mean radius of each thin slice along the log.</summary>
         public List<LocalCenterlineSlice> LocalCenterlines { get; set; } = new();
+        /// <summary>Sweep/bow numbers (diagnostic).</summary>
         public CenterlineSweepResult? CenterlineSweep { get; set; }
 
         // Radius field
@@ -126,29 +155,41 @@ namespace OptimizationXY.Charger.Services.Core
         public List<RadiusFieldPoint> OptimizationRadiusField { get; set; } = new();
         public List<BinnedRadiusFieldPoint> OptimizationBinnedRadiusField { get; set; } = new();
 
-        // Defects
+        // Defects (diagnostic in the inscribed-geometry modes; scored in PenaltyScored mode).
         public RadiusDefectMap? RadiusDefectMap { get; set; }
         public List<RadiusDefectPatch> RadiusDefectPatches { get; set; } = new();
         public DefectPatchAnalysis? DefectPatchAnalysis { get; set; }
 
-        // Optimization
+        // Optimization results. Only the ones for the active OptimizationMode are filled.
 
         public AdaptiveScoringProfile? AdaptiveScoringProfile { get; set; }
 
 
 
+        // Inscribed-geometry search results (filled in the inscribed modes and in
+        // RecoveryOptimized): best round cylinder, best oval, and the peel comparison
+        // that picks between them (CompareInscribedGeometry = production mode).
         public InscribedGeometryResult? LargestInscribedCylinder { get; set; }
         public InscribedGeometryResult? LargestInscribedOval { get; set; }
         public GeometryPeelComparisonResult? GeometryPeelComparison { get; set; }
+        // RecoveryOptimized mode only: the strategy comparison and the direct search.
         public RecoveryOptimizationResult? RecoveryOptimization { get; set; }
         public DirectRecoverySearchResult? DirectRecoverySearch { get; set; }
 
-        // Final model
+        // Final model: log size summary and THE recommendation that becomes the PLC command.
         public LogGeometryModel Model { get; set; } = new();
-        public FinalSpindleRecommendation? FinalSpindleRecommendation { get; set; } // the final recommendation for the spindle position, based on the optimization results what I need to give to the database
+        public FinalSpindleRecommendation? FinalSpindleRecommendation { get; set; } // the final spindle position recommendation: becomes the PLC command and is saved to the scan folder / database
 
-        // Visuals
+        // Visuals (pictures saved with the scan and shown on screen). All are OpenCV
+        // images that must be disposed - Clear() does that.
 
+        // Peel views (the "unrolled veneer" pictures), drawn after the PLC write:
+        //   UnwrappedPeelView       the selected position (always)
+        //   CylinderPeelView        best inscribed cylinder (inscribed compare / recovery)
+        //   OvalPeelView            best inscribed oval (inscribed compare / recovery)
+        //   BaselinePeelView        current axis, no move (recovery mode)
+        //   PenaltyPeelView         penalty-scored position (recovery mode)
+        //   DirectRecoveryPeelView  direct search position (recovery mode)
         public Mat? UnwrappedPeelView { get; set; }
         public Mat? CylinderPeelView { get; set; }
         public Mat? OvalPeelView { get; set; }
@@ -163,14 +204,23 @@ namespace OptimizationXY.Charger.Services.Core
         /// </summary>
         public List<DeferredPeelView> DeferredPeelViews { get; } = new();
 
+        // Despite its name: the tail / middle / head cross-section picture
+        // (RotatingRadiusSectionOverlayBuilder).
         public Mat? PointCloudOverlay { get; set; }
 
         /// <summary>Single view from the head end of the block, shown in the main form overlay box.</summary>
         public Mat? LogHeadEndViewOverlay { get; set; }
+        // Colour map of the radius defect map (dents/bumps along and around the log).
+        // CenterlineOffsetOverlay and SpindleAxisOverlay are saved when present, but
+        // nothing in the current pipeline fills them, so they stay null.
         public Mat? RadiusDefectHeatmap { get; set; }
         public Mat? CenterlineOffsetOverlay { get; set; }
         public Mat? SpindleAxisOverlay { get; set; }
 
+        /// <summary>
+        /// Forgets everything about the previous scan (disposing all images) so a new
+        /// scan starts clean. The settings object is kept.
+        /// </summary>
         public void Clear()
         {
 

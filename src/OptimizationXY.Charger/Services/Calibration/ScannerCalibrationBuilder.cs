@@ -6,12 +6,27 @@ using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Preprocessing;
 
 
-/// <summary>
-/// Provides methods for building and analyzing scanner calibration data, including extracting reference captures,
-/// constructing lookup tables, and evaluating laser detection quality.
-/// </summary>
+// =============================================================================
+// ScannerCalibrationBuilder.cs - turns reference images into a lookup table
+// -----------------------------------------------------------------------------
+// For each reference (small tube, large tube, home cable at radius 0):
+//   ExtractReference*  - detect the laser line in every frame with the SAME
+//                        preprocessing/detector as production, then for each
+//                        image column average the laser row over the frames
+//                        (after rejecting outliers). Each column becomes one
+//                        LookupPoint "(column, laser row) -> known radius".
+//                        About 25% of the frames are held back to test with.
+// Then BuildTable puts all references together, stamps the calibration
+// fingerprint (camera snapshot hashes + image geometry hash), measures the
+// held-out repeatability error, and validates the result.
+// This class only BUILDS a table; CalibrationPackageStore saves/activates it.
+// =============================================================================
 namespace OptimizationXY.Charger.Services.Calibration;
 
+/// <summary>
+/// Builds and checks scanner calibration data: extracts reference captures,
+/// constructs the lookup table and summarises laser detection quality.
+/// </summary>
 public static class ScannerCalibrationBuilder
 {
 
@@ -80,6 +95,11 @@ public static class ScannerCalibrationBuilder
             isHomeAxisReference);
     }
 
+    /// <summary>
+    /// Shared work of both ExtractReference methods: detect the laser line in each
+    /// frame, split frames into training and held-out sets, and build one lookup
+    /// point per image column from the training frames.
+    /// </summary>
     private static CalibrationReferenceCapture ExtractReferenceCore(
         IReadOnlyList<Mat> concatenatedFrames,
         DateTime capturedUtc,
@@ -141,6 +161,7 @@ public static class ScannerCalibrationBuilder
             var profile = LaserStripeDetector.Detect(binary)
                 .ToDictionary(point => point.X, point => point.LaserCenterY);
 
+            // A frame needs at least 30 laser columns to be usable.
             if (profile.Count >= 30)
             {
                 profiles.Add(profile);
@@ -160,6 +181,9 @@ public static class ScannerCalibrationBuilder
 
         if (profiles.Count >= 3)
         {
+            // Use about 75% of frames to build the points and keep the rest back to
+            // measure repeatability. A column must appear in at least half of the
+            // training frames to be trusted.
             int trainingCount = Math.Max(2, (int)Math.Ceiling(profiles.Count * 0.75));
             trainingCount = Math.Min(trainingCount, profiles.Count - 1);
 
@@ -198,6 +222,8 @@ public static class ScannerCalibrationBuilder
                 continue;
             }
 
+            // Drop laser rows that disagree with the other frames in this column, then
+            // average what is left.
             double[] filtered = RejectOutliers(values);
             if (filtered.Length < minimumSamplesPerColumn)
             {
@@ -270,9 +296,9 @@ public static class ScannerCalibrationBuilder
     /// <param name="independentValidationMaximumErrorMM">The maximum error in millimeters from independent validation.</param>
     /// <param name="notes">Additional notes for the calibration.</param>
     /// <returns>The constructed <see cref="ScannerLookupTable"/>.</returns>
-    /// <exception cref="ArgumentException">Thrown if the reference name is null or whitespace.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown if the measured diameter is not a positive finite value or the radius band ID is negative or zero.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if there are not enough concatenated frames or if laser detection fails on sufficient frames.</exception>
+    /// <exception cref="ArgumentException">Thrown if the operator name is missing.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if lengthPixelsPerMM is not positive and finite.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if camera snapshots are missing, fewer than two different radii are given, or the references have different image sizes.</exception>
     /// <exception cref="InvalidDataException">Thrown if the constructed table is not valid for production use.</exception>
     public static ScannerLookupTable BuildTable(
         AppSettings settings,
@@ -340,6 +366,7 @@ public static class ScannerCalibrationBuilder
                 "The calibration references must contain at least two different known radii.");
         }
 
+        // e.g. "CAL-20261030-091500-1a2b3c4d5e6" (cut to 32 characters).
         string calibrationId =
             $"CAL-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}"[..32];
 
@@ -400,7 +427,8 @@ public static class ScannerCalibrationBuilder
     }
 
     /// <summary>
-    /// Analyzes the laser detection in a calibration capture batch.
+    /// Setup-wizard laser check: runs the production laser detector on each frame
+    /// of a capture and summarises how many columns and which rows it found.
     /// </summary>
     /// <param name="batch">The calibration capture batch to analyze.</param>
     /// <returns>A summary of the laser detection results.</returns>
@@ -493,7 +521,9 @@ public static class ScannerCalibrationBuilder
     }
     
     /// <summary>
-    /// Rejects outliers from the given array of values using the median absolute deviation method.
+    /// Rejects outliers using the median absolute deviation (MAD): a value is kept
+    /// if it is within max(1.5 px, 3.5 x 1.4826 x MAD) of the median. 1.4826 x MAD
+    /// estimates the standard deviation for normally distributed data.
     /// </summary>
     /// <param name="values">The array of values to process.</param>
     /// <returns>A new array with outliers removed.</returns>
@@ -554,7 +584,7 @@ public static class ScannerCalibrationBuilder
     /// Computes the SHA-256 hash of the given byte array and returns it as a hexadecimal string.
     /// </summary>
     /// <param name="data">The byte array to compute the SHA-256 hash for.</param>
-    /// <returns>The SHA-256 hash a s a hexadecimal string.</returns>
+    /// <returns>The SHA-256 hash as an upper-case hexadecimal string ("" for empty data).</returns>
     private static string ComputeSha256(byte[] data)
     {
         if (data.Length == 0)
@@ -572,11 +602,15 @@ public static class ScannerCalibrationBuilder
 /// </summary>
 public sealed class LaserDetectionSummary
 {
+    /// <summary>Frames in the capture / frames where the laser was found.</summary>
     public int CapturedFrameCount { get; set; }
     public int ValidLaserFrameCount { get; set; }
+    /// <summary>Joined image size, pixels.</summary>
     public int ImageWidth { get; set; }
     public int ImageHeight { get; set; }
+    /// <summary>Average number of image columns with a detected laser point per frame.</summary>
     public double AverageDetectedColumns { get; set; }
+    /// <summary>Lowest / highest / mean laser row seen (pixels).</summary>
     public double MinimumLaserY { get; set; }
     public double MaximumLaserY { get; set; }
     public double MeanLaserY { get; set; }

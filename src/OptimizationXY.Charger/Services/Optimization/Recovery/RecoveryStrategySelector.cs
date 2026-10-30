@@ -3,7 +3,10 @@ using OptimizationXY.Charger.Models.Optimization.Recovery;
 namespace OptimizationXY.Charger.Services.Optimization.Recovery;
 
 /// <summary>
-/// Selects the best recovery strategy based on simulated circular virtual peel recovery metrics.
+/// Selects the best recovery strategy (RecoveryOptimized mode) from simulated
+/// circular virtual-peel metrics. Same order as GeometryPeelSelector: usable
+/// sheets, usable length, rejected sheets, severe wane, total wane, then
+/// (optionally) the smaller move. The first candidate wins exact ties.
 /// </summary>
 public static class RecoveryStrategySelector
 {

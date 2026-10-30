@@ -6,10 +6,16 @@ namespace OptimizationXY.Charger.Models.Defects;
 /// Each enum value represents a different classification category for a measured radius point,
 /// ranging from acceptable ("Good") to various severity levels of defects ("LowRadius", "SevereLowRadius", etc.).
 ///
+/// A point is classified by its radius error compared with the median radius of
+/// its slice. A defect level needs BOTH the millimetre threshold AND the
+/// percentage threshold to be passed (see RadiusDefectMapBuilder.Classify).
+/// The millimetre thresholds come from settings (and may be scaled by adaptive
+/// scoring); the percentages are fixed in the code (4.5% / 7.5% / 4.5%).
+///
 /// Defect type classification is used to:
 /// - Identify problem areas on the log
-/// - Determine correction strategies (spindle/charger movements)
-/// - Calculate penalty scores during optimization
+/// - Build connected defect patches
+/// - Calculate penalty scores in the legacy PenaltyScored optimization mode
 /// - Filter noise from real defects
 /// </summary>
 public enum RadiusDefectType
@@ -22,29 +28,29 @@ public enum RadiusDefectType
 
     /// <summary>
     /// Indicates the radius is below the acceptable limit, but within a moderate tolerance.
-    /// Represents a minor wane or material loss defect that should be corrected.
+    /// Represents moderate wane or missing wood: at least DefectSettings.LowRadiusThresholdMM
+    /// (default 2 mm) AND 4.5% below the slice median.
     /// </summary>
     LowRadius,
 
     /// <summary>
     /// Indicates the radius is significantly below the acceptable limit.
-    /// Represents a severe wane or major material loss defect requiring correction.
+    /// Represents severe wane or missing wood: at least DefectSettings.SevereLowRadiusThresholdMM
+    /// (default 4 mm) AND 7.5% below the slice median.
     /// This level of defect heavily impacts log quality and yield.
     /// </summary>
     SevereLowRadius,
 
     /// <summary>
-    /// Indicates the radius is above the acceptable limit, but within a moderate tolerance.
-    /// Represents over-milling or unexpected excess material.
+    /// Indicates the radius is above the slice median by at least
+    /// DefectSettings.HighRadiusThresholdMM (default 2 mm) AND 4.5%.
+    /// Usually bumps, knots, bark or a laser reflection.
     /// Generally less problematic than low-radius defects.
     /// </summary>
     HighRadius,
 
     /// <summary>
-    /// Indicates the radius measurement is above acceptable limits but is likely due to
-    /// measurement noise rather than an actual defect.
-    /// Used to distinguish sensor noise from true defects.
-    /// Can be filtered out or given lower weight in scoring.
+    /// Reserved for measurement noise. Not assigned by the current classifier.
     /// </summary>
     Noise
 }

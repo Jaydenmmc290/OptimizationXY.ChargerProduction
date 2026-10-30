@@ -6,14 +6,17 @@ using OptimizationXY.Charger.Models.Acquisition;
 namespace OptimizationXY.Charger.Services.Camera;
 
 /// <summary>
-/// Discovers acquisition devices currently visible to Sapera.
+/// Discovers acquisition devices (cameras) currently visible to Sapera and,
+/// optionally, reads their serial numbers so a physical camera can be found
+/// by serial number even if Sapera renumbers the GigEVision_Device_N names.
 /// No camera names are hard-coded here.
 /// </summary>
 public static class SaperaCameraDiscoveryService
 {
 
     /// <summary>
-    /// Discovers all cameras currently visible to Sapera and returns their serial numbers.
+    /// Lists every acquisition device location (server name + resource index)
+    /// Sapera can see, sorted by name. Does NOT open the cameras or read serials.
     /// </summary>
     /// <returns>A read-only list of discovered cameras.</returns>
     public static IReadOnlyList<DiscoveredCamera> Discover()
@@ -93,14 +96,17 @@ public static class SaperaCameraDiscoveryService
         "deviceID"
     ];
 
-    /// <summary>
-    /// Discovers every camera like <see cref="Discover"/> and also opens each one
-    /// briefly to read the serial-number / device-ID strings it reports. Call it
-    /// only while this program has no camera open (before connecting).
-    /// </summary>
+    // Opening a camera to probe it is retried this many times, this far apart.
     private const int ProbeAttempts = 5;
     private const int ProbeRetryDelayMilliseconds = 2000;
 
+    /// <summary>
+    /// Discovers every camera like <see cref="Discover"/> and also opens each one
+    /// briefly to read the serial-number / device-ID strings it reports. Call it
+    /// only while this program has no camera open (before connecting). A camera
+    /// that cannot be opened (in use) gets only Sapera's location serial and
+    /// IdentityProbed = false.
+    /// </summary>
     public static IReadOnlyList<DiscoveredCamera> DiscoverWithIdentity()
     {
         var probed = new List<DiscoveredCamera>();
@@ -181,6 +187,7 @@ public static class SaperaCameraDiscoveryService
         return [.. values.Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
+    /// <summary>Sapera's serial number for a location without opening the camera (empty list if unknown).</summary>
     private static IReadOnlyList<string> ReadLocationSerialOnly(SapLocation location)
     {
         try

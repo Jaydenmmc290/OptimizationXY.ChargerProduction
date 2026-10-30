@@ -1,12 +1,20 @@
 using OptimizationXY.Charger.UI.Controls;
 
 
-/// <summary>
-/// Represents the result of a scan quality assessment performed by an operator,
-/// including status, messages, and various metrics related to the scan.
-/// </summary>
+// OperatorScanQualityResult.cs - the scan-quality verdict shown to the lathe operator.
 namespace OptimizationXY.Charger.Models.Operator;
 
+/// <summary>
+/// The scan-quality verdict for one scan, made by OperatorScanQualityAnalyzer
+/// and shown on the operator screen. It is NOT made by the operator - it
+/// tells the operator whether the scan was good enough.
+/// </summary>
+/// <remarks>
+/// This result is the scan-quality gate (an essential readiness check): a
+/// <see cref="ScanQualityStatus.Failed"/> result always blocks the PLC write, and
+/// a <see cref="ScanQualityStatus.Warning"/> result also blocks it while
+/// Plc.RequireGoodQuality is on (default), so only Good scans are sent.
+/// </remarks>
 public sealed class OperatorScanQualityResult
 {
 
@@ -26,22 +34,22 @@ public sealed class OperatorScanQualityResult
     public string DetailMessage { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the number of frames used during the scan process.
+    /// Gets or sets how many frames were actually used to build the point cloud.
     /// </summary>
     public int FramesUsed { get; init; }
 
     /// <summary>
-    /// Gets or sets the expected number of frames to be used during the scan process.
+    /// Gets or sets the number of frames the scan was expected to provide.
     /// </summary>
     public int ExpectedFrames { get; init; }
 
     /// <summary>
-    /// Gets or sets the percentage of the profile coverage achieved during the scan process.
+    /// Gets or sets the percentage of the block length that has laser measurements.
     /// </summary>
     public double ProfileCoveragePercent { get; init; }
 
     /// <summary>
-    /// Gets or sets the percentage of valid slices obtained during the scan process.
+    /// Gets or sets the percentage of Z slices along the block that had enough data to be valid.
     /// </summary>
     public double ValidSlicePercent { get; init; }
 
@@ -92,7 +100,7 @@ public sealed class OperatorScanQualityResult
     public double ProcessingSeconds { get; init; }
 
     /// <summary>
-    /// Gets or sets the list of profile points obtained during the scan process, providing detailed information about the scanned log's profile.
+    /// Gets or sets the side-view profile points drawn on the operator screen (LogProfileControl).
     /// </summary>
     public IReadOnlyList<LogProfilePoint> ProfilePoints { get; init; } =
         [];

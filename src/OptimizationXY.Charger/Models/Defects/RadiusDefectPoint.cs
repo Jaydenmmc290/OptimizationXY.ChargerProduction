@@ -1,7 +1,9 @@
 namespace OptimizationXY.Charger.Models.Defects;
 
 /// <summary>
-/// Represents a single defect measurement point on a log cross-section.
+/// One classified cell of the binned radius field: where it is on the log
+/// (Z along the log, angle around it), its measured radius, the radius it was
+/// expected to have, and whether that difference counts as a defect.
 ///
 /// This class captures all relevant data for a point on the log surface,
 /// including its location (axial Z position and angular position) and
@@ -26,15 +28,13 @@ public class RadiusDefectPoint
     ///
     /// 0-360 degree range representing the angular location around the log's circumference.
     /// Used to determine where on the cross-section the defect is located.
-    /// Important for spindle optimization - correcting requires moving spindle
-    /// to opposing side of the defect.
     /// </summary>
     public double AngleBinDeg { get; set; }
 
     /// <summary>
     /// Gets or sets the actual measured radius at this point, measured in millimeters.
     ///
-    /// This is the raw measurement from the laser scanner after calibration and
+    /// This is the binned mean radius from the laser scanner after calibration and
     /// geometric processing. Represents the physical distance from centerline to
     /// the log surface at this angular and axial position.
     /// </summary>
@@ -43,8 +43,8 @@ public class RadiusDefectPoint
     /// <summary>
     /// Gets or sets the theoretical/expected radius at this point, measured in millimeters.
     ///
-    /// This is the target or nominal radius value. Typically the mean radius for
-    /// a perfectly cylindrical log, or may vary based on expected taper.
+    /// This is the MEDIAN radius of all valid cells in the same Z slice. It is
+    /// recomputed for every slice, so it follows the log's taper.
     /// Used to calculate deviation and defect severity.
     /// </summary>
     public double ExpectedRadiusMM { get; set; }
@@ -67,7 +67,7 @@ public class RadiusDefectPoint
     /// - LowRadius: Minor material deficiency
     /// - SevereLowRadius: Severe material deficiency
     /// - HighRadius: Excess material
-    /// - Noise: Measurement noise rather than true defect
+    /// - Noise: reserved; RadiusDefectMapBuilder does not currently assign it
     ///
     /// Used for optimization penalty calculations and filtering.
     /// </summary>

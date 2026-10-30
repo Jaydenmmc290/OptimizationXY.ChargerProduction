@@ -3,6 +3,7 @@ using Emgu.CV.CvEnum;
 
 namespace OptimizationXY.Charger.Services.Input;
 
+/// <summary>Loads saved image files (offline replay, calibration import) as 8-bit greyscale.</summary>
 public static class ImageInputService
 {
 

@@ -1,18 +1,18 @@
 
-/// <summary>
-/// Represents a surface model with radius values based on Z and angle.
-/// </summary>
+// SurfaceModel.cs - the log surface as a regular radius grid.
 namespace OptimizationXY.Charger.Models.Geometry;
 
 
 /// <summary>
-/// Represents a surface model with radius values based on Z and angle.
+/// The log surface as a regular grid: radius (mm) for each Z row and angle
+/// column. Used by the peel simulation, which "turns" this surface around a
+/// chosen axis.
 /// </summary>
 public sealed class SurfaceModel
 {
 
     /// <summary>
-    /// Gets or sets a 2D array representing the radius values based on Z and angle.
+    /// Gets or sets the radius grid, indexed [zIndex, angleIndex], in millimetres.
     /// </summary>
     public double[,] RadiusByZAndAngle { get; set; } = new double[1, 1];
 

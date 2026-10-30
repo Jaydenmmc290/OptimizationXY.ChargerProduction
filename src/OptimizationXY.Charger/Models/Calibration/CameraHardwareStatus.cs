@@ -2,8 +2,9 @@ namespace OptimizationXY.Charger.Models.Calibration;
 
 
 /// <summary>
-/// Represents the status of camera hardware, including connection status, server names,
-/// device indices, and configuration paths for both head and tail cameras.
+/// Snapshot of the two cameras' connection state for display and readiness
+/// checks: whether each is connected, its Sapera server name/device index,
+/// and (legacy CCF mode only) its configuration file path and load result.
 /// </summary>
 public sealed class CameraHardwareStatus
 {
@@ -26,10 +27,10 @@ public sealed class CameraHardwareStatus
     // TailDeviceIndex is the device index of the tail camera in Sapera.
     public int TailDeviceIndex { get; set; }
 
-    // HeadConfigurationPath is the file path to the configuration for the head camera.
+    // HeadConfigurationPath: legacy .ccf file path for the head camera (empty in programmatic mode).
     public string HeadConfigurationPath { get; set; } = string.Empty;
 
-    // TailConfigurationPath is the file path to the configuration for the tail camera.
+    // TailConfigurationPath: legacy .ccf file path for the tail camera (empty in programmatic mode).
     public string TailConfigurationPath { get; set; } = string.Empty;
 
     // HeadConfigurationLoaded indicates whether the configuration for the head camera has been successfully loaded.

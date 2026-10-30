@@ -6,13 +6,20 @@ using OptimizationXY.Charger.Models.Geometry;
 namespace OptimizationXY.Charger.Services.Analysis;
 
 /// <summary>
-/// Provides methods to analyze the ovality of a spindle based on binned radius field data.
+/// Finds the most out-of-round cross-section of the LOG from the binned radius
+/// field. Diagnostic only - reported and saved, it does not move the spindles.
 /// </summary>
+/// <remarks>
+/// For each Z slice the radius-versus-angle data is fitted with a short
+/// Fourier series (see <see cref="AnalyzeSlice"/>). The second harmonic of
+/// that fit is the oval part of the shape. The slice with the largest
+/// ovality (major minus minor diameter) is returned.
+/// </remarks>
 public static class OvalityAnalyzer
 {
 
     /// <summary>
-    /// Analyzes the ovality of a spindle based on a list of binned radius field points.
+    /// Analyzes every Z slice of the binned radius field and returns the one with the most ovality.
     /// </summary>
     /// <param name="binnedField">The list of binned radius field points.</param>
     /// <param name="minAngleBinsPerSlice">The minimum number of angle bins required per slice for analysis.</param>
@@ -24,6 +31,7 @@ public static class OvalityAnalyzer
             throw new InvalidOperationException("Binned radius field is empty.");
 
         var slices = binnedField
+            // Group the field into cross-section slices (one per Z bin), ordered along the log.
             .GroupBy(p => p.ZBinMM)
             .OrderBy(g => g.Key)
             .ToList();
@@ -41,6 +49,8 @@ public static class OvalityAnalyzer
                 .OrderBy(p => p.AngleBinDeg)
                 .ToList();
 
+            // Skip slices with too few valid angle bins - a fit through a few points
+            // would report false ovality. Default 36 bins (every 10 degrees).
             if (points.Count < minAngleBinsPerSlice)
                 continue;
 
@@ -59,7 +69,8 @@ public static class OvalityAnalyzer
     }
 
     /// <summary>
-    /// Analyzes a single slice of binned radius field points to determine ovality characteristics.
+    /// Least-squares fit of r(theta) = A0 + A1 cos t + B1 sin t + A2 cos 2t + B2 sin 2t
+    /// to one slice and converts the coefficients into diameters and an orientation.
     /// </summary>
     /// <param name="slicePoints">The list of binned radius field points for the slice.</param>
     /// <param name="z">The Z-coordinate of the slice.</param>
@@ -68,6 +79,9 @@ public static class OvalityAnalyzer
     {
         int n = slicePoints.Count;
 
+        // Build the least-squares system: one row per angle bin, one column per
+        // term of the series [1, cos t, sin t, cos 2t, sin 2t]. Solving with QR
+        // gives the coefficients that best match the measured radii.
         Matrix<double> design = DenseMatrix.Create(n, 5, 0.0);
         Vector<double> radii = DenseVector.Create(n, 0.0);
 
@@ -93,6 +107,8 @@ public static class OvalityAnalyzer
         double a2 = coeff[3];
         double b2 = coeff[4];
 
+        // The second harmonic is the "oval" part: it adds secondAmp on the long
+        // axis and subtracts it on the short axis. (A1/B1 only move the centre.)
         double secondAmp = Math.Sqrt(a2 * a2 + b2 * b2);
 
         double majorRadius = a0 + secondAmp;
@@ -102,11 +118,14 @@ public static class OvalityAnalyzer
         double minorDiameter = minorRadius * 2.0;
         double ovality = majorDiameter - minorDiameter;
 
+        // Percentage of the MAJOR diameter.
         double ovalityPercent =
             majorDiameter > 0
                 ? ovality / majorDiameter * 100.0
                 : 0.0;
 
+        // Angle of the long axis. cos(2t) repeats every 180 degrees, so the
+        // angle is halved and folded into 0..180 degrees.
         double orientationRad = 0.5 * Math.Atan2(b2, a2);
         double orientationDeg = orientationRad * 180.0 / Math.PI;
 
