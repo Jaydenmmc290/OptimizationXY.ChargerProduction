@@ -1,12 +1,14 @@
 using OptimizationXY.Charger.Models.Optimization.Spindle;
 
 
-/// <summary>
-/// Represents the result of a direct recovery search, which includes the
-/// optimized spindle movement, recovery search metrics, and other relevant information.
-/// </summary>
+// DirectRecoverySearchResult.cs - result of DirectRecoveryOptimizer.
 namespace OptimizationXY.Charger.Models.Optimization.Recovery;
 
+/// <summary>
+/// Result of the direct veneer-recovery search (DirectRecoveryOptimizer, used
+/// in RecoveryOptimized mode): the best spindle position found by virtually
+/// peeling many candidate positions, and that position's peel numbers.
+/// </summary>
 public sealed class DirectRecoverySearchResult
 {
 
@@ -21,17 +23,17 @@ public sealed class DirectRecoverySearchResult
     public RecoverySearchMetrics Metrics { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets the summary of the recovery search, which may include additional information or insights about the search process and its results.
+    /// Gets or sets how many candidate spindle positions were virtually peeled.
     /// </summary>
     public int EvaluatedCandidates { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of rejected candidates during the recovery search, which indicates how many potential solutions were considered but ultimately not selected.
+    /// Gets or sets how many candidates were invalid (e.g. outside travel limits or the peel could not be computed).
     /// </summary>
     public int RejectedCandidates { get; set; }
 
     /// <summary>
-    /// Gets or sets the summary of the recovery search, which may include additional information or insights about the search process and its results.
+    /// Gets or sets a one-line text summary of the search for logs and the saved scan.
     /// </summary>
     public string SearchSummary { get; set; } = string.Empty;
 

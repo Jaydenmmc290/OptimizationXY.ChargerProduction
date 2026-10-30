@@ -1,40 +1,49 @@
 
-/// <summary>
-/// Represents the final recommendation for spindle optimization, including the selected strategy, risk assessment, and machine command details.
-/// </summary>
+// FinalSpindleRecommendation.cs - THE answer for one scan: where to move the spindles.
 namespace OptimizationXY.Charger.Models.Optimization.Spindle;
 
+/// <summary>
+/// The final answer for one scan: which strategy won, whether the move is
+/// allowed, and the head/tail commands that are sent to the PLC
+/// (PlcPayloadBuilder converts the Command* values to inches).
+/// </summary>
+/// <remarks>
+/// Sign rule: every optimization mode builds the PLC command as the NEGATIVE
+/// of the selected axis position in the point-cloud frame
+/// (Command = -SpindleMovement). A command of 0 means "stay on the current
+/// axis". Head = end nearest the lathe operator, tail = far end. On this
+/// machine +X is toward the V's, -X toward the lathe, +Y down and -Y up;
+/// confirm on commissioning that the PLC applies the commands that way.
+/// </remarks>
 public sealed class FinalSpindleRecommendation
 {
 
     /// <summary>
-    /// Gets or sets the optimization mode used for spindle optimization, which may
-    /// indicate the specific approach or algorithm applied to achieve the recommended spindle position.
+    /// Gets or sets the optimization mode that produced this recommendation
+    /// (production: CompareInscribedGeometry).
     /// </summary>
     public SpindleOptimizationMode OptimizationMode { get; set; }
 
     /// <summary>
-    /// Gets or sets the selected strategy for spindle optimization, which may
-    /// indicate the specific approach or algorithm applied to achieve the recommended spindle position.
+    /// Gets or sets the display name of the strategy that won (e.g. "Largest Inscribed Cylinder"),
+    /// shown to the operator and saved with the scan.
     /// </summary>
     public string SelectedStrategy { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the recommended spindle position is
-    /// considered safe and effective for the log being processed.
+    /// Gets or sets whether the optimizer considers this position a real improvement worth using.
     /// </summary>
     public bool IsRecommended { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the machine is allowed to move to the recommended spindle position,
-    /// which may depend on safety considerations, operational constraints, or other factors.
+    /// Gets or sets whether the move is inside the machine's safety/travel limits.
+    /// When false, PlcPayloadBuilder refuses to build a PLC payload.
     /// </summary>
     public bool MachineMoveAllowed { get; set; }
 
 
     /// <summary>
-    /// Gets or sets the recommended action for the operator, which may include instructions for adjusting the spindle position,
-    /// modifying the log orientation, or taking other steps to optimize the cutting process.
+    /// Gets or sets a short instruction for the operator screen.
     /// </summary>
     public string RecommendedAction { get; set; } = string.Empty;
 
@@ -51,35 +60,35 @@ public sealed class FinalSpindleRecommendation
 
 
     /// <summary>
-    /// Gets or sets the risk score associated with the recommended spindle position, which may
-    /// indicate the potential for defects, waste, or other negative outcomes during the cutting process.
+    /// Gets or sets the adaptive risk score at the recommended position (legacy
+    /// penalty/adaptive scoring; diagnostic in the inscribed-geometry modes).
     /// </summary>
     public double RiskScore { get; set; }
 
     /// <summary>
-    /// Gets or sets the risk rating associated with the recommended spindle position, which may
+    /// Gets or sets the text rating for <see cref="RiskScore"/> (e.g. Low/Medium/High).
     /// </summary>
     public string RiskRating { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the baseline risk score for the log before optimization, which may
+    /// Gets or sets the risk score on the CURRENT axis (no move), for comparison.
     /// </summary>
     public double BaselineRiskScore { get; set; }
 
     /// <summary>
-    /// Gets or sets the baseline risk rating for the log before optimization, which may
+    /// Gets or sets the text rating for <see cref="BaselineRiskScore"/>.
     /// </summary>
     public string BaselineRiskRating { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the percentage reduction in risk score achieved through optimization, which may
+    /// Gets or sets how much lower (percent) the risk score is than on the current axis.
     /// </summary>
     public double RiskScoreReductionPercent { get; set; }
 
 
     /// <summary>
-    /// Gets or sets the machine command details for the recommended spindle position,
-    /// including the coordinates of the tail and head of the log in millimeters.
+    /// The head/tail X/Y commands sent to the PLC, in MILLIMETRES here (inches in
+    /// the PLC payload). Command = -SpindleMovement (see the class remarks).
     /// </summary>
     public double CommandTailXMM { get; set; }
     public double CommandTailYMM { get; set; }
@@ -88,7 +97,8 @@ public sealed class FinalSpindleRecommendation
 
 
     /// <summary>
-    /// Gets or sets the best tested spindle position during optimization, including the coordinates of the tail and head of the log in millimeters.
+    /// The best spindle axis position found (point-cloud frame, mm) before it is
+    /// turned into a command. Kept for diagnostics.
     /// </summary>
     public double BestTestedTailXMM { get; set; }
     public double BestTestedTailYMM { get; set; }
@@ -96,15 +106,14 @@ public sealed class FinalSpindleRecommendation
     public double BestTestedHeadYMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum spindle movement in millimeters, which may indicate the extent
-    /// of adjustment required to achieve the recommended spindle position.
+    /// Gets or sets the largest single head/tail move (mm) needed to reach the commanded position.
     /// </summary>
     public double MaxSpindleMovementMM { get; set; }
 
 
     /// <summary>
     /// Gets or sets the total number of full sheets produced from the log.
-    /// Usable, rejected, and total full sheets are tracked to assess the efficiency and quality of the cutting process.
+    /// Sheet counts of the virtual peel at the commanded position (see PeelSheetSummary).
     /// </summary>
     public int TotalFullSheets { get; set; }
     public int UsableFullSheets { get; set; }
@@ -117,30 +126,35 @@ public sealed class FinalSpindleRecommendation
     public double UsableVeneerLengthMM { get; set; }
 
    
+    /// <summary>
+    /// Inscribed-geometry size at the chosen axis: major and minor diameters (mm;
+    /// equal for a cylinder) and the oval's major-axis direction (degrees).
+    /// </summary>
     public double InscribedMajorDiameterMM { get; set; }
     public double InscribedMinorDiameterMM { get; set; }
     public double InscribedOrientationDeg { get; set; }
 
     /// <summary>
-    /// Gets or sets the baseline and optimized wane scores in millimeters, which may indicate the extent
-    /// of wane (the amount of bark or sapwood present) and its potential impact on the log's quality and value.
+    /// Gets or sets the wane score on the current axis (baseline) and at the
+    /// chosen axis (optimized). Wane here means missing wood around the turning axis.
     /// </summary>
     public double BaselineWaneScoreMM { get; set; }
     public double OptimizedWaneScoreMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the baseline and optimized internal search scores, which may indicate the effectiveness
-    /// of the internal search algorithm in identifying optimal spindle positions.
+    /// Gets or sets the search's internal score on the current axis and at the chosen
+    /// axis (legacy PenaltyScored search; diagnostic in other modes).
     /// </summary>
     public double BaselineInternalSearchScore { get; set; }
     public double OptimizedInternalSearchScore { get; set; }
 
+    /// <summary>Defect-patch penalty on the current axis and at the chosen axis (legacy scoring; diagnostic).</summary>
     public double BaselineDefectPenalty { get; set; }
     public double OptimizedDefectPenalty { get; set; }
     
     /// <summary>
-    /// Gets or sets the number of candidates tested during optimization, which may indicate the thoroughness
-    /// of the search process.
+    /// Gets or sets how many candidate positions were evaluated in total and at
+    /// each search level (coarse, medium, fine).
     /// </summary>
     public int TestedCandidates { get; set; }
     public int CoarseCandidates { get; set; }

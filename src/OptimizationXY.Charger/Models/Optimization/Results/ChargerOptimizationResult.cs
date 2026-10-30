@@ -1,10 +1,13 @@
 using OptimizationXY.Charger.Models.Optimization.Spindle;
 
-/// <summary>
-/// Represents the result of the charger optimization process, including offsets, scores, penalties, and candidate counts.
-/// </summary>
+// ChargerOptimizationResult.cs - result of the legacy penalty-scored search (ChargerOptimizer).
 namespace OptimizationXY.Charger.Models.Optimization.Results;
 
+/// <summary>
+/// Result of the legacy penalty-scored search (ChargerOptimizer, PenaltyScored
+/// mode): the best offset of the log centre, its scores and how many candidate
+/// positions were tried. Lower scores/penalties are better.
+/// </summary>
 public class ChargerOptimizationResult  
 {
 
@@ -18,22 +21,22 @@ public class ChargerOptimizationResult
     public double OffsetYMM { get; set; }  
 
     /// <summary>
-    /// Gets or sets a score representing the wane (deviation from ideal shape) of the charger.
+    /// Gets or sets the wane score of the log around the chosen axis (how much of the surface falls inside the target radius).
     /// </summary>
     public double WaneScore { get; set; }  
 
     /// <summary>
-    /// Gets or sets a penalty score representing the presence of defects in the charger.
+    /// Gets or sets the defect-patch penalty of the log around the chosen axis.
     /// </summary>
     public double DefectPenalty { get; set; } 
 
     /// <summary>
-    /// Gets or sets a penalty score representing the amount of movement applied to the charger, which may affect its performance.
+    /// Gets or sets the penalty for how far the spindles must move (bigger moves cost more).
     /// </summary>
     public double MovementPenalty { get; set; } 
 
     /// <summary>
-    /// Gets or sets the final score of the optimization, which may be a combination of the wane score and the various penalties.
+    /// Gets or sets the combined score (wane + penalties, weighted by the scoring settings). Lowest wins.
     /// </summary>
     public double FinalScore { get; set; }  
 
@@ -43,7 +46,7 @@ public class ChargerOptimizationResult
     public bool IsRecommended { get; set; }  
 
     /// <summary>
-    /// Gets or sets the percentage improvement of the optimization result compared to a baseline or previous result.
+    /// Gets or sets the percentage improvement of the final score versus not moving (the current axis).
     /// </summary>
     public double ImprovementPercent { get; set; }  
 
@@ -59,7 +62,7 @@ public class ChargerOptimizationResult
     
     /// <summary>
     /// Gets or sets the number of fine candidates considered during the optimization process.
-    /// </summary>  
+    /// </summary>
     public int FineCandidates { get; set; }
 
     /// <summary>
