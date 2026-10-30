@@ -27,6 +27,7 @@ public sealed class GenieNanoCameraService : IDisposable
     public event EventHandler<CameraFrameEventArgs>? FrameAcquired;
     public event EventHandler<string>? DiagnosticsMessage;
 
+    // Connect/Start: always throw PlatformNotSupportedException in this build.
     public void Connect(CameraDeviceSettings settings) => ThrowUnavailable();
 
     public void Connect(
@@ -48,6 +49,7 @@ public sealed class GenieNanoCameraService : IDisposable
     public void StartManagedFrameCapture() =>
         ThrowUnavailable();
 
+    // Stop/Disconnect: nothing to stop, so they do nothing.
     public void StopLive()
     {
     }

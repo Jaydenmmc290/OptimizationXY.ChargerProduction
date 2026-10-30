@@ -1451,6 +1451,7 @@ public static class InscribedGeometryOptimizer
 
     private sealed class Candidate
     {
+        // Axis tested: tail = offset + sweep/2, head = offset - sweep/2 (mm, X and Y).
         public double OffsetXMM { get; init; }
         public double OffsetYMM { get; init; }
         public double SweepXMM { get; init; }
@@ -1476,6 +1477,8 @@ public static class InscribedGeometryOptimizer
     /// </summary>
     private sealed class SearchPassResult
     {
+        // Best axis of the pass (same offset/sweep meaning as Candidate), its
+        // geometry, and how many candidates the pass tried.
         public double OffsetXMM { get; init; }
         public double OffsetYMM { get; init; }
         public double SweepXMM { get; init; }

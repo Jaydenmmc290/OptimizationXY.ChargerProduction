@@ -237,6 +237,8 @@ public static class LookupTableInterpolator
                 LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
+        // Copies of the table's points, point count and image width, plus the bands
+        // of every column (built on first use).
         public List<LookupPoint> Points { get; }
         public int PointCount { get; }
         public int ImageWidth { get; }

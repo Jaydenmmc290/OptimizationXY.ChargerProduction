@@ -55,6 +55,7 @@ internal static class CalibrationImageImportRunner
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+    // Indented so the written calibration file is easy to read by eye.
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -462,16 +463,24 @@ internal static class CalibrationImageImportRunner
     /// <summary>The parsed command-line switches (see the class summary for the list).</summary>
     private sealed class ImportOptions
     {
+        // Image files given with --small, --large and --home (each switch may repeat).
         public List<string> SmallImages { get; } = [];
         public List<string> LargeImages { get; } = [];
         public List<string> HomeImages { get; } = [];
+        // Reference tube diameters, always stored in mm (the -in switches are converted).
         public double SmallDiameterMM { get; private set; }
         public double LargeDiameterMM { get; private set; }
+        // Null = keep the length scale of the active calibration.
         public double? LengthPixelsPerMM { get; private set; }
         public string OperatorName { get; private set; } = Environment.UserName;
         public string Notes { get; private set; } = string.Empty;
+        // True (--activate) = make the new calibration the active one.
         public bool Activate { get; private set; }
 
+        /// <summary>
+        /// Reads the switches. Unknown switches are ignored.
+        /// </summary>
+        /// <exception cref="ArgumentException">A value is missing, not a number, or the diameters are missing/wrong way round.</exception>
         public static ImportOptions Parse(string[] args)
         {
             var options = new ImportOptions();
@@ -518,6 +527,7 @@ internal static class CalibrationImageImportRunner
             return options;
         }
 
+        /// <summary>Reads a number written with '.' as decimal point; throws if it is not a finite number.</summary>
         private static double Number(string text) =>
             double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) &&
             double.IsFinite(value)

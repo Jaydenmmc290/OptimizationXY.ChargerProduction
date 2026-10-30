@@ -114,6 +114,7 @@ namespace OptimizationXY.Charger.Services.Core
         /// </summary>
         public byte[]? HeadCameraConfigurationSnapshot { get; set; }
         public byte[]? TailCameraConfigurationSnapshot { get; set; }
+        // (Head first, tail second; both are copied into the saved scan folder.)
 
         // Geometry. PointCloud = MEASURED points only (X/Y across the log, Z along it,
         // mm, Z = 0 at the tail). This is the only cloud used for measurement,
@@ -165,9 +166,13 @@ namespace OptimizationXY.Charger.Services.Core
 
 
 
+        // Inscribed-geometry search results (filled in the inscribed modes and in
+        // RecoveryOptimized): best round cylinder, best oval, and the peel comparison
+        // that picks between them (CompareInscribedGeometry = production mode).
         public InscribedGeometryResult? LargestInscribedCylinder { get; set; }
         public InscribedGeometryResult? LargestInscribedOval { get; set; }
         public GeometryPeelComparisonResult? GeometryPeelComparison { get; set; }
+        // RecoveryOptimized mode only: the strategy comparison and the direct search.
         public RecoveryOptimizationResult? RecoveryOptimization { get; set; }
         public DirectRecoverySearchResult? DirectRecoverySearch { get; set; }
 
@@ -178,6 +183,13 @@ namespace OptimizationXY.Charger.Services.Core
         // Visuals (pictures saved with the scan and shown on screen). All are OpenCV
         // images that must be disposed - Clear() does that.
 
+        // Peel views (the "unrolled veneer" pictures), drawn after the PLC write:
+        //   UnwrappedPeelView       the selected position (always)
+        //   CylinderPeelView        best inscribed cylinder (inscribed compare / recovery)
+        //   OvalPeelView            best inscribed oval (inscribed compare / recovery)
+        //   BaselinePeelView        current axis, no move (recovery mode)
+        //   PenaltyPeelView         penalty-scored position (recovery mode)
+        //   DirectRecoveryPeelView  direct search position (recovery mode)
         public Mat? UnwrappedPeelView { get; set; }
         public Mat? CylinderPeelView { get; set; }
         public Mat? OvalPeelView { get; set; }
@@ -192,10 +204,14 @@ namespace OptimizationXY.Charger.Services.Core
         /// </summary>
         public List<DeferredPeelView> DeferredPeelViews { get; } = new();
 
+        // Picture of the measured point cloud.
         public Mat? PointCloudOverlay { get; set; }
 
         /// <summary>Single view from the head end of the block, shown in the main form overlay box.</summary>
         public Mat? LogHeadEndViewOverlay { get; set; }
+        // Colour map of the radius defect map (dents/bumps along and around the log).
+        // CenterlineOffsetOverlay and SpindleAxisOverlay are saved when present, but
+        // nothing in the current pipeline fills them, so they stay null.
         public Mat? RadiusDefectHeatmap { get; set; }
         public Mat? CenterlineOffsetOverlay { get; set; }
         public Mat? SpindleAxisOverlay { get; set; }

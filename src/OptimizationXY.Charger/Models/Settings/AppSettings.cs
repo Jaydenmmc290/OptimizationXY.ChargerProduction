@@ -913,6 +913,7 @@ public sealed class ProductionSettings
     public bool EmergencyStopAndInterlocksVerified { get; set; }
     public bool PlcRuntimeLicenseVerified { get; set; }
 
+    // Name of the person who signed off commissioning, and when (UTC).
     public string CommissioningApprovedBy { get; set; } = string.Empty;
     public DateTime? CommissioningApprovedUtc { get; set; }
 
@@ -1126,6 +1127,8 @@ public sealed class MachineLimitSettings
     public double MaxHeadMoveXMM { get; set; } = 100;  
     public double MaxHeadMoveYMM { get; set; } = 100; 
 
+    // NOTE: WarningMoveMM is not read anywhere in the program at present; only
+    // the hard Max…MoveMM limits above are enforced.
     public double WarningMoveMM { get; set; } = 80;  // Warning threshold for movement in millimeters. If the movement exceeds this value, a warning will be issued.
 }
 
@@ -1157,11 +1160,13 @@ public sealed class DiagnosticsSettings
 
 
 /// <summary>
-/// Cell counts for ONE virtual-peel sheet (used internally by the peel
-/// simulation to decide whether the sheet is usable).
+/// Cell counts for ONE virtual-peel sheet (filled while the peel view is
+/// drawn, UnwrappedPeelViewBuilder, to decide whether the sheet is usable).
 /// </summary>
 public sealed class SheetQualityStats
 {
+    // Grid cells in the sheet, how many are clean wood, how many show wane
+    // (gap/bark), and how many show severe wane.
     public int TotalCells { get; set; }
     public int UsableCells { get; set; } 
     public int WaneCells { get; set; } 
@@ -1180,6 +1185,7 @@ public class ScanFolderInfo
     public int BlockNumber { get; set; }
     public int ScanNumber { get; set; }
 
+    // Folder name (for example "Block_0003") and its full path.
     public string BlockName { get; set; } = string.Empty;
     public string BlockFolderPath { get; set; } = string.Empty;
 }
@@ -1192,8 +1198,11 @@ public class ScanFolderInfo
 /// </summary>
 public sealed class DatabaseSettings
 {
+    // Off by default. Turned off on load if no connection string can be resolved.
     public bool EnableDatabaseSaving { get; set; }
 
+    // SQL Server connection string. When the environment variable
+    // OPTIMIZATION_XY_SQL_CONNECTION_STRING is set, it is used instead.
     public string ConnectionString { get; set; } = string.Empty;
 }
 
@@ -1205,6 +1214,18 @@ public sealed class DatabaseSettings
 /// </summary>
 public sealed class ProductionSetupSettings
 {
+    // One flag per setup-wizard step, set true when that step is completed:
+    //   DatabaseConfigured                        database created/checked at the expected schema version
+    //   CameraConfigurationVerified               both cameras connected and configured (or laser check passed)
+    //   CameraPhysicalPositionsConfirmed          operator confirmed head/tail previews show the correct ends
+    //   LaserDetectionVerified                    laser line found in enough verification frames
+    //   LengthCalibrationConfigured               axial length scale measured and saved
+    //   ScannerCalibrationCreated                 scanner calibration built and activated
+    //   ScannerCalibrationRepeatabilityVerified   the new calibration has repeatability figures
+    // PendingLengthPixelsPerMM is the measured length scale (pixels per mm along
+    // the block); it is used to build the scanner calibration, which then keeps
+    // its own copy. LengthCalibrationMeasuredUtc is when it was measured.
+    // ActiveCalibrationId names the calibration package in use.
     public bool DatabaseConfigured { get; set; }
     public bool CameraConfigurationVerified { get; set; }
     public bool CameraPhysicalPositionsConfirmed { get; set; }
