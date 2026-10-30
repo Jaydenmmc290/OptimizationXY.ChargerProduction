@@ -7,6 +7,13 @@ using OptimizationXY.Charger.Models.Defects;
 namespace OptimizationXY.Charger.Visualization;
 /// <summary>
 /// Builds a heatmap visualization of radius defects based on a RadiusDefectMap.
+/// <para>
+/// X axis = position along the block (Z, mm); Y axis = angle (0–360°). Each
+/// cell is coloured by its radius error (measured radius minus the expected
+/// smooth radius): blue at -4 mm or lower, cyan between -4 and -2 mm, dark grey
+/// otherwise. Only LOW spots (dents, missing wood) are coloured; high spots
+/// are drawn grey like good wood. Diagnostic picture only.
+/// </para>
 /// </summary>
 public static class RadiusDefectHeatmapBuilder
 {

@@ -14,6 +14,22 @@ namespace OptimizationXY.Charger.UI.Forms;
 
 /// <summary>
 /// A Windows Forms wizard for guiding the user through the production setup and scanner calibration process.
+/// <para>
+/// The tabs, done in order on a new or changed machine:
+/// 1. Overview (where data is stored), 2. Local SQL Express (create/check the
+/// database), 3. Cameras (pick which discovered camera is head and which is
+/// tail, confirm with the previews), 4. Camera Alignment / Seam (line up the two
+/// images and check the laser), 5. Axial Length Scale (pixels per mm along the
+/// block), 6. Known References (capture round references of known diameter),
+/// 7. Review and Activate (build, check and activate the scanner calibration).
+/// </para>
+/// <para>
+/// Each completed step sets a flag in AppSettings.Setup; the main form opens
+/// this wizard automatically while the minimum setup is incomplete or the
+/// active calibration cannot be loaded or does not match. The wizard
+/// never opens the cameras itself; it asks MainForm through
+/// <see cref="ProductionSetupContext"/>. PLC ScanStart is ignored while it is open.
+/// </para>
 /// </summary>
 public sealed class ProductionSetupWizardForm : Form
 {
@@ -1389,6 +1405,10 @@ public sealed class ProductionSetupWizardForm : Form
             });
     }
 
+    /// <summary>
+    /// Asks for the cameras Sapera can see, refills the head and tail drop-down
+    /// lists, and re-selects the cameras already assigned in the settings.
+    /// </summary>
     private void RefreshDiscoveredCameraList()
     {
         _discoveredCameras.Clear();
@@ -1463,6 +1483,7 @@ public sealed class ProductionSetupWizardForm : Form
         Append(_cameraStatus.Text);
     }
 
+    /// <summary>Selects the list entry with the given Sapera server name and device index (if present).</summary>
     private static void SelectAssignedCamera(
     ComboBox comboBox,
     string serverName,
