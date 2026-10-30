@@ -1,7 +1,10 @@
 using Emgu.CV;
 
 /// <summary>
-/// Represents a batch of calibration captures, including concatenated frames and camera configuration snapshots.
+/// A batch of joined (head + tail) frames captured while a calibration
+/// reference (a round tube of known diameter, or the home cable) is in the
+/// scanner, plus the camera settings snapshots in force at that moment. The
+/// batch owns the images: dispose it to free the image memory.
 /// </summary>
 namespace OptimizationXY.Charger.Models.Calibration;
 
@@ -10,13 +13,13 @@ namespace OptimizationXY.Charger.Models.Calibration;
 public sealed class CalibrationCaptureBatch : IDisposable
 {
     
-    // Gets the concatenated frames captured during calibration.
+    // Joined head+tail images, one per captured pair.
     public required IReadOnlyList<Mat> ConcatenatedFrames { get; init; }
 
-    // Gets the head camera configuration snapshot captured during calibration.
+    // Head-camera settings snapshot (bytes) - hashed into the calibration fingerprint.
     public required byte[] HeadCameraConfigurationSnapshot { get; init; }
 
-    // Gets the tail camera configuration snapshot captured during calibration.
+    // Tail-camera settings snapshot (bytes) - hashed into the calibration fingerprint.
     public required byte[] TailCameraConfigurationSnapshot { get; init; }
 
     // Gets the UTC timestamp when the calibration capture batch was captured.

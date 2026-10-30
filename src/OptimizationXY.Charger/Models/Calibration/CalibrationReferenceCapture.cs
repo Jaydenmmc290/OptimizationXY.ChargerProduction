@@ -1,16 +1,17 @@
 namespace OptimizationXY.Charger.Models.Calibration;
 
 /// <summary>
-/// Represents a capture of calibration reference data, including a summary, lookup points, and held-out samples.
+/// Everything measured from ONE calibration reference (one tube or the home
+/// cable): its summary, the lookup points it contributes to the table, and
+/// held-out samples kept back for checking the finished table.
 /// </summary>
 public sealed class CalibrationReferenceCapture
 {
 
-    //CalibrationReferenceCapture is a record type that encapsulates the details of a calibration reference capture.
-    //It includes a summary of the calibration reference, a list of lookup points, and a list of held-out samples.
+    // Summary: name, known size, image size and laser statistics for this reference.
     public required CalibrationReferenceSummary Summary { get; init; }
 
-    // Lookup points are a collection of data points used for calibration reference.
+    // Lookup points: (column, laser row) -> known radius, added to the calibration table.
     public required IReadOnlyList<LookupPoint> Points { get; init; }
 
     // Held-out samples are a collection of calibration laser samples that are not used in

@@ -1,17 +1,26 @@
 namespace OptimizationXY.Charger.Models.Calibration;
 
 /// <summary>
-/// Complete scanner calibration package used by the runtime lookup
-/// interpolator. The file is machine-specific and must be regenerated after a
+/// Complete scanner calibration ("lookup table") used at run time by
+/// LookupTableInterpolator to turn each detected laser point (image column,
+/// laser row) into a real radius in millimetres. Saved as
+/// Config\Calibration\scanner-lookup-table.json.
+/// <para>
+/// The table also records a fingerprint of the setup it was made with
+/// (camera identity, SHA-256 hashes of the camera settings and of the
+/// crop/flip/overlap geometry). The program refuses to use the table if that
+/// fingerprint no longer matches the current setup.
+/// </para>
+/// The file is machine-specific and must be regenerated after a
 /// camera, lens, laser, mount, crop, orientation, seam, or camera-configuration change.
 /// </summary>
 public sealed class ScannerLookupTable
 {
 
-    //SchemaVersion indicates the version of the schema used for the scanner lookup table.
+    // SchemaVersion: file format version; anything below 3 is rejected by IsValid.
     public int SchemaVersion { get; set; } = 3;
 
-    // CalibrationId is the unique identifier for the calibration.  
+    // CalibrationId: unique id of this calibration (shown in logs and saved with each scan).
     public string CalibrationId { get; set; } = string.Empty;
 
     // CreatedUtc is the UTC timestamp when the scanner lookup table was created.
@@ -26,34 +35,33 @@ public sealed class ScannerLookupTable
     //  SoftwareVersion is the version of the software used for the calibration.
     public string SoftwareVersion { get; set; } = string.Empty;
 
-    // HeadCameraSerialNumber is the serial number of the head camera used in the calibration.
+    // HeadCameraServerName: Sapera server name of the head camera when calibrated (part of the fingerprint).
     public string HeadCameraServerName { get; set; } = string.Empty;
 
-    // TailCameraSerialNumber is the serial number of the tail camera used in the calibration.
+    // TailCameraServerName: Sapera server name of the tail camera when calibrated (part of the fingerprint).
     public string TailCameraServerName { get; set; } = string.Empty;
 
-    // HeadCameraSerialNumber is the serial number of the head camera used in the calibration.
+    // HeadCameraConfigurationSha256: SHA-256 hash of the head camera settings used for calibration.
     public string HeadCameraConfigurationSha256 { get; set; } = string.Empty;
 
-    // TailCameraSerialNumber is the serial number of the tail camera used in the calibration.
+    // TailCameraConfigurationSha256: SHA-256 hash of the tail camera settings used for calibration.
     public string TailCameraConfigurationSha256 { get; set; } = string.Empty;
 
-    // AcquisitionGeometrySha256 is the SHA-256 hash of the acquisition geometry used in the calibration.
+    // AcquisitionGeometrySha256: SHA-256 hash of the image-joining geometry (crop, flip, overlap, offset, ...) used for calibration.
     public string AcquisitionGeometrySha256 { get; set; } = string.Empty;
 
-    // ImageWidth is the width of the image captured during calibration.
+    // ImageWidth / ImageHeight: joined-image size (pixels) the table was built for. Scan images must be the same size.
     public int ImageWidth { get; set; }
 
-    // ImageHeight is the height of the image captured during calibration.
     public int ImageHeight { get; set; }
 
-    // LengthPixelsPerMM is the calibrated length in pixels per millimeter.
+    // LengthPixelsPerMM: axial scale - image columns per millimetre along the log.
     public double LengthPixelsPerMM { get; set; }
 
     // MinimumCalibratedRadiusMM is the minimum calibrated radius in millimeters.
     public double MinimumCalibratedRadiusMM { get; set; }
 
-    // MaximumCalibratedRadiusMM is the maximum calibrated radius in millimeters.
+    // MaximumCalibratedRadiusMM: largest calibrated radius (mm). Larger radii are extrapolated or rejected (see LookupTableInterpolator).
     public double MaximumCalibratedRadiusMM { get; set; }
 
     // References is a list of calibration reference summaries used in the calibration process.
@@ -66,8 +74,13 @@ public sealed class ScannerLookupTable
     public List<LookupPoint> Points { get; set; } = [];
 
 
-    /// IsValid checks if the scanner lookup table is valid based on various criteria,
-    /// including schema version, calibration ID, SHA-256 hashes, image dimensions, and point data.
+    /// <summary>
+    /// True when the table is complete and self-consistent: schema 3 or later,
+    /// an id, three valid SHA-256 hashes, a positive image size and axial scale,
+    /// at least two points from at least two different radius bands, every
+    /// point inside the image with a finite non-negative radius, and the
+    /// recorded min/max radius matching the points (within 0.01 mm).
+    /// </summary>
     public bool IsValid
     {
         get
@@ -105,6 +118,9 @@ public sealed class ScannerLookupTable
                 return false;
             }
 
+            // Count distinct reference bands. Points with a band id are grouped by id;
+            // older points without one are grouped by their radius rounded to 0.0001 mm.
+            // At least two bands are needed to interpolate between radii.
             int distinctRadiusBands = Points
                 .Select(point => point.RadiusBandId > 0
                     ? $"B:{point.RadiusBandId}"
