@@ -3437,7 +3437,7 @@ double maxSpindleMovementMM)
     /// two frames adding at the same time can lose an entry or throw, and a
     /// throw there used to mark a good frame invalid.
     /// </summary>
-    private static readonly object TimingEntriesLock = new();
+    private static readonly Lock TimingEntriesLock = new();
 
     /// <summary>
     /// Adds one timing entry. Safe to call from several threads at once.

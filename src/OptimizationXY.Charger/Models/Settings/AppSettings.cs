@@ -263,13 +263,13 @@ public sealed class RotatingScanSettings
     /// Set true if the log turns the opposite way to the mathematical positive direction of the
     /// machine X/Y frame. Verify with an off-centre reference before changing.
     /// </summary>
-    public bool ReverseRotationDirection { get; set; } = false;
+    public bool ReverseRotationDirection { get; set; } 
 
     /// <summary>
     /// Machine-frame angle (degrees) at which the laser line strikes the log. 0 means the laser
     /// measures along machine +X. Verify with an off-centre reference before changing.
     /// </summary>
-    public double LaserAngleOffsetDeg { get; set; } = 0.0;
+    public double LaserAngleOffsetDeg { get; set; } 
 
     /// <summary>
     /// Indicates whether to fill in missing points during the rotating scan process. If true, the application will attempt to

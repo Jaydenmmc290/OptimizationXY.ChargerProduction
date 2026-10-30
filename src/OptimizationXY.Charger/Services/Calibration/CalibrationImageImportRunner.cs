@@ -101,7 +101,7 @@ internal static class CalibrationImageImportRunner
             report.AppendLine(CultureInfo.InvariantCulture,
                 $"Active calibration before import: {previous.CalibrationId} " +
                 $"({previous.ImageWidth}x{previous.ImageHeight}, radius {previous.MinimumCalibratedRadiusMM:F3}-{previous.MaximumCalibratedRadiusMM:F3} mm).");
-            report.AppendLine(CultureInfo.InvariantCulture,
+            report.AppendLine(
                 $"LengthPixelsPerMM: {lengthPixelsPerMM:F10}" +
                 (options.LengthPixelsPerMM.HasValue ? " (from --length-pixels-per-mm)" : " (kept from the active calibration; cropping does not change it)"));
             report.AppendLine(expectedWidth.HasValue
@@ -203,7 +203,7 @@ internal static class CalibrationImageImportRunner
     private static CalibrationReferenceCapture ImportReference(
         StringBuilder report,
         string name,
-        IReadOnlyList<string> imagePaths,
+        List<string> imagePaths,
         double diameterMM,
         int bandId,
         bool isHome,

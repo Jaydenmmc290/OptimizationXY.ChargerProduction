@@ -89,10 +89,9 @@ namespace OptimizationXY.Charger.Kinematic;
         /// <exception cref="ArgumentException">If config settings are invalid</exception>
         public KinematicsCalculator(KinematicsConfig config)
         {
-            if (config == null)
-                throw new ArgumentNullException(nameof(config));
+        ArgumentNullException.ThrowIfNull(config);
 
-            config.Validate();
+        config.Validate();
             _config = config;
         }
 
@@ -201,7 +200,7 @@ namespace OptimizationXY.Charger.Kinematic;
             //   C) Only tail needs rotation
             //   D) Neither needs rotation
 
-            double spindleRotateCalc = 0;  // Amount to rotate the spindle (degrees)
+            double spindleRotateCalc;  // Amount to rotate the spindle (degrees)
             double newDogAngle = dogLCAngle;    // New angle after rotation
             double newTailAngle = tailLCAngle;  // New angle after rotation
 
@@ -380,7 +379,7 @@ namespace OptimizationXY.Charger.Kinematic;
             double tailFromRight = _config.RotationZoneRightLimit - tailLCAngle;
 
             // STEP 6: DETERMINE ROTATION CASE AND APPLY ROTATION LOGIC
-            double spindleRotateCalc = 0;
+            double spindleRotateCalc;
             double newDogAngle = dogLCAngle;
             double newTailAngle = tailLCAngle;
 

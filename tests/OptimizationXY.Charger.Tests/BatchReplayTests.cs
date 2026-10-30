@@ -7,7 +7,7 @@ namespace OptimizationXY.Charger.Tests;
 public class BatchReplayTests
 {
     [Fact]
-    public void SettingsOverride_ChangesNumbersBoolsAndEnums()
+    public void SettingsOverrideChangesNumbersBoolsAndEnums()
     {
         var settings = new AppSettings();
 
@@ -21,7 +21,7 @@ public class BatchReplayTests
     }
 
     [Fact]
-    public void SettingsOverride_RejectsUnknownSettingsAndBadValues()
+    public void SettingsOverrideRejectsUnknownSettingsAndBadValues()
     {
         var settings = new AppSettings();
 
@@ -31,14 +31,14 @@ public class BatchReplayTests
     }
 
     [Fact]
-    public void Csv_RoundTrips_AndSummaryFlagsChangesAndRepeatSpread()
+    public void CsvRoundTripsAndSummaryFlagsChangesAndRepeatSpread()
     {
         string folder = Path.Combine(Path.GetTempPath(), "batch-replay-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
 
         try
         {
-            BatchReplayRunner.Row Row(string scan, double tailX, int usable) => new(
+            static BatchReplayRunner.Row Row(string scan, double tailX, int usable) => new(
                 scan, "Block_0003", "OK", 88, 83, true, 83, "Largest Inscribed Cylinder",
                 tailX, 2.68, -19.41, -16.43, 439.47, usable, 45, usable * 1270.0, "Good", 1.5, string.Empty);
 

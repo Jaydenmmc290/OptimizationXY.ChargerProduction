@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Text;
+using System.Globalization;
 
 namespace OptimizationXY.Charger.Kinematic;
 
@@ -490,12 +491,12 @@ public partial class KinematicForm : Form
         double TailLCAngle = 0;  // Calculated angle from spindle center to tail component
 
         // Zone check flags (1 = in zone, 0 = safe)
-        int DogLCInZone = 0;  // True if dog is in rotation zone (needs rotation)
-        int TailLCInZone = 0; // True if tail is in rotation zone (needs rotation)
+        int DogLCInZone;  // True if dog is in rotation zone (needs rotation)
+        int TailLCInZone; // True if tail is in rotation zone (needs rotation)
 
         // Distance from spindle center to each component
-        double DogRotSC2LC = 0;   // Radial distance from center to dog
-        double TailRotSC2LC = 0;  // Radial distance from center to tail
+        double DogRotSC2LC;   // Radial distance from center to dog
+        double TailRotSC2LC;  // Radial distance from center to tail
 
         // Distances from each component to rotation zone boundaries
         double DogFromLeft = 0;   // How far dog angle is from left boundary
@@ -508,8 +509,8 @@ public partial class KinematicForm : Form
         double AngleB = 0;  // Used in complex rotation case calculations
 
         // Final angles after rotation applied
-        double TailEndAngle = 0;  // Final tail angle after rotation
-        double DogEndAngle = 0;   // Final dog angle after rotation
+        double TailEndAngle;  // Final tail angle after rotation
+        double DogEndAngle ;   // Final dog angle after rotation
 
         // New angles with rotation applied (before coordinate conversion)
         double NewDogAngle = 0;  // Dog angle after spindle rotation
@@ -808,9 +809,8 @@ public partial class KinematicForm : Form
 
                 if (AngleB > 360)
                 {
-                    AngleB =
-                        AngleB -
-                        360;
+                    AngleB -=
+360;
                 }
 
                 NewDogAngle =
@@ -841,9 +841,8 @@ public partial class KinematicForm : Form
 
                 if (AngleB > 360)
                 {
-                    AngleB =
-                        AngleB -
-                        360;
+                    AngleB -=
+360;
                 }
 
                 NewDogAngle =
@@ -1141,9 +1140,8 @@ public partial class KinematicForm : Form
 
             if (AngleA > 360)
             {
-                AngleA =
-                    AngleA -
-                    360;
+                AngleA -=
+360;
             }
 
 
@@ -1155,9 +1153,8 @@ public partial class KinematicForm : Form
 
             if (AngleB > 360)
             {
-                AngleB =
-                    AngleB -
-                    360;
+                AngleB -=
+360;
             }
 
 
@@ -1342,21 +1339,17 @@ public partial class KinematicForm : Form
 
         if (Enable_XY_Correction_Offset)
         {
-            DOGXCalc =
-                DOGXCalc +
-                HEAD_X_OFFSET;
+            DOGXCalc +=
+HEAD_X_OFFSET;
 
-            DOGYCalc =
-                DOGYCalc +
-                HEAD_Y_OFFSET;
+            DOGYCalc +=
+HEAD_Y_OFFSET;
 
-            TailXCalc =
-                TailXCalc +
-                TAIL_X_OFFSET;
+            TailXCalc +=
+TAIL_X_OFFSET;
 
-            TailYCalc =
-                TailYCalc +
-                TAIL_Y_OFFSET;
+            TailYCalc +=
+TAIL_Y_OFFSET;
         }
 
 
@@ -1480,20 +1473,20 @@ public partial class KinematicForm : Form
         // Working variables for Dog J1 solution
         // ------------------------------------------------------------
 
-        double dog_sum_x_1 = 0;
-        double dog_sum_y_1 = 0;
+        double dog_sum_x_1 ;
+        double dog_sum_y_1 ;
 
-        double dog_J1_11 = 0;
-        double dog_J1_12 = 0;
-        double dog_J1_21 = 0;
-        double dog_J1_22 = 0;
+        double dog_J1_11 ;
+        double dog_J1_12 ;
+        double dog_J1_21 ;
+        double dog_J1_22 ;
 
-        double det_J1 = 0;
+        double det_J1;
 
-        double dog_J1_inv_11 = 0;
-        double dog_J1_inv_12 = 0;
-        double dog_J1_inv_21 = 0;
-        double dog_J1_inv_22 = 0;
+        double dog_J1_inv_11 ;
+        double dog_J1_inv_12 ;
+        double dog_J1_inv_21 ;
+        double dog_J1_inv_22 ;
 
 
         // ============================================================
@@ -1559,19 +1552,15 @@ public partial class KinematicForm : Form
                 dog_J1_11 / det_J1;
 
 
-            dog_theta_3 =
-                dog_theta_3
-                -
-                (
+            dog_theta_3 -=
+(
                     dog_J1_inv_11 * dog_sum_x_1
                     +
                     dog_J1_inv_12 * dog_sum_y_1
                 );
 
-            dog_theta_4 =
-                dog_theta_4
-                -
-                (
+            dog_theta_4 -=
+(
                     dog_J1_inv_21 * dog_sum_x_1
                     +
                     dog_J1_inv_22 * dog_sum_y_1
@@ -1640,20 +1629,20 @@ public partial class KinematicForm : Form
         // Dog J2 working variables
         // ------------------------------------------------------------
 
-        double dog_sum_x_2 = 0;
-        double dog_sum_y_2 = 0;
+        double dog_sum_x_2 ;
+        double dog_sum_y_2 ;
 
-        double dog_J2_11 = 0;
-        double dog_J2_12 = 0;
-        double dog_J2_21 = 0;
-        double dog_J2_22 = 0;
+        double dog_J2_11 ;
+        double dog_J2_12 ;
+        double dog_J2_21 ;
+        double dog_J2_22 ;
 
-        double det_J2 = 0;
+        double det_J2 ;
 
-        double dog_J2_inv_11 = 0;
-        double dog_J2_inv_12 = 0;
-        double dog_J2_inv_21 = 0;
-        double dog_J2_inv_22 = 0;
+        double dog_J2_inv_11 ;
+        double dog_J2_inv_12 ;
+        double dog_J2_inv_21 ;
+        double dog_J2_inv_22 ;
 
 
         // ============================================================
@@ -1709,19 +1698,15 @@ public partial class KinematicForm : Form
                 dog_J2_11 / det_J2;
 
 
-            dog_r_6 =
-                dog_r_6
-                -
-                (
+            dog_r_6 -=
+(
                     dog_J2_inv_11 * dog_sum_x_2
                     +
                     dog_J2_inv_12 * dog_sum_y_2
                 );
 
-            dog_r_7 =
-                dog_r_7
-                -
-                (
+            dog_r_7 -=
+(
                     dog_J2_inv_21 * dog_sum_x_2
                     +
                     dog_J2_inv_22 * dog_sum_y_2
@@ -1774,20 +1759,20 @@ public partial class KinematicForm : Form
         // Dog J3 working variables
         // ------------------------------------------------------------
 
-        double dog_sum_x_3 = 0;
-        double dog_sum_y_3 = 0;
+        double dog_sum_x_3 ;
+        double dog_sum_y_3 ;
 
-        double dog_J3_11 = 0;
-        double dog_J3_12 = 0;
-        double dog_J3_21 = 0;
-        double dog_J3_22 = 0;
+        double dog_J3_11 ;
+        double dog_J3_12 ;
+        double dog_J3_21 ;
+        double dog_J3_22 ;
 
-        double det_J3 = 0;
+        double det_J3 ;
 
-        double dog_J3_inv_11 = 0;
-        double dog_J3_inv_12 = 0;
-        double dog_J3_inv_21 = 0;
-        double dog_J3_inv_22 = 0;
+        double dog_J3_inv_11 ;
+        double dog_J3_inv_12 ;
+        double dog_J3_inv_21 ;
+        double dog_J3_inv_22 ;
 
 
         // ============================================================
@@ -1847,19 +1832,15 @@ public partial class KinematicForm : Form
                 dog_J3_11 / det_J3;
 
 
-            dog_theta_5_new =
-                dog_theta_5_new
-                -
-                (
+            dog_theta_5_new -=
+(
                     dog_J3_inv_11 * dog_sum_x_3
                     +
                     dog_J3_inv_12 * dog_sum_y_3
                 );
 
-            dog_r_2_new =
-                dog_r_2_new
-                -
-                (
+            dog_r_2_new -=
+(
                     dog_J3_inv_21 * dog_sum_x_3
                     +
                     dog_J3_inv_22 * dog_sum_y_3
@@ -1908,20 +1889,20 @@ public partial class KinematicForm : Form
         // Dog J4 working variables
         // ------------------------------------------------------------
 
-        double dog_sum_x_4 = 0;
-        double dog_sum_y_4 = 0;
+        double dog_sum_x_4 ;
+        double dog_sum_y_4 ;
 
-        double dog_J4_11 = 0;
-        double dog_J4_12 = 0;
-        double dog_J4_21 = 0;
-        double dog_J4_22 = 0;
+        double dog_J4_11 ;
+        double dog_J4_12 ;
+        double dog_J4_21 ;
+        double dog_J4_22 ;
 
-        double det_J4 = 0;
+        double det_J4 ;
 
-        double dog_J4_inv_11 = 0;
-        double dog_J4_inv_12 = 0;
-        double dog_J4_inv_21 = 0;
-        double dog_J4_inv_22 = 0;
+        double dog_J4_inv_11 ;
+        double dog_J4_inv_12 ;
+        double dog_J4_inv_21 ;
+        double dog_J4_inv_22 ;
 
 
         // ============================================================
@@ -1985,19 +1966,15 @@ public partial class KinematicForm : Form
                 dog_J4_11 / det_J4;
 
 
-            dog_r_4_new =
-                dog_r_4_new
-                -
-                (
+            dog_r_4_new -=
+(
                     dog_J4_inv_11 * dog_sum_x_4
                     +
                     dog_J4_inv_12 * dog_sum_y_4
                 );
 
-            dog_theta_4_new =
-                dog_theta_4_new
-                -
-                (
+            dog_theta_4_new -=
+(
                     dog_J4_inv_21 * dog_sum_x_4
                     +
                     dog_J4_inv_22 * dog_sum_y_4
@@ -2056,20 +2033,20 @@ public partial class KinematicForm : Form
         // Tail J1 working variables
         // ------------------------------------------------------------
 
-        double tail_sum_x_1 = 0;
-        double tail_sum_y_1 = 0;
+        double tail_sum_x_1 ;
+        double tail_sum_y_1 ;
 
-        double tail_J1_11 = 0;
-        double tail_J1_12 = 0;
-        double tail_J1_21 = 0;
-        double tail_J1_22 = 0;
+        double tail_J1_11 ;
+        double tail_J1_12 ;
+        double tail_J1_21 ;
+        double tail_J1_22 ;
 
-        double tail_det_J1 = 0;
+        double tail_det_J1 ;
 
-        double tail_J1_inv_11 = 0;
-        double tail_J1_inv_12 = 0;
-        double tail_J1_inv_21 = 0;
-        double tail_J1_inv_22 = 0;
+        double tail_J1_inv_11 ;
+        double tail_J1_inv_12 ;
+        double tail_J1_inv_21 ;
+        double tail_J1_inv_22 ;
 
 
         // ============================================================
@@ -2142,19 +2119,15 @@ public partial class KinematicForm : Form
                 tail_J1_11 / tail_det_J1;
 
 
-            tail_theta_3 =
-                tail_theta_3
-                -
-                (
+            tail_theta_3 -=
+(
                     tail_J1_inv_11 * tail_sum_x_1
                     +
                     tail_J1_inv_12 * tail_sum_y_1
                 );
 
-            tail_theta_4 =
-                tail_theta_4
-                -
-                (
+            tail_theta_4 -=
+(
                     tail_J1_inv_21 * tail_sum_x_1
                     +
                     tail_J1_inv_22 * tail_sum_y_1
@@ -2218,20 +2191,20 @@ public partial class KinematicForm : Form
         // Tail J2 working variables
         // ------------------------------------------------------------
 
-        double tail_sum_x_2 = 0;
-        double tail_sum_y_2 = 0;
+        double tail_sum_x_2 ;
+        double tail_sum_y_2 ;
 
-        double tail_J2_11 = 0;
-        double tail_J2_12 = 0;
-        double tail_J2_21 = 0;
-        double tail_J2_22 = 0;
+        double tail_J2_11 ;
+        double tail_J2_12 ;
+        double tail_J2_21 ;
+        double tail_J2_22 ;
 
-        double tail_det_J2 = 0;
+        double tail_det_J2 ;
 
-        double tail_J2_inv_11 = 0;
-        double tail_J2_inv_12 = 0;
-        double tail_J2_inv_21 = 0;
-        double tail_J2_inv_22 = 0;
+        double tail_J2_inv_11 ;
+        double tail_J2_inv_12 ;
+        double tail_J2_inv_21 ;
+        double tail_J2_inv_22 ;
 
 
         // ============================================================
@@ -2292,19 +2265,15 @@ public partial class KinematicForm : Form
                 tail_J2_11 / tail_det_J2;
 
 
-            tail_r_6 =
-                tail_r_6
-                -
-                (
+            tail_r_6 -=
+(
                     tail_J2_inv_11 * tail_sum_x_2
                     +
                     tail_J2_inv_12 * tail_sum_y_2
                 );
 
-            tail_r_7 =
-                tail_r_7
-                -
-                (
+            tail_r_7 -=
+(
                     tail_J2_inv_21 * tail_sum_x_2
                     +
                     tail_J2_inv_22 * tail_sum_y_2
@@ -2355,20 +2324,20 @@ public partial class KinematicForm : Form
         // Tail J3 working variables
         // ------------------------------------------------------------
 
-        double tail_sum_x_3 = 0;
-        double tail_sum_y_3 = 0;
+        double tail_sum_x_3;
+        double tail_sum_y_3;
 
-        double tail_J3_11 = 0;
-        double tail_J3_12 = 0;
-        double tail_J3_21 = 0;
-        double tail_J3_22 = 0;
+        double tail_J3_11 ;
+        double tail_J3_12 ;
+        double tail_J3_21 ;
+        double tail_J3_22 ;
 
-        double tail_det_J3 = 0;
+        double tail_det_J3 ;
 
-        double tail_J3_inv_11 = 0;
-        double tail_J3_inv_12 = 0;
-        double tail_J3_inv_21 = 0;
-        double tail_J3_inv_22 = 0;
+        double tail_J3_inv_11 ;
+        double tail_J3_inv_12 ;
+        double tail_J3_inv_21 ;
+        double tail_J3_inv_22 ;
 
 
         // ============================================================
@@ -2428,19 +2397,15 @@ public partial class KinematicForm : Form
                 tail_J3_11 / tail_det_J3;
 
 
-            tail_theta_5_new =
-                tail_theta_5_new
-                -
-                (
+            tail_theta_5_new -=
+(
                     tail_J3_inv_11 * tail_sum_x_3
                     +
                     tail_J3_inv_12 * tail_sum_y_3
                 );
 
-            tail_r_2_new =
-                tail_r_2_new
-                -
-                (
+            tail_r_2_new -=
+(
                     tail_J3_inv_21 * tail_sum_x_3
                     +
                     tail_J3_inv_22 * tail_sum_y_3
@@ -2488,20 +2453,20 @@ public partial class KinematicForm : Form
         // Tail J4 working variables
         // ------------------------------------------------------------
 
-        double tail_sum_x_4 = 0;
-        double tail_sum_y_4 = 0;
+        double tail_sum_x_4;
+        double tail_sum_y_4;
 
-        double tail_J4_11 = 0;
-        double tail_J4_12 = 0;
-        double tail_J4_21 = 0;
-        double tail_J4_22 = 0;
+        double tail_J4_11 ;
+        double tail_J4_12 ;
+        double tail_J4_21 ;
+        double tail_J4_22 ;
 
-        double tail_det_J4 = 0;
+        double tail_det_J4 ;
 
-        double tail_J4_inv_11 = 0;
-        double tail_J4_inv_12 = 0;
-        double tail_J4_inv_21 = 0;
-        double tail_J4_inv_22 = 0;
+        double tail_J4_inv_11 ;
+        double tail_J4_inv_12 ;
+        double tail_J4_inv_21 ;
+        double tail_J4_inv_22 ;
 
 
         // ============================================================
@@ -2565,19 +2530,15 @@ public partial class KinematicForm : Form
                 tail_J4_11 / tail_det_J4;
 
 
-            tail_r_4_new =
-                tail_r_4_new
-                -
-                (
+            tail_r_4_new -=
+(
                     tail_J4_inv_11 * tail_sum_x_4
                     +
                     tail_J4_inv_12 * tail_sum_y_4
                 );
 
-            tail_theta_4_new =
-                tail_theta_4_new
-                -
-                (
+            tail_theta_4_new -=
+(
                     tail_J4_inv_21 * tail_sum_x_4
                     +
                     tail_J4_inv_22 * tail_sum_y_4
@@ -4298,12 +4259,15 @@ double resultAngle)
 
 
         sb.AppendLine(
+            CultureInfo.InvariantCulture,
             $"{name}:");
 
         sb.AppendLine(
+            CultureInfo.InvariantCulture,
             $"X = {x:F9}");
 
         sb.AppendLine(
+            CultureInfo.InvariantCulture,
             $"Y = {y:F9}");
 
 
@@ -4316,8 +4280,8 @@ double resultAngle)
                 $"Angle = 57.2958 * ATAN(Y / X)");
 
             sb.AppendLine(
-                $"      = 57.2958 * ATAN(" +
-                $"{y:F9} / {x:F9})");
+                CultureInfo.InvariantCulture,
+                $"      = 57.2958 * ATAN({y:F9} / {x:F9})");
         }
 
 
@@ -4403,6 +4367,7 @@ double resultAngle)
 
 
         sb.AppendLine(
+            CultureInfo.InvariantCulture,
             $"Final PLC Angle = {resultAngle:F9} deg");
 
 

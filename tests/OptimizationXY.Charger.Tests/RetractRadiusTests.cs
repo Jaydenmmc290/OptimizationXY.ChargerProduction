@@ -33,7 +33,7 @@ public class RetractRadiusTests
     }
 
     [Fact]
-    public void NoMove_EqualsLargestRadiusFromCurrentAxis()
+    public void NoMoveEqualsLargestRadiusFromCurrentAxis()
     {
         var cloud = RoundBlock(100.0, 0.0, 0.0);
 
@@ -43,7 +43,7 @@ public class RetractRadiusTests
     }
 
     [Fact]
-    public void Move_CoversDistanceFromCommandedAxis()
+    public void MoveCoversDistanceFromCommandedAxis()
     {
         // Block centred on the current axis. Command +10 mm X at both ends puts
         // the new axis at -10 mm in point-cloud coordinates, so the far side of
@@ -56,7 +56,7 @@ public class RetractRadiusTests
     }
 
     [Fact]
-    public void Move_ToCentre_NeverSmallerThanCurrentAxisRadius()
+    public void MoveToCentreNeverSmallerThanCurrentAxisRadius()
     {
         // Block 15 mm off the current axis; moving it to centre would make the
         // commanded-axis radius 100 mm, but the block still swings 115 mm around
@@ -69,7 +69,7 @@ public class RetractRadiusTests
     }
 
     [Fact]
-    public void EmptyCloud_ReturnsNaN()
+    public void EmptyCloudReturnsNaN()
     {
         Assert.True(double.IsNaN(PlcPayloadBuilder.LargestSwingRadiusMM([], 0, 0, 0, 0)));
         Assert.True(double.IsNaN(PlcPayloadBuilder.LargestSwingRadiusMM(null, 0, 0, 0, 0)));

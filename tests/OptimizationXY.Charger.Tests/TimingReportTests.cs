@@ -7,7 +7,7 @@ namespace OptimizationXY.Charger.Tests;
 public class TimingReportTests
 {
     [Fact]
-    public void Report_UsesRealElapsedTime_NotTheSumOfParallelFrames()
+    public void ReportUsesRealElapsedTimeNotTheSumOfParallelFrames()
     {
         var entries = new List<PipelineTimingEntry>
         {
@@ -38,7 +38,7 @@ public class TimingReportTests
     }
 
     [Fact]
-    public void ScanTimeline_ReportsEachStepAndRunningTotal()
+    public void ScanTimelineReportsEachStepAndRunningTotal()
     {
         ScanTimeline.Start("PLC ScanComplete received");
         ScanTimeline.Mark("Scan processed, position chosen");

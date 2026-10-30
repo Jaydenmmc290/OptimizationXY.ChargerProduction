@@ -64,7 +64,7 @@ public static class ScanTimeline
             var report = new StringBuilder();
             report.Append(Environment.NewLine);
             report.Append("=== SCAN-TO-PLC TIMELINE (real elapsed time) ===").Append(Environment.NewLine);
-            report.Append($"{"Step finished".PadRight(46)} {"Step took",10} {"Since start",12}").Append(Environment.NewLine);
+            StringBuilder stringBuilder = report.Append($"{"Step finished".PadRight(46)} {"Step took",10} {"Since start",12}").Append(Environment.NewLine);
 
             double previous = 0.0;
 
@@ -73,8 +73,9 @@ public static class ScanTimeline
                 double stepMS = atMS - previous;
                 previous = atMS;
 
-                report.Append(
-                    $"{name.PadRight(46)} {stepMS / 1000.0,8:F2} s {atMS / 1000.0,10:F2} s")
+                string handler = $"{name.PadRight(46)} {stepMS / 1000.0,8:F2} s {atMS / 1000.0,10:F2} s";
+                StringBuilder stringBuilder1 = stringBuilder.Append(
+                    handler)
                     .Append(Environment.NewLine);
             }
 

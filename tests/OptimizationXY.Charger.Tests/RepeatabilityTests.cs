@@ -44,7 +44,7 @@ public class RepeatabilityTests
     }
 
     [Fact]
-    public void RefineClosureOffset_FindsTheFractionOfAFrame()
+    public void RefineClosureOffsetFindsTheFractionOfAFrame()
     {
         const double period = 84.6;   // true revolution: 84.6 frames
         var profiles = new double[]?[95];
@@ -52,7 +52,7 @@ public class RepeatabilityTests
         for (int index = 0; index < profiles.Length; index++)
         {
             double angle = index * 360.0 / period;
-            profiles[index] = Enumerable.Range(0, Columns).Select(x => RadiusAt(x, angle)).ToArray();
+            profiles[index] = [.. Enumerable.Range(0, Columns).Select(x => RadiusAt(x, angle))];
         }
 
         // Frame 85 is the nearest whole frame; the true closure is 0.4 frame before it.
@@ -63,7 +63,7 @@ public class RepeatabilityTests
     }
 
     [Fact]
-    public void Assign_OffByDefault_KeepsWholeFrames_OnGivesFractionalRevolution()
+    public void AssignOffByDefaultKeepsWholeFramesOnGivesFractionalRevolution()
     {
         Assert.False(new RotatingScanSettings().SubFrameRevolutionClosure);   // off by default
 
@@ -94,7 +94,7 @@ public class RepeatabilityTests
     }
 
     [Fact]
-    public void Assign_Unverified_ReportsClosestReturnAndEndRest()
+    public void AssignUnverifiedReportsClosestReturnAndEndRest()
     {
         // The block turns only about 300 degrees, then rests: no closure.
         var frames = new List<ScanFrame>();
@@ -121,11 +121,11 @@ public class RepeatabilityTests
     }
 
     [Fact]
-    public void Assign_ApproximateClosure_UsesTheClosestReturnInsteadOfTheRestStart()
+    public void AssignApproximateClosureUsesTheClosestReturnInsteadOfTheRestStart()
     {
         // One full turn in 86 frames, then rest. From frame 80 on, the profile
         // carries +/-2 mm of roughness, so it never returns within 1.5 mm.
-        List<ScanFrame> Frames()
+        static List<ScanFrame> Frames()
         {
             var frames = new List<ScanFrame>();
             for (int index = 0; index < 96; index++)
@@ -185,13 +185,13 @@ public class RepeatabilityTests
     private static InscribedGeometryResult Geometry(InscribedGeometryKind kind) => new() { Kind = kind };
 
     [Fact]
-    public void TieBreak_IsOnByDefault_AtOnePercent()
+    public void TieBreakIsOnByDefaultAtOnePercent()
     {
         Assert.Equal(1.0, new InscribedGeometrySettings().OvalMinimumWaneAdvantagePercent);
     }
 
     [Fact]
-    public void TieBreak_Off_OvalWinsOnAnyWaneDifference()
+    public void TieBreakOffOvalWinsOnAnyWaneDifference()
     {
         var result = GeometryPeelSelector.Select(
             Geometry(InscribedGeometryKind.Cylinder), Peel(33, 1.0, 6.0),
@@ -201,7 +201,7 @@ public class RepeatabilityTests
     }
 
     [Fact]
-    public void TieBreak_On_KeepsCylinderForSmallWaneDifference_ButNotForASheet()
+    public void TieBreakOnKeepsCylinderForSmallWaneDifferenceButNotForASheet()
     {
         var small = GeometryPeelSelector.Select(
             Geometry(InscribedGeometryKind.Cylinder), Peel(33, 1.0, 6.0),
@@ -244,7 +244,7 @@ public class RepeatabilityTests
         84.6, axis);
 
     [Fact]
-    public void Summary_UsesSameBlockLists_AndReportsInBlockMetrics()
+    public void SummaryUsesSameBlockListsAndReportsInBlockMetrics()
     {
         var rows = new List<BatchReplayRunner.Row>
         {
@@ -267,7 +267,7 @@ public class RepeatabilityTests
     }
 
     [Fact]
-    public void SameBlock_MatchesDateAndBlockFolders()
+    public void SameBlockMatchesDateAndBlockFolders()
     {
         var rows = new List<BatchReplayRunner.Row>
         {
@@ -276,14 +276,14 @@ public class RepeatabilityTests
             Row(Path.Combine("10", "05", "Block_0001", "Scan_0001"), 2.9, 377.6, 25, "Largest Inscribed Cylinder")
         };
 
-        var groups = BatchReplayRunner.GroupRepeatScans(rows, [new[] { "09\\11\\Block_0001", "09/11/Block_0002" }]);
+        var groups = BatchReplayRunner.GroupRepeatScans(rows, [["09\\11\\Block_0001", "09/11/Block_0002"]]);
 
         Assert.Single(groups);
         Assert.Equal(2, groups[0].Scans.Count);   // 10\05\Block_0001 is a different block
     }
 
     [Fact]
-    public void ReadCsv_AcceptsSummariesWrittenBeforeTheNewColumns()
+    public void ReadCsvAcceptsSummariesWrittenBeforeTheNewColumns()
     {
         string folder = Path.Combine(Path.GetTempPath(), "batch-old-csv-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);

@@ -325,6 +325,7 @@ internal static class BatchReplayRunner
         "UsableSheets", "TotalSheets", "UsableVeneerLengthMM", "ScanQuality", "ProcessingSeconds", "Error",
         "RevolutionFrames", "AxisFromCenterlineMM"
     ];
+    internal static readonly char[] separator = new[] { ',', ';' };
 
     internal static void WriteCsv(string path, IEnumerable<Row> rows)
     {
@@ -648,7 +649,7 @@ internal static class BatchReplayRunner
 
             string[] names = args[i + 1]
                 .Trim('"')
-                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                .Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
             if (names.Length > 0)
                 groups.Add(names);

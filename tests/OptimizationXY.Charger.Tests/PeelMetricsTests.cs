@@ -103,7 +103,7 @@ public class PeelMetricsTests
 
     [Theory]
     [MemberData(nameof(Cases))]
-    public void MetricsOnly_MatchesDrawnSimulation_Exactly(
+    public void MetricsOnlyMatchesDrawnSimulationExactly(
         double radiusMM,
         double ovality,
         double offsetXMM,
@@ -154,7 +154,7 @@ public class PeelMetricsTests
     }
 
     [Fact]
-    public void Test_Cases_Cover_Usable_And_Rejected_Sheets()
+    public void TestCasesCoverUsableAndRejectedSheets()
     {
         // Guard against a comparison that passes only because everything is 0.
         int usable = 0;

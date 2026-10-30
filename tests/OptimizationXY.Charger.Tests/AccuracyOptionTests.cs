@@ -18,7 +18,7 @@ namespace OptimizationXY.Charger.Tests;
 public class AccuracyOptionTests
 {
     [Fact]
-    public void AllNewOptions_AreOffByDefault()
+    public void AllNewOptionsAreOffByDefault()
     {
         var settings = new AppSettings();
 
@@ -33,14 +33,14 @@ public class AccuracyOptionTests
     // ------------------------------------------------------------
 
     [Fact]
-    public void RobustMinimum_Zero_IsThePlainMinimum()
+    public void RobustMinimumZeroIsThePlainMinimum()
     {
         List<double> radii = [180.0, 200.0, 201.0, 202.0, 203.0];
         Assert.Equal(180.0, RadiusFieldBinner.RobustMinimum(radii, 0));
     }
 
     [Fact]
-    public void RobustMinimum_IgnoresLowestReadings_OnlyInWellFilledCells()
+    public void RobustMinimumIgnoresLowestReadingsOnlyInWellFilledCells()
     {
         List<double> five = [180.0, 200.0, 201.0, 202.0, 203.0];
         Assert.Equal(200.0, RadiusFieldBinner.RobustMinimum(five, 1));   // 5 >= 2*1+3
@@ -82,7 +82,7 @@ public class AccuracyOptionTests
     }
 
     [Fact]
-    public void Default_KeepsOnlyTheLongestPiece()
+    public void DefaultKeepsOnlyTheLongestPiece()
     {
         using var gray = BrokenStripe(100.0);
         using Mat binary = ImagePreprocessingService.BuildBinary(gray.Mat);
@@ -93,7 +93,7 @@ public class AccuracyOptionTests
     }
 
     [Fact]
-    public void KeepAllAlignedSegments_KeepsBothPieces_AndRejectsTheReflection()
+    public void KeepAllAlignedSegmentsKeepsBothPiecesAndRejectsTheReflection()
     {
         using var gray = BrokenStripe(100.0);
         using Mat binary = ImagePreprocessingService.BuildBinary(gray.Mat);
@@ -107,7 +107,7 @@ public class AccuracyOptionTests
     }
 
     [Fact]
-    public void SubPixelCenter_FindsTheStripeCentre_ToATenthOfAPixel()
+    public void SubPixelCenterFindsTheStripeCentreToATenthOfAPixel()
     {
         const double trueCenter = 100.3;
         using var gray = BrokenStripe(trueCenter);
@@ -181,7 +181,7 @@ public class AccuracyOptionTests
     };
 
     [Fact]
-    public void CertifiedSearch_FindsTheTrueAxis_AndIsNeverWorseThanTheGrid()
+    public void CertifiedSearchFindsTheTrueAxisAndIsNeverWorseThanTheGrid()
     {
         List<BinnedRadiusFieldPoint> field = TiltedRoundBlock();
 

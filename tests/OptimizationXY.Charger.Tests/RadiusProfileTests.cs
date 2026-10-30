@@ -80,13 +80,13 @@ public class RadiusProfileTests
     }
 
     [Fact]
-    public void Table_Used_By_The_Tests_Is_Valid()
+    public void TableUsedByTheTestsIsValid()
     {
         Assert.True(ValidTable().IsValid);
     }
 
     [Fact]
-    public void ProfileRadii_AreIdentical_To_PerPoint_ValidatedLookup()
+    public void ProfileRadiiAreIdenticalToPerPointValidatedLookup()
     {
         ScannerLookupTable table = ValidTable();
 
@@ -117,7 +117,7 @@ public class RadiusProfileTests
     }
 
     [Fact]
-    public void InvalidTable_IsStillRefused()
+    public void InvalidTableIsStillRefused()
     {
         ScannerLookupTable table = ValidTable();
         table.CalibrationId = string.Empty;
