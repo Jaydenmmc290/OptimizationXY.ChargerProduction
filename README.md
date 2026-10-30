@@ -27,8 +27,19 @@ Inside `src/OptimizationXY.Charger/`:
 
 ## Building
 
-Open `OptimizationXY.Charger.slnx` in Visual Studio and build (x64). The `dotnet` command line cannot build
-this project (error MSB4803, because of `licenses.licx`).
+Open `OptimizationXY.Charger.slnx` in Visual Studio and build (x64). A plain `dotnet build` fails
+(error MSB4803, because of `licenses.licx`).
+
+The GitHub build check compiles and tests without the camera SDK and without the licence file:
+
+```text
+dotnet build src/OptimizationXY.Charger/OptimizationXY.Charger.csproj -c Release -p:UseSapera=false -p:SkipLicx=true -p:Platform=x64
+```
+
+That build has no camera support (the cameras report "not available"), so it is for checking code only,
+never for the production machine.
+
+A file-by-file guide to the source is in [Code map](docs/design/CODE_MAP.md).
 
 To test processing without cameras or a PLC, see [Offline replay](docs/development/OFFLINE_REPLAY.md).
 

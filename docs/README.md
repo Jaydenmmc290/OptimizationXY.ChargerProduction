@@ -95,7 +95,7 @@ The wizard can:
 - create or upgrade the local OptimizationXY SQL Express database when database saving is enabled;
 - discover Sapera acquisition cameras;
 - assign the physical Head / Dog and Tail cameras;
-- read each camera's serial number and save the Head/Tail assignment by Sapera server name and device index;
+- save the Head/Tail assignment by Sapera server name and device index (each camera's serial number is read when it connects and recorded in its configuration snapshot);
 - reconnect the final head/tail cameras;
 - open separate head/tail previews for physical-side confirmation;
 - configure and verify camera crop, orientation, vertical registration, overlap, and seam;

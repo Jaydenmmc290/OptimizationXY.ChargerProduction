@@ -10,11 +10,13 @@ MainForm
   -> CompletedLogCapture (one concatenated frame per head/tail pair)
   -> LogProcessingCoordinator
   -> LogProcessingPipeline.RunCurrentFramesPipeline
-  -> ProductionReadinessEvaluator
+  -> OperatorScanQualityAnalyzer (scan-quality gate)
+  -> PlcPayloadBuilder + ProductionReadinessEvaluator
   -> XyRestrictedPlcService (PLC write)
-  -> ScanResultSaveService
-       -> SimpleScanSaveService
+  -> ScanResultSaveService (by default after the PLC write)
+       -> SimpleScanSaveService (scan folder, deferred peel pictures)
        -> optional SqlScanSaveService
+       -> ProductionAuditWriter
 ```
 
 The live-capture and folder-processing entry points share one ordered processing method. This prevents the two workflows from silently skipping different analysis stages.
@@ -41,11 +43,19 @@ The UI preview calls the same concatenator with the persisted acquisition settin
 - `Services/Acquisition`: live capture, frame pairing, concatenation, counters, and processing coordination.
 - `Services/Calibration`: validated scanner lookup-table persistence and interpolation.
 - `Services/Core`: pipeline ordering and state ownership.
-- `Services/PointCloud`, `Geometry`, and `Defects`: measured log geometry and diagnostics.
-- `Services/Optimization/Scoring`: legacy penalty-scored spindle search.
+- `Services/Preprocessing`, `Profile`, `Scan`, `Input`: frame clean-up, laser-line profiles and loading frames from folders.
+- `Services/PointCloud`, `Geometry`, `Analysis` and `Defects`: measured log geometry and diagnostics.
+- `Services/Optimization/Search` and `Scoring`: legacy penalty-scored spindle search and its scoring.
 - `Services/Optimization/Geometry`: largest-inscribed-cylinder and largest-inscribed-oval searches.
 - `Services/Optimization/Recovery`: virtual-peel comparison and final geometry selection.
+- `Services/Optimization/Movement` and `Wane`: turning a chosen axis into spindle moves; wane helpers.
+- `Services/Operator`: the scan-quality result shown to the lathe operator (and the PLC gate).
+- `Services/Production`: PLC payload, readiness checks, audit records, block/scan sequence numbers.
+- `Services/Plc`: the XYRestricted PLC connection, handshake and write/readback.
 - `Services/Storage`: result-folder creation, manifests, optional SQL persistence, and retention.
+- `Services/Configuration`: loading/upgrading/validating `appsettings.json` and SQL setup.
+- `Services/Replay`: offline replay of saved scans (`--replay`, `--replay-batch`).
+- `Kinematic`: the kinematic position form and its calculations.
 - `Visualization`: display-only overlays and virtual peel images.
 - `UI`: WinForms interaction and operator status.
 
@@ -53,13 +63,13 @@ The UI preview calls the same concatenator with the persisted acquisition settin
 
 Every optimization mode first runs the same measured-analysis stages:
 
-1. Preprocess frames.
-2. Apply calibration.
-3. Extract frame profiles.
-4. Build raw and display point clouds.
+1. Preprocess frames and find the laser line (per frame, in parallel).
+2. Apply calibration to get a radius per image column.
+3. Assign each frame its rotation angle from the one measured revolution.
+4. Build the measured point cloud (and a separate display-only cloud).
 5. Fit the centerline.
-6. Build the radius field.
-7. Bin the radius field.
+6. Build the radius fields (centreline-relative for diagnostics, spindle-axis-relative for choosing the position).
+7. Bin the radius fields.
 8. Analyze ovality and centerline sweep.
 9. Analyze radius defects.
 10. Analyze connected defect patches.
@@ -84,7 +94,17 @@ CompareInscribedGeometry
   -> oval search + peel
   -> select by usable full 50-inch sheets, usable length,
      rejected sheets, severe wane, then total wane
+     (a small wane-only oval advantage keeps the cylinder)
+
+RecoveryOptimized
+  -> seeds: current axis, penalty search, cylinder, oval
+  -> bounded direct recovery search around the seeds
+  -> select by the same virtual-peel order (then smaller move)
 ```
+
+`CompareInscribedGeometry` is the production mode. See
+[`OPTIMIZATION_MODES.md`](OPTIMIZATION_MODES.md). The decision uses virtual-peel numbers only;
+the peel pictures are drawn after the PLC write, when the scan is saved.
 
 Defect maps and patches are retained in every branch for diagnostics. Their weights, risk score, and penalty score are not inputs to spindle selection in an inscribed-geometry branch.
 

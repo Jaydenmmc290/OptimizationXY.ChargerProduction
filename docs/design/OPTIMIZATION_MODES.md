@@ -19,7 +19,7 @@ Analyze defect patches
 
 ## 1. Recovery Optimized 
 
-This mode first generates four seed fixed spindle axes when enabled: current baseline, penalty-search best tested, largest inscribed cylinder, and largest inscribed oval. It then performs a bounded metrics-only direct veneer-recovery refinement around those seeds. The refined position and all seed positions are rendered with the full physical circular rotary-lathe virtual peel, and the exact rendered results select the winner by:
+This mode first generates four seed fixed spindle axes when enabled: current baseline, penalty-search best tested, largest inscribed cylinder, and largest inscribed oval. It then performs a bounded metrics-only direct veneer-recovery refinement around those seeds. The refined position and all seed positions are evaluated with the full point-cloud circular rotary-lathe virtual peel (numbers only, `UnwrappedPeelViewBuilder.ComputeMetrics`; the same grid and rules as the drawn peel), and those results select the winner by:
 
 1. more usable full 50-inch sheets;
 2. more usable veneer length;
@@ -30,7 +30,7 @@ This mode first generates four seed fixed spindle axes when enabled: current bas
 
 Penalty/risk values remain diagnostics and can generate one seed, but they do not choose the final winner. The direct refinement searches only head/tail X/Y within commissioned machine limits. It does not generate a rotation command.
 
-Default direct-refinement settings are a 2 mm local radius, 2 mm step, and a 500-position cap. The search uses the binned measured surface without allocating display images; the selected refined candidate is then re-evaluated by the full point-cloud peel renderer before final comparison.
+Default direct-refinement settings are a 2 mm local radius, 2 mm step, and a 500-position cap. The search uses the binned measured surface without allocating display images; the selected refined candidate is then re-evaluated with the full point-cloud peel before final comparison. The peel pictures are drawn later, after the PLC write, when the scan is saved.
 
 ## 2. Penalty-Scored Optimizer
 
@@ -45,6 +45,10 @@ This mode performs a geometry-only coarse-to-fine search. It selects the head/ta
 - Missing angular bins are filled conservatively.
 - Machine travel is a hard feasibility limit.
 - Defect and risk penalties do not influence the position.
+- Repeatability: the search is centred on the block's fitted centreline, and a
+  candidate's score is its inscribed radius minus `InscribedGeometry.CenterlinePullWeight`
+  (default 0.5) times its distance from that centreline. This keeps repeat scans of the
+  same block from picking widely different axes when several axes are almost equally good.
 
 The selected axis is then evaluated with the normal fixed-axis circular virtual peel.
 
@@ -54,7 +58,7 @@ This mode searches the same feasible spindle axes, then finds the largest center
 
 The oval is an axis-selection model. A conventional veneer lathe with a fixed knife and fixed spindle axis still peels circular paths; it cannot peel the ellipse perimeter. Therefore the final recovery estimate is generated with the same physical circular virtual-peel model at the oval-selected spindle position.
 
-## 5. Compare Cylinder vs Oval
+## 5. Compare Cylinder vs Oval (production mode)
 
 This mode independently computes both geometry candidates and creates both virtual peels. The final machine position is selected in this order:
 
@@ -65,12 +69,15 @@ This mode independently computes both geometry candidates and creates both virtu
 5. lower total-wane area;
 6. larger guaranteed circular radius, then less movement, if the peels remain tied.
 
+Exception: if the oval would win ONLY on wane (steps 4–5) and by less than
+`InscribedGeometry.OvalMinimumWaneAdvantagePercent` (default 1.0), the cylinder is kept, so
+small wane differences do not make repeat scans of the same block flip between the two.
+
 The selected recommendation is written to the normal final spindle output. Both comparison images are retained:
 
 ```text
 Overlays/largest_inscribed_cylinder_peel.png
 Overlays/largest_inscribed_oval_peel.png
-Overlays/direct_recovery_refinement_peel.png  # direct-recovery candidate, when enabled
 Overlays/unwrapped_peel_view.png               # selected winner
 ```
 
