@@ -953,6 +953,7 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
                 "Binned machine-frame optimization field returned no points.");
         }
 
+        // Report how well the spindle-axis field covers the log (diagnostics only).
         var optimizationZBins = _state.OptimizationBinnedRadiusField
             .GroupBy(point => point.ZBinMM)
             .ToList();
@@ -1000,7 +1001,10 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // Supports folders with fewer than 36 rotating images.
     // ------------------------------------------------------------
     /// <summary>
-    /// Analyzes the binned radius field for ovality patterns.
+    /// Stage 6b: ovality (out-of-roundness) report. Diagnostic only - it does not
+    /// move the spindles. The angle coverage a slice needs is lowered for scans
+    /// with few frames, and lowered again if no slice qualifies, so this report
+    /// can never fail a scan on its own.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the binned radius field is missing or empty.</exception>
@@ -1079,7 +1083,9 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Analyzes the binned radius field for radius defects based on the defect thresholds specified in the application settings.
+    /// Stage 6c: classifies every centreline-field cell as normal / low wood /
+    /// severe low wood / high spot (relative to its slice median) and builds the
+    /// defect heat-map picture. Diagnostic in the inscribed-geometry modes.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the binned radius field is missing or empty.</exception>
@@ -1128,7 +1134,8 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     }
 
     /// <summary>
-    /// Analyzes the radius defect patches from the radius defect map, grouping connected low-wood areas into individual patches for further analysis and reporting.
+    /// Stage 6d: groups connected low-wood cells into patches and reports the
+    /// largest and the deepest. Diagnostic in the inscribed-geometry modes.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the radius defect map is missing or empty.</exception>
@@ -1205,8 +1212,11 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
-    /// scoring profile, producing the final spindle setup for the log.
+    /// LEGACY penalty-scored search (PenaltyScored mode, and the "penalty"
+    /// candidate in RecoveryOptimized mode). Scores many candidate head/tail axes
+    /// using the spindle-axis field, the defect patches and the adaptive
+    /// scoring profile, and builds the FinalSpindleRecommendation from the best.
+    /// NOT used to choose the position in the production CompareInscribedGeometry mode.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
@@ -1292,6 +1302,8 @@ RotatingRadiusSectionOverlayBuilder.BuildTailMiddleHeadFromBinnedField(  // Buil
         // Baseline measurement: current spindle axis, no movement.
         // This wane value is a real measured average radius spread.
         // ------------------------------------------------------------
+        // Score of the CURRENT axis (no move, all offsets 0). Every candidate is
+        // compared against this baseline.
         double baselineAxisWaneScore =
 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
     _state.OptimizationBinnedRadiusField,
