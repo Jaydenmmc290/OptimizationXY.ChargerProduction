@@ -18,8 +18,9 @@
 //   7. Optimization - the branch chosen by Settings.OptimizationMode
 //                     (production: CompareInscribedGeometry) produces the
 //                     FinalSpindleRecommendation.
-//   8. Scan-quality - the operator scan-quality verdict (gate for the PLC).
-// Pictures (peel views, overlays) are queued and drawn after the PLC write.
+// After the pipeline, MainForm runs OperatorScanQualityAnalyzer (the
+// scan-quality gate for the PLC write). Peel pictures are queued and drawn
+// after the PLC write, when SimpleScanSaveService saves the scan.
 //
 // Coordinates: point-cloud X/Y across the log with (0,0) = the current
 // spindle axis; Z along the log with Z = 0 at the TAIL end. Spindle moves are
@@ -3396,7 +3397,10 @@ double centerlineSweepMM)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Builds the final spindle recommendation based on the optimizer results, machine warnings, and movement constraints.
+    /// LEGACY PenaltyScored mode: builds the final recommendation from the penalty
+    /// search result. The command (negative of the best axis offset) is only
+    /// filled in when the search says the move is worth it (IsRecommended);
+    /// otherwise the command is zero = stay on the current axis.
     /// </summary>
     /// <param name="finalSetup">The final optimizer setup result.</param>
     /// <param name="machineWarnings">A list of machine warnings.</param>
@@ -3693,6 +3697,7 @@ double maxSpindleMovementMM)
                 "Scanner calibration is invalid or incomplete.");
         }
 
+        // Times the whole run (frames in hand to position chosen) for the report.
         _runClock.Restart();
         TimingDepth.Value = 0;
 
@@ -3731,6 +3736,9 @@ double maxSpindleMovementMM)
         Action<string>? progress,
         CancellationToken token)
     {
+        // Stage 0: remember the calibration used. A full copy of the table is
+        // kept in the state so the saved scan records exactly which values were
+        // used, even if the calibration file is replaced later.
         void RunStage(
             string timingName,
             string progressMessage,
@@ -3849,6 +3857,7 @@ double maxSpindleMovementMM)
             "Analyzing defect patches...",
             () => AnalyzeDefectPatches(token));
 
+        // Stage 7: the optimization branch for the configured mode.
         if (_state.Settings.OptimizationMode ==
             SpindleOptimizationMode.PenaltyScored)
         {
