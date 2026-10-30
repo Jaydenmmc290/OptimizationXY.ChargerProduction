@@ -1,3 +1,31 @@
+// =============================================================================
+// LogProcessingPipeline.cs - THE processing pipeline (frames in -> spindle position out)
+// -----------------------------------------------------------------------------
+// One shared instance (Instance) works on the shared PipelineState. Live
+// capture, folder processing and offline replay all call the SAME ordered
+// method, RunCurrentFramesPipeline, so no workflow can skip a stage.
+//
+// Stage order (see RunCurrentFramesPipeline):
+//   1. Profiles     - per frame, in parallel: threshold image -> find laser
+//                     line -> calibrated radius per column -> trim bad ends.
+//   2. Angles       - RevolutionAngleAssigner gives every frame its angle and
+//                     drops frames outside the one measured revolution.
+//   3. Point cloud  - measured points (and a separate display-only cloud).
+//   4. Centreline   - PCA axis, slice centres, sweep/bow, refined axis.
+//   5. Radius fields- centreline-relative field (shape diagnostics) AND the
+//                     spindle-axis field (used for choosing the position).
+//   6. Binning, ovality, defect map and defect patches (diagnostics).
+//   7. Optimization - the branch chosen by Settings.OptimizationMode
+//                     (production: CompareInscribedGeometry) produces the
+//                     FinalSpindleRecommendation.
+//   8. Scan-quality - the operator scan-quality verdict (gate for the PLC).
+// Pictures (peel views, overlays) are queued and drawn after the PLC write.
+//
+// Coordinates: point-cloud X/Y across the log with (0,0) = the current
+// spindle axis; Z along the log with Z = 0 at the TAIL end. Spindle moves are
+// offsets from (0,0), and the PLC command is the negative of the chosen axis.
+// =============================================================================
+
 using System.Globalization;
 using Emgu.CV;
 using OptimizationXY.Charger.Models.Calibration;
@@ -31,7 +59,8 @@ using OptimizationXY.Charger.Models.Analysis;
 namespace OptimizationXY.Charger.Services.Core;
 
 /// <summary>
-/// Represents the main processing pipeline for log scanning and analysis. This class is responsible for loading
+/// The main processing pipeline for one log scan (see the file header for the
+/// stage order). This class is responsible for loading
 /// scan frames, processing them to build profiles, constructing point clouds, fitting centerlines, building
 /// radius fields, binning radius data, analyzing ovality, and detecting defects.
 /// It maintains the state of the pipeline and provides methods to execute each step in the processing workflow.
@@ -42,7 +71,10 @@ public sealed class LogProcessingPipeline
         new(() => new LogProcessingPipeline());
 
     /// <summary>
-    /// Filters out bad profile ends from the given log profile based on a minimum valid end diameter fraction.
+    /// Trims the unreliable ends of one frame's profile: from each end, skip
+    /// columns until 5 in a row have a diameter of at least MinValidEndDiameterFraction
+    /// x the profile's largest diameter. (Fixture, glare or a collapsing laser
+    /// line at the block ends gives small, wrong diameters.)
     /// </summary>
     /// <param name="profile">The log profile to filter.</param>
     /// <param name="MinValidEndDiameterFraction">The minimum valid end diameter fraction.</param>
@@ -101,6 +133,7 @@ public sealed class LogProcessingPipeline
             ? $"Frame {frame.FrameIndex}"
             : Path.GetFileName(frame.ImagePath);
 
+        // Live frames already carry their image in memory; replays load it from disk.
         Mat gray;
         if (frame.GrayImage is not null && !frame.GrayImage.IsEmpty)
         {
@@ -117,6 +150,7 @@ public sealed class LogProcessingPipeline
         }
 
         frame.BinaryImage?.Dispose();
+        // Stage 1a: threshold the grey image into a laser mask.
         frame.BinaryImage = RunTimed(
             $"{stepPrefix} - Build Binary Image",
             () => ImagePreprocessingService.BuildBinary(gray));
@@ -124,6 +158,7 @@ public sealed class LogProcessingPipeline
         if (frame.BinaryImage.IsEmpty)
             throw new InvalidOperationException("Could not build binary image.");
 
+        // Stage 1b: find the laser row in every image column.
         List<LaserProfileColumn> laserProfile = RunTimed(
             $"{stepPrefix} - Detect Laser Stripe",
             () => LaserStripeDetector.Detect(
@@ -138,6 +173,8 @@ public sealed class LogProcessingPipeline
         if (!lookupTable.IsValid)
             throw new InvalidOperationException("Scanner calibration is invalid.");
 
+        // Stage 1c: laser row -> calibrated radius (mm) per column, median-smoothed
+        // over 9 columns.
         List<LogProfileColumn> profile = RunTimed(
             $"{stepPrefix} - Build Radius Profile",
             () => LaserRadiusProfileBuilder.BuildFromLookupTable(
@@ -150,6 +187,7 @@ public sealed class LogProcessingPipeline
         if (profile.Count == 0)
             throw new InvalidOperationException("Profile build failed.");
 
+        // Stage 1d: trim unreliable columns at both ends of the block.
         return RunTimed(
             $"{stepPrefix} - Filter Bad Profile Ends",
             () => FilterBadProfileEnds(
@@ -158,7 +196,9 @@ public sealed class LogProcessingPipeline
     }
 
     /// <summary>
-    /// Trims the ends of the local centerline slices to remove unreliable data at the log ends.
+    /// Removes trimFraction of the slices from each end (at least 1, at most a
+    /// tenth) so ragged block ends do not distort the sweep/bow numbers. Lists
+    /// of fewer than 10 slices are returned unchanged.
     /// </summary>
     /// <param name="slices">The list of local centerline slices to trim.</param>
     /// <param name="trimFraction">The fraction of slices to trim from each end.</param>
@@ -245,7 +285,9 @@ public sealed class LogProcessingPipeline
     }
 
     /// <summary>
-    /// Validates the proposed tail/head spindle movements against machine limits and warnings.
+    /// Checks each proposed head/tail X/Y move against MachineLimits. A move over
+    /// the hard limit adds a "BLOCKED:" message; a move over WarningMoveMM adds a
+    /// "WARNING:" message. Returns all messages (empty = fine).
     /// </summary>
     /// <param name="tailXMM">The tail X movement in millimeters.</param>
     /// <param name="tailYMM">The tail Y movement in millimeters.</param>
@@ -269,11 +311,11 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     /// <summary>
     /// Checks a single axis movement against its maximum allowed and warning thresholds, adding messages to the warnings list as appropriate.
     /// </summary>
-    /// <param name="name"></param>
-    /// <param name="valueMM"></param>
-    /// <param name="maxAllowedMM"></param>
-    /// <param name="warningMM"></param>
-    /// <param name="warnings"></param>
+    /// <param name="name">Axis label for the message, e.g. "Tail X".</param>
+    /// <param name="valueMM">Proposed move, mm (sign ignored).</param>
+    /// <param name="maxAllowedMM">Hard travel limit, mm.</param>
+    /// <param name="warningMM">Warning level, mm.</param>
+    /// <param name="warnings">List the message is added to.</param>
     private static void CheckAxis(
         string name,
         double valueMM,
@@ -366,6 +408,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             return values[values.Count / 2];
         }
 
+        // The median first and last stripe column over all frames = the agreed
+        // block ends in the image.
         int consensusFirstX = MedianOf([.. framesWithProfiles.Select(frame => frame.Profile.Min(column => column.X))]);
         int consensusLastX = MedianOf([.. framesWithProfiles.Select(frame => frame.Profile.Max(column => column.X))]);
 
@@ -404,6 +448,12 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"tolerance {tolerancePixels} px)\r\n";
     }
 
+    /// <summary>
+    /// Stage 1: builds the calibrated profile of every frame in parallel (frames
+    /// are independent). A frame that fails is marked invalid with the reason
+    /// instead of stopping the scan. Then frames are trimmed to the agreed block
+    /// length and the frame angles are assigned.
+    /// </summary>
     internal void ProcessRotatingScanFrames(ScannerLookupTable lookupTable, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
