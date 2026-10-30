@@ -79,7 +79,8 @@ public sealed class AppSettings
     /// </summary>
     public DefectSettings Defects { get; set; } = new(); 
     /// <summary>
-    /// Legacy penalty-scored search: search grid sizes and penalty weights.
+    /// Search grid sizes (coarse/medium/fine) used by BOTH the inscribed-geometry
+    /// search (production) and the legacy penalty search, plus the legacy penalty weights.
     /// </summary>
     public OptimizationSettings Optimization { get; set; } = new(); 
     /// <summary>
@@ -721,9 +722,12 @@ public sealed class DefectSettings
 
 
 /// <summary>
-/// Legacy PenaltyScored search grid and penalty settings (ChargerOptimizer).
-/// The search tries offsets on a coarse grid, then a medium grid around the
-/// best coarse point, then a fine grid around the best medium point.
+/// Spindle search grid and legacy penalty settings. The coarse/medium/fine grid
+/// is used by the PRODUCTION inscribed-geometry search (InscribedGeometryOptimizer)
+/// and by the legacy penalty search (ChargerOptimizer). Each pass tries every
+/// combination of centre offset X/Y and sweep X/Y within +/- the pass radius in
+/// steps of the pass step, then the next pass is centred on the best result.
+/// The movement/wane-guard/improvement settings apply to the legacy search only.
 /// </summary>
 public sealed class OptimizationSettings
 {

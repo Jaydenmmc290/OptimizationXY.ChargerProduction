@@ -16,6 +16,24 @@ namespace OptimizationXY.Charger.Services.Optimization.Geometry;
 /// the measured log envelope for the full log length. The ellipse is used only
 /// to choose the spindle axis. A conventional rotary lathe still peels circles,
 /// so final recovery is always checked with the circular virtual-peel model.
+///
+/// How a candidate is described: a straight spindle axis given by its
+/// position at the TAIL end and at the HEAD end (X/Y offsets in mm from the
+/// current spindle axis, point-cloud frame). The search walks the four numbers
+/// centre-offset X/Y and sweep X/Y (tail = offset + sweep/2, head = offset -
+/// sweep/2, see SpindleMovementBuilder).
+///
+/// How a candidate is scored (<see cref="EvaluateCandidate"/>):
+/// <list type="number">
+/// <item><description>Reject it if any end moves past the hard travel limits.</description></item>
+/// <item><description>For every surface sample, measure its distance and angle from the candidate axis at that sample's position along the log. Keep the SMALLEST distance in each angle bin (the "angular envelope"). This collapses the whole block into one worst-case cross-section, so anything that fits it fits every slice.</description></item>
+/// <item><description>Reject it if too few angle bins have data; fill the rest from their smaller neighbour.</description></item>
+/// <item><description>Cylinder: radius = smallest envelope value - safety margin. Oval: largest-area ellipse that fits the envelope.</description></item>
+/// <item><description>Score = equivalent radius - CenterlinePullWeight x distance from the fitted centreline (repeatability anchor).</description></item>
+/// </list>
+/// Search = coarse grid -> medium grid -> fine grid, each centred on the
+/// previous winner (Optimization.Coarse*/Medium*/Fine* settings). Optional
+/// certified branch-and-bound refinement for the cylinder.
 /// </summary>
 public static class InscribedGeometryOptimizer
 {
@@ -94,6 +112,8 @@ public static class InscribedGeometryOptimizer
             geometrySettings,
             machineLimits);
 
+        // Turn each binned cell into an X/Y surface point with its position along
+        // the log (0 = tail end, 1 = head end).
         SurfaceSample[] samples = BuildSamples(field);
 
         // ------------------------------------------------------------
@@ -143,6 +163,7 @@ public static class InscribedGeometryOptimizer
             startSweepYMM = startTailY - startHeadY;
         }
 
+        // Three-pass grid search; each pass is centred on the previous winner.
         SearchPassResult coarse = Search(
             samples,
             kind,
@@ -260,7 +281,10 @@ public static class InscribedGeometryOptimizer
     }
 
     /// <summary>
-    /// Perform a single search pass over the specified range of offsets and sweeps, evaluating candidates and returning the best one found.
+    /// One grid pass: every combination of offset X, offset Y, sweep X and sweep Y
+    /// within +/- radiusMM of the given centre, in steps of stepMM (e.g. +/-20 mm
+    /// in 5 mm steps = 9 x 9 x 9 x 9 = 6,561 candidates). Runs in parallel over
+    /// offset X. Throws if no candidate has enough angular coverage.
     /// </summary>
     /// <param name="samples">The array of surface samples to evaluate.</param>
     /// <param name="kind">The kind of inscribed geometry to optimize.</param>
@@ -447,6 +471,7 @@ public static class InscribedGeometryOptimizer
 
         // Radius of the circle with the same area, so cylinder and oval
         // candidates are pulled toward the centreline on the same scale.
+        // Score = equivalent radius minus the centreline pull (see FindBest).
         double equivalentRadiusMM =
             kind == InscribedGeometryKind.Cylinder
                 ? geometry.GuaranteedCircularRadiusMM
@@ -680,7 +705,8 @@ public static class InscribedGeometryOptimizer
     }
 
     /// <summary>
-    /// Evaluate the inscribed cylinder geometry based on the provided envelope and spindle movement, returning the resulting geometry.
+    /// Largest circle around the candidate axis that stays inside the envelope:
+    /// the smallest envelope distance minus the safety margin (never below 0).
     /// </summary>
     /// <param name="envelope">The array of envelope values representing the available radius at each angular bin.</param>
     /// <param name="movement">The optimized spindle movement.</param>
@@ -713,7 +739,10 @@ public static class InscribedGeometryOptimizer
     }
 
     /// <summary>
-    /// Evaluate the inscribed oval geometry based on the provided envelope and spindle movement, returning the resulting geometry.
+    /// Largest-area ellipse centred on the candidate axis that stays inside the
+    /// envelope. Tries every minor/major ratio from MinimumAxisRatio to 1 and every
+    /// orientation 0-180 degrees (setting step sizes); for each, the major
+    /// semi-axis is limited by the tightest angle bin. Ties go to the bigger minor axis.
     /// </summary>
     /// <param name="envelope">The array of envelope values representing the available radius at each angular bin.</param>
     /// <param name="movement">The optimized spindle movement.</param>
@@ -764,6 +793,7 @@ public static class InscribedGeometryOptimizer
                         break;
                     }
 
+                    // Use the CENTRE of each angle bin.
                     double angleRad =
                         (angleIndex + 0.5) *
                         2.0 * Math.PI /
@@ -866,6 +896,7 @@ public static class InscribedGeometryOptimizer
             if (angleRad < 0)
                 angleRad += 2.0 * Math.PI;
 
+            // Which angle bin this sample falls into.
             int angleIndex = Math.Clamp(
                 (int)Math.Floor(
                     angleRad /
@@ -874,6 +905,7 @@ public static class InscribedGeometryOptimizer
                 0,
                 angularBins - 1);
 
+            // Keep the smallest distance per bin = the tightest surface point.
             if (radiusMM < envelope[angleIndex])
                 envelope[angleIndex] = radiusMM;
         }
@@ -933,6 +965,8 @@ public static class InscribedGeometryOptimizer
                 }
             }
 
+            // Missing bin: use the SMALLER of its nearest filled neighbours either side
+            // (conservative - never invents extra wood).
             double fill = Math.Min(previous, next);
 
             envelope[index] =
@@ -1035,6 +1069,9 @@ public static class InscribedGeometryOptimizer
         InscribedGeometrySettings settings,
         bool useCenterlineScore)
     {
+        // Ranking order: (1) score (with centreline anchor) or size (without),
+        // beyond the tie tolerance; (2) smaller spindle move; (3) a fixed order of
+        // the four numbers so ties always resolve the same way (repeatability).
         InscribedGeometryResult left = candidate.Geometry;
         InscribedGeometryResult right = current.Geometry;
 
@@ -1109,12 +1146,6 @@ public static class InscribedGeometryOptimizer
     }
 
     /// <summary>
-    /// Determine if the optimized spindle movement is within the machine limits specified in the settings.
-    /// </summary>
-    /// <param name="movement">The optimized spindle movement to evaluate.</param>
-    /// <param name="limits">The machine limit settings to compare against.</param>
-    /// <returns>True if the optimized spindle movement is within the machine limits; otherwise, false.</returns>
-    /// <summary>
     /// Largest distance, at the tail or head end, between a candidate axis and
     /// the fitted centreline of the block.
     /// </summary>
@@ -1147,6 +1178,7 @@ public static class InscribedGeometryOptimizer
         List<double> sliceX = [];
         List<double> sliceY = [];
 
+        // One slice per Z bin (all samples of a bin share the same NormalizedZ).
         foreach (var slice in samples.GroupBy(
                      sample => (long)Math.Round(sample.NormalizedZ * 1_000_000.0)))
         {
@@ -1235,6 +1267,7 @@ public static class InscribedGeometryOptimizer
         double slopeY = sumTT > 1e-9 ? sumTY / sumTT : 0.0;
 
         // NormalizedZ = 0 is the tail end, 1 is the head end.
+        // Line through the slice centres, evaluated at t = 0 (tail) and t = 1 (head).
         double tailXMM = meanCenterX - slopeX * meanT;
         double tailYMM = meanCenterY - slopeY * meanT;
         double headXMM = tailXMM + slopeX;
@@ -1255,6 +1288,7 @@ public static class InscribedGeometryOptimizer
             headYMM);
     }
 
+    /// <summary>True when every end of the candidate axis is within the hard travel limits (MachineLimits).</summary>
     private static bool IsWithinMachineLimits(
         OptimizedSpindleMovement movement,
         MachineLimitSettings limits)
@@ -1267,8 +1301,7 @@ public static class InscribedGeometryOptimizer
     }
 
     /// <summary>
-    /// Calculate the maximum spindle movement in millimeters based on the optimized spindle movement,
-    /// considering both tail and head movements.
+    /// The larger of the tail and head move DISTANCES (sqrt(X^2 + Y^2) at each end), mm.
     /// </summary>
     /// <param name="movement">The optimized spindle movement to evaluate.</param>
     /// <returns>The maximum spindle movement in millimeters.</returns>
