@@ -1,8 +1,19 @@
+// =============================================================================
+// GenieNanoCameraService.Unavailable.cs - stand-in when the Sapera SDK is missing
+// -----------------------------------------------------------------------------
+// Compiled only when SAPERA is NOT defined (e.g. the GitHub build check, or a
+// development PC without the SDK). It has the same public members as the real
+// GenieNanoCameraService so MainForm and the forms compile, but every attempt
+// to connect or start acquisition throws PlatformNotSupportedException. Stop/
+// Disconnect do nothing. Camera discovery returns no cameras.
+// =============================================================================
+
 #if !SAPERA
 using OptimizationXY.Charger.Models.Acquisition;
 
 namespace OptimizationXY.Charger.Services.Camera;
 
+/// <summary>Non-hardware build of the camera service: reports "not available" for every camera action.</summary>
 public sealed class GenieNanoCameraService : IDisposable
 {
     private const string MissingSdkMessage =
@@ -51,6 +62,7 @@ public sealed class GenieNanoCameraService : IDisposable
 
     public void Dispose() => Disconnect();
 
+    /// <summary>Logs and throws the "Sapera support is not available in this build" error.</summary>
     private void ThrowUnavailable()
     {
         DiagnosticsMessage?.Invoke(

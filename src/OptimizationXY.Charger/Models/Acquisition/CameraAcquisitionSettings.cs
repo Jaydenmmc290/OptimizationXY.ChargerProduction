@@ -237,9 +237,18 @@ public sealed class DualCameraConcatenationSettings
 
 /// <summary>
 /// Settings for one physical Teledyne DALSA Genie Nano camera. Programmatic
-/// initialization (open the camera directly and set each feature from these
-/// values) is the production default; the CCF name is only used when the
-/// legacy configuration-file mode is selected.
+/// initialization (open the camera directly by its Sapera location) is the
+/// production default; the CCF name is only used when the legacy
+/// configuration-file mode is selected.
+/// <para>
+/// IMPORTANT - what is actually written to the camera: in programmatic mode
+/// GenieNanoCameraService writes ONLY the trigger features (TriggerMode, and
+/// in Encoder mode TriggerSelector=FrameStart, TriggerSource=Line1,
+/// TriggerActivation=RisingEdge). Exposure, gain, frame rate and pixel format
+/// are NOT written; the camera keeps its own saved values. Those settings
+/// here are validated and recorded only. The camera's real width, height,
+/// offsets and pixel format are read back and stored in the capture snapshot.
+/// </para>
 /// </summary>
 public sealed class CameraDeviceSettings
 {
@@ -262,8 +271,8 @@ public sealed class CameraDeviceSettings
     public string ExpectedSerialNumber { get; set; } = string.Empty;
     /// <summary>
     /// How the camera is set up when it is opened: Programmatic (production -
-    /// every feature is written from these settings) or ConfigurationFile (legacy
-    /// - load a Sapera .ccf file named by <see cref="ConfigurationFileName"/>).
+    /// open by location and write only the trigger features) or ConfigurationFile
+    /// (legacy - load a Sapera .ccf file named by <see cref="ConfigurationFileName"/>).
     /// </summary>
     public CameraInitializationMode InitializationMode { get; set; } =
         CameraInitializationMode.Programmatic;
@@ -271,21 +280,21 @@ public sealed class CameraDeviceSettings
     public string ConfigurationFileName { get; set; } = string.Empty;
     /// <summary>Number of Sapera image buffers (ring buffer) for this camera. Minimum 4.</summary>
     public int BufferCount { get; set; } = 8;
-    /// <summary>Frames per second used in free-running (FrameRate) mode. 0 &lt; value &lt;= 1000.</summary>
+    /// <summary>Nominal frames per second for free-running mode. 0 &lt; value &lt;= 1000. Validated/recorded only - not written to the camera.</summary>
     public double AcquisitionFrameRate { get; set; } = 30.0;
     /// <summary>Free-running or triggered (Encoder) acquisition. Production uses Encoder.</summary>
     public AcquisitionMode Mode { get; set; } = AcquisitionMode.Encoder;
 
-    /// <summary>GenICam pixel format; "Mono8" = 8-bit greyscale, one byte per pixel.</summary>
+    /// <summary>Expected GenICam pixel format; "Mono8" = 8-bit greyscale. Not written to the camera (frames that are not 8-bit are rejected).</summary>
     public string PixelFormat { get; set; } = "Mono8";
-    /// <summary>Shutter time in microseconds (15017 us is about 15 ms).</summary>
+    /// <summary>Exposure (shutter) time in microseconds (15017 us is about 15 ms). Validated/recorded only - not written to the camera.</summary>
     public double ExposureTimeMicroseconds { get; set; } = 15017.0;
-    /// <summary>Camera analogue gain (brightness multiplier); 1.0 = no extra gain.</summary>
+    /// <summary>Camera gain (brightness multiplier); 1.0 = no extra gain. Validated/recorded only - not written to the camera.</summary>
     public double Gain { get; set; } = 1.0;
 
-    /// <summary>GenICam trigger input used in Encoder mode (normally "Line1").</summary>
+    /// <summary>Intended trigger input for Encoder mode. NOTE: the camera service always writes "Line1"; this value is not used.</summary>
     public string TriggerSource { get; set; } = "Line1";
-    /// <summary>Which edge of the trigger pulse fires a frame (normally "RisingEdge").</summary>
+    /// <summary>Intended trigger edge. NOTE: the camera service always writes "RisingEdge"; this value is not used.</summary>
     public string TriggerActivation { get; set; } = "RisingEdge";
 
 
