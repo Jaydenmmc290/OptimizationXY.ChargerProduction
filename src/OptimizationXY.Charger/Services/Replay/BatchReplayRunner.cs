@@ -45,9 +45,19 @@ internal static class BatchReplayRunner
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+    /// <summary>True when the command line contains the --replay-batch switch.</summary>
     public static bool IsRequested(string[] args) =>
         args.Any(argument => string.Equals(argument, CommandLineSwitch, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// One line of summary.csv: the result of replaying one saved scan.
+    /// Command values (TailXMM … HeadYMM) are the machine moves the PLC would have
+    /// been sent, in mm. AxisFromCenterlineMM is how far the chosen spindle axis
+    /// is from the block's own centreline (NaN when the centreline pull was not
+    /// used); it is the value used to compare repeat scans of one block.
+    /// Status is "OK", "NoResult" (pipeline ran but gave no recommendation) or
+    /// "Failed" (see Error).
+    /// </summary>
     internal sealed record Row(
         string ScanFolder,
         string Block,
@@ -71,6 +81,11 @@ internal static class BatchReplayRunner
         double RevolutionFrames = double.NaN,
         double AxisFromCenterlineMM = double.NaN);
 
+    /// <summary>
+    /// Entry point for --replay-batch: reads the switches (or asks for the root
+    /// folder), runs <see cref="RunBatch"/> and opens/shows the summary.
+    /// </summary>
+    /// <param name="args">The program's command-line arguments.</param>
     public static void Run(string[] args)
     {
         string? root = ArgumentAfter(args, CommandLineSwitch);
@@ -219,6 +234,12 @@ internal static class BatchReplayRunner
         return folders;
     }
 
+    /// <summary>
+    /// Replays one scan folder with the calibration saved in it, writes its full
+    /// diagnostics report into reports\ and returns its summary line. Any error is
+    /// caught and returned as a "Failed" row so one bad scan does not stop the batch.
+    /// The shared pipeline state is cleared before and after.
+    /// </summary>
     private static Row ReplayOne(string scanFolder, string root, string reportsFolder)
     {
         PipelineState state = PipelineState.Instance;
@@ -308,6 +329,9 @@ internal static class BatchReplayRunner
         }
     }
 
+    /// <summary>
+    /// Saves a scan's diagnostics report as reports\&lt;relative path with '_'&gt;.txt.
+    /// </summary>
     private static void WriteReport(string reportsFolder, string relative, string report)
     {
         string name = string.Join("_", relative.Split(Path.GetInvalidFileNameChars().Concat([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]).ToArray(), StringSplitOptions.RemoveEmptyEntries));
@@ -318,6 +342,7 @@ internal static class BatchReplayRunner
     // CSV
     // ------------------------------------------------------------
 
+    // Column order of summary.csv. Keep it in step with WriteCsv and ReadCsv.
     private static readonly string[] Header =
     [
         "ScanFolder", "Block", "Status", "Frames", "FramesUsed", "RevolutionVerified", "FramesPerRevolution",
@@ -326,6 +351,7 @@ internal static class BatchReplayRunner
         "RevolutionFrames", "AxisFromCenterlineMM"
     ];
 
+    /// <summary>Writes the rows as summary.csv (invariant culture, quoted text).</summary>
     internal static void WriteCsv(string path, IEnumerable<Row> rows)
     {
         var csv = new StringBuilder();
@@ -345,6 +371,10 @@ internal static class BatchReplayRunner
         File.WriteAllText(path, csv.ToString(), Encoding.UTF8);
     }
 
+    /// <summary>
+    /// Reads a summary.csv written earlier (used as the --baseline). Columns are
+    /// matched by name; missing numbers read as NaN or 0.
+    /// </summary>
     internal static List<Row> ReadCsv(string path)
     {
         var rows = new List<Row>();
@@ -384,20 +414,26 @@ internal static class BatchReplayRunner
         return rows;
     }
 
+    /// <summary>CSV text field: quoted, inner quotes doubled, line breaks replaced by spaces.</summary>
     private static string Quote(string value) =>
         "\"" + (value ?? string.Empty).Replace("\"", "\"\"", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal) + "\"";
 
+    /// <summary>Number for the CSV (up to 3 decimals); empty when NaN or infinite.</summary>
     private static string Num(double value) =>
         double.IsFinite(value) ? value.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty;
 
+    /// <summary>Whole number for the CSV.</summary>
     private static string Num(int value) => value.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>Reads a CSV whole number; 0 when it cannot be read.</summary>
     private static int ParseInt(string text) =>
         int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) ? value : 0;
 
+    /// <summary>Reads a CSV number; NaN when it cannot be read (for example an empty cell).</summary>
     private static double ParseDouble(string text) =>
         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) ? value : double.NaN;
 
+    /// <summary>Splits one CSV line into fields, honouring quotes and doubled quotes.</summary>
     private static List<string> SplitCsv(string line)
     {
         var fields = new List<string>();
@@ -447,6 +483,10 @@ internal static class BatchReplayRunner
     // Summary
     // ------------------------------------------------------------
 
+    /// <summary>
+    /// Largest difference, in mm, between two runs' four commands
+    /// (tail X/Y and head X/Y). Compared with --tolerance-mm to decide "changed".
+    /// </summary>
     internal static double LargestCommandChangeMM(Row a, Row b) =>
         new[]
         {
@@ -456,6 +496,11 @@ internal static class BatchReplayRunner
             Math.Abs(a.HeadYMM - b.HeadYMM)
         }.Max();
 
+    /// <summary>
+    /// Builds summary.txt: settings tried, totals, scans whose commands moved
+    /// more than the tolerance against the baseline, and how well repeat scans of
+    /// the same block agree.
+    /// </summary>
     internal static string BuildSummary(
         string root,
         IReadOnlyList<string> applied,
@@ -637,6 +682,10 @@ internal static class BatchReplayRunner
         return groups;
     }
 
+    /// <summary>
+    /// Reads every --same-block "A,B,C" switch (commas or semicolons) into a list
+    /// of block-name groups.
+    /// </summary>
     internal static List<IReadOnlyList<string>> ParseSameBlockGroups(string[] args)
     {
         var groups = new List<IReadOnlyList<string>>();
@@ -657,6 +706,10 @@ internal static class BatchReplayRunner
         return groups;
     }
 
+    /// <summary>
+    /// The value that follows a switch, for example the folder after --out.
+    /// Null when the switch is missing or is followed by another switch.
+    /// </summary>
     private static string? ArgumentAfter(string[] args, string name)
     {
         int index = Array.FindIndex(args, argument => string.Equals(argument, name, StringComparison.OrdinalIgnoreCase));

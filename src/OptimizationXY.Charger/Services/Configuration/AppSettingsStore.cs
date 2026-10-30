@@ -12,8 +12,12 @@ namespace OptimizationXY.Charger.Services.Configuration;
 /// </summary>
 public static class AppSettingsStore
 {
+    // Raised when a release changes what appsettings.json means. Loading an older
+    // file runs the upgrade steps below and then stamps it with this number.
     private const int CurrentSettingsVersion = 10;
 
+    // Readable output; comments, trailing commas and any letter case are allowed
+    // when reading, and enums are written by name (for example "Encoder").
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -26,6 +30,10 @@ public static class AppSettingsStore
     public static string ConfigDirectory => ApplicationPaths.ConfigDirectory;
     public static string SettingsPath => Path.Combine(ConfigDirectory, "appsettings.json");
 
+    /// <summary>
+    /// Where older versions kept appsettings.json (Config\ next to the .exe). If
+    /// the new location has no settings yet, this file is copied there once.
+    /// </summary>
     private static string LegacySettingsPath => Path.Combine(
         AppContext.BaseDirectory,
         "Config",

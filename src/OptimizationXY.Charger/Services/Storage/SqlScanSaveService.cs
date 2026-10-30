@@ -10,17 +10,27 @@ namespace OptimizationXY.Charger.Services.Storage;
 /// <summary>
 /// Saves the scan results to a SQL database. This service handles the insertion of scan session data, scan frames, and optimization results into the appropriate database tables. It ensures that all related data is saved within a single transaction, providing atomicity and consistency.
 /// If any part of the save operation fails, the transaction is rolled back to maintain data integrity.
+/// <para>
+/// The scan folder must already be saved to disk (state.LastSavedRunFolder):
+/// the block and scan numbers are read from its Block_####\Scan_#### names.
+/// Lengths and diameters are stored in INCHES in the database (columns ending
+/// in "In"); the program works in mm and converts with MM_PER_INCH.
+/// </para>
 /// </summary>
 /// <param name="settings">The database settings used to configure the connection.</param>
 public sealed class SqlScanSaveService(DatabaseSettings settings)
 {
+    // Database columns are in inches; everything in the program is in mm.
     private const double MM_PER_INCH = 25.4;
 
     private readonly DatabaseSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
 
     /// <summary>
-    /// Saves the scan results from the provided PipelineState to the SQL database. This method performs the following steps:
+    /// Saves the scan results from the provided PipelineState to the SQL database, in one transaction:
+    /// (1) find or create the ScanBlock row for the block folder, (2) insert the
+    /// ScanSession row, (3) insert one ScanFrame row per frame, (4) insert the
+    /// OptimizationResult row. Any failure rolls all of it back.
     /// </summary>
     /// <param name="state">The pipeline state containing the scan results to be saved.</param>
     /// <returns>The ID of the inserted scan record.</returns>

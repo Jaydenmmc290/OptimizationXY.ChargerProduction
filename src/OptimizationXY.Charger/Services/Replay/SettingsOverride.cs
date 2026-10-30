@@ -72,6 +72,12 @@ public static class SettingsOverride
         throw new ArgumentException($"Setting override '{assignment}' has no setting name.");
     }
 
+    /// <summary>
+    /// Converts the text after '=' to the setting's type: enums by name (any
+    /// case), true/false, strings as-is, numbers with invariant culture ('.' as
+    /// decimal point). "null" or empty clears a nullable setting.
+    /// </summary>
+    /// <exception cref="ArgumentException">The text is not a valid value for the setting.</exception>
     private static object? Convert(string text, Type type, string path)
     {
         Type underlying = Nullable.GetUnderlyingType(type) ?? type;

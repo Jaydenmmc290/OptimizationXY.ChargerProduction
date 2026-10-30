@@ -32,11 +32,13 @@ internal static class OfflineReplayRunner
 
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
+    // Case-insensitive so calibration files written by older versions still load.
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>True when the command line contains the --replay switch.</summary>
     public static bool IsRequested(string[] args)
     {
         return args.Any(argument =>
@@ -46,6 +48,13 @@ internal static class OfflineReplayRunner
                 StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Replays one saved scan: finds the scan folder and its calibration, applies
+    /// any --set overrides (in memory only), runs the normal processing pipeline on
+    /// the saved frames, writes a ReplayDiagnosticsReport_yyyyMMdd_HHmmss.txt and
+    /// shows a summary. Cameras, PLC and SQL are never used.
+    /// </summary>
+    /// <param name="args">The program's command-line arguments.</param>
     public static void Run(string[] args)
     {
         try
@@ -249,6 +258,11 @@ internal static class OfflineReplayRunner
         }
     }
 
+    /// <summary>
+    /// The folder given after --replay, or (when none is given) the folder the
+    /// user picks in a folder dialog. Null when the dialog is cancelled.
+    /// </summary>
+    /// <exception cref="DirectoryNotFoundException">The folder given on the command line does not exist.</exception>
     private static string? ResolveScanFolder(string[] args)
     {
         int switchIndex = Array.FindIndex(
@@ -286,6 +300,10 @@ internal static class OfflineReplayRunner
             : null;
     }
 
+    /// <summary>
+    /// The scan's Frames sub-folder when it exists; otherwise the chosen folder
+    /// itself (so a plain folder of frame images can also be replayed).
+    /// </summary>
     private static string ResolveFramesFolder(string scanFolder)
     {
         string framesFolder = Path.Combine(scanFolder, "Frames");
@@ -295,6 +313,12 @@ internal static class OfflineReplayRunner
             : scanFolder;
     }
 
+    /// <summary>
+    /// The calibration to replay with: scanner-calibration.json or
+    /// scanner-lookup-table.json in the scan folder, then in its parent folder.
+    /// If none is valid the user is asked to pick a calibration file.
+    /// Null when the dialog is cancelled.
+    /// </summary>
     private static ScannerLookupTable? ResolveCalibration(string scanFolder)
     {
         string?[] candidates =
@@ -360,6 +384,10 @@ internal static class OfflineReplayRunner
         return null;
     }
 
+    /// <summary>
+    /// Reads a calibration JSON file. Returns null (and logs why) when the file
+    /// cannot be read or has no usable calibration points.
+    /// </summary>
     private static ScannerLookupTable? TryLoadCalibration(string path)
     {
         try

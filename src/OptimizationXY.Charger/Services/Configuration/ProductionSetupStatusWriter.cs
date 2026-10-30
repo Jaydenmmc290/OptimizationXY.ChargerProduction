@@ -5,13 +5,19 @@ using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Services.Calibration;
 
 
-/// <summary>
-/// Writes a JSON file containing the current production setup status, including configuration and calibration details.
-/// </summary>
 namespace OptimizationXY.Charger.Services.Configuration;
 
+/// <summary>
+/// Writes production-setup-status.json in the Setup folder: a readable
+/// snapshot of how this computer is set up (folders, calibration in use and
+/// its acquisition-geometry hash, database switch, camera servers, device
+/// indexes and frame-join settings, which setup checks are done, and whether
+/// commissioning is complete). It is a record for people checking
+/// the installation; the program does not read it back.
+/// </summary>
 public static class ProductionSetupStatusWriter
 {
+    // Indented so the file is easy to read by eye.
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
