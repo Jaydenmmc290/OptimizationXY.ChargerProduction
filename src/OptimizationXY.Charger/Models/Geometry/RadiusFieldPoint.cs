@@ -30,8 +30,9 @@ public class RadiusFieldPoint
     /// Gets or sets the circumferential angle of this measurement point, measured in degrees.
     ///
     /// Range: 0-360 degrees around the log circumference.
-    /// 0 degrees is the point-cloud +X direction (atan2(Y, X)); it is a log-fixed
-    /// angle, not a clock position on the machine.
+    /// 0 degrees is the point-cloud +X direction (atan2(Y, X)). How that lines up
+    /// with the machine depends on RotatingScan.LaserAngleOffsetDeg and
+    /// ReverseRotationDirection.
     /// Combined with RadiusMM to specify position in polar coordinates.
     /// </summary>
     public double AngleDeg { get; set; }

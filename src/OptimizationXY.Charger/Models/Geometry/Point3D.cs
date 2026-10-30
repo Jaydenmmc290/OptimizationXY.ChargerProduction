@@ -13,8 +13,10 @@ namespace OptimizationXY.Charger.Models.Geometry;
 /// Z = distance along the log, 0 at the TAIL end, increasing toward the head;
 /// X/Y = position across the log, with (0,0) on the spindle axis the log was
 /// scanned on. X = r cos(angle), Y = r sin(angle), where angle is the frame's
-/// rotation angle. This is a log-fixed frame - it is NOT the machine's
-/// charger X/Y travel; the movement code converts between them.
+/// AngleDeg = RotatingScan.LaserAngleOffsetDeg + direction x (frame step),
+/// set by RevolutionAngleAssigner. Those two settings are what line this frame
+/// up with the machine X/Y directions; verify them with an off-centre
+/// reference before trusting the X/Y signs.
 ///
 /// Typical usage:
 /// - Representing points in a 3D point cloud from the laser scanner
