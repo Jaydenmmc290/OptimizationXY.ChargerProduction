@@ -27,19 +27,23 @@ public static class LogHeadEndViewOverlayBuilder
 {
     private const double MillimetersPerInch = 25.4;
 
+    // Colours are OpenCV BGR (blue, green, red), not RGB.
     private static readonly MCvScalar White = new(255, 255, 255);
     private static readonly MCvScalar LightGray = new(200, 200, 200);
     private static readonly MCvScalar MidGray = new(130, 130, 130);
     private static readonly MCvScalar GridGray = new(60, 60, 60);
     private static readonly MCvScalar WoodColor = new(95, 150, 190);
+    // Widest-diameter line, narrowest-diameter line, spindle-axis cross:
     private static readonly MCvScalar LargestColor = new(0, 215, 255);      // amber (BGR)
     private static readonly MCvScalar SmallestColor = new(255, 200, 120);   // light blue (BGR)
     private static readonly MCvScalar SpindleColor = new(0, 255, 255);      // yellow (BGR)
 
+    // One colour per drawn section (tail, middle, head):
     private static readonly MCvScalar TailColor = new(70, 70, 255);         // red (BGR)
     private static readonly MCvScalar MiddleColor = new(70, 230, 70);       // green (BGR)
     private static readonly MCvScalar HeadColor = new(255, 150, 60);        // blue (BGR)
 
+    /// <summary>One cross-section of the block drawn in the picture (tail, middle or head).</summary>
     private sealed class Section
     {
         public string Name { get; init; } = string.Empty;
@@ -53,9 +57,13 @@ public static class LogHeadEndViewOverlayBuilder
         public double CenterXMM { get; init; }
         public double CenterYMM { get; init; }
 
+        // Average and largest radius of the outline (the largest sets the picture scale).
         public double MeanRadiusMM { get; init; }
         public double MaxRadiusMM { get; init; }
 
+        // Widest and narrowest diameter across the section: a radius plus the radius
+        // measured opposite it (within 6°). The angle is of the first of the pair
+        // (0–180°). HasDiameters is false when no opposite pairs were found.
         public bool HasDiameters { get; init; }
         public double WidestDiameterMM { get; init; }
         public double WidestAngleDeg { get; init; }
@@ -336,6 +344,11 @@ public static class LogHeadEndViewOverlayBuilder
     // Section data
     // ------------------------------------------------------------
 
+    /// <summary>
+    /// Collects one section's outline from the binned radius field (the Z bin at
+    /// sectionZ), finds its widest/narrowest diameters, and places it where the
+    /// fitted centreline crosses that Z (at the spindle axis when no centreline).
+    /// </summary>
     private static Section BuildSection(
         List<BinnedRadiusFieldPoint> field,
         double sectionZ,
@@ -481,6 +494,7 @@ public static class LogHeadEndViewOverlayBuilder
         CvInvoke.Circle(canvas, new Point(x, y), size + 2, SpindleColor, 1, LineType.AntiAlias);
     }
 
+    /// <summary>Draws a dashed straight line (dash and gap lengths in pixels).</summary>
     private static void DrawDashed(
         Mat canvas,
         Point from,
@@ -515,6 +529,7 @@ public static class LogHeadEndViewOverlayBuilder
         }
     }
 
+    /// <summary>Writes text with its baseline-left corner at (x, y).</summary>
     private static void Text(
         Mat canvas,
         string text,
@@ -552,9 +567,11 @@ public static class LogHeadEndViewOverlayBuilder
         Text(canvas, text, centerX - estimatedWidth / 2, y, fontScale, color, thickness);
     }
 
+    /// <summary>Millimetres to inches (labels are shown in inches).</summary>
     private static double Inches(double millimeters) =>
         millimeters / MillimetersPerInch;
 
+    /// <summary>Wraps an angle into 0 ≤ angle &lt; 360 degrees.</summary>
     private static double NormalizeAngle(double angle)
     {
         angle %= 360.0;

@@ -5,11 +5,21 @@ namespace OptimizationXY.Charger.UI.Forms;
 /// <summary>
 /// Read-only lathe-operator display. The form is updated by the main production
 /// workflow and intentionally contains no camera/live-view controls.
+/// <para>
+/// Screen states in a normal cycle: Waiting ("READY FOR NEXT BLOCK") →
+/// Capturing ("SCANNING BLOCK", frame counter) → waiting for ScanComplete →
+/// Processing ("BUILDING LOG PROFILE") → Result (GOOD / CHECK SCAN / RESCAN)
+/// or Failure. The colour bar matches the state. Every Show… method may be
+/// called from any thread; the work is moved to the UI thread.
+/// The operator cannot close this window; only application exit closes it.
+/// </para>
 /// </summary>
 public partial class OperatorScanQualityForm : Form
 {
+    // Set only by CloseForApplicationExit, so the operator cannot close the window.
     private bool _allowClose;
 
+    /// <summary>Creates the window showing the waiting state.</summary>
     public OperatorScanQualityForm()
     {
         InitializeComponent();
@@ -20,6 +30,7 @@ public partial class OperatorScanQualityForm : Form
     // scanned before. Only touched on the UI thread.
     private bool _previousBlockOnScreen;
 
+    /// <summary>Idle: ready for the next block, waiting for the PLC ScanStart signal.</summary>
     public void ShowWaiting(OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -31,6 +42,7 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>Capture running: shows captured / expected frame pairs.</summary>
     public void ShowCapturing(OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -57,6 +69,7 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>All frames are in; waiting for the PLC ScanComplete signal.</summary>
     public void ShowWaitingForScanComplete(OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -69,6 +82,7 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>Frames are being processed into the log profile.</summary>
     public void ShowProcessing(OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -81,6 +95,11 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>
+    /// Shows the scan-quality result: headline and colour, frames used, profile
+    /// coverage, valid slices, length, average diameter (inches), largest gap,
+    /// and the log profile drawing.
+    /// </summary>
     public void ShowResult(
         OperatorScanQualityResult result,
         OperatorRuntimeStatus runtime)
@@ -115,6 +134,7 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>Processing failed: red "SCAN FAILED" with the message; the block must be rescanned.</summary>
     public void ShowFailure(string message, OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -131,6 +151,7 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>Refreshes the PLC, ScanStart/ScanComplete, calibration and system-ready indicators.</summary>
     public void UpdateRuntime(OperatorRuntimeStatus runtime)
     {
         RunOnUiThread(() =>
@@ -162,12 +183,14 @@ public partial class OperatorScanQualityForm : Form
         });
     }
 
+    /// <summary>Closes the window when the program exits (the only way it can close).</summary>
     public void CloseForApplicationExit()
     {
         _allowClose = true;
         Close();
     }
 
+    /// <summary>Cancels a close by the user (X button / Alt+F4) unless the program is exiting.</summary>
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (!_allowClose && e.CloseReason == CloseReason.UserClosing)
@@ -179,6 +202,7 @@ public partial class OperatorScanQualityForm : Form
         base.OnFormClosing(e);
     }
 
+    /// <summary>Sets the coloured status bar, headline and message.</summary>
     private void SetStatus(
         ScanQualityStatus status,
         string headline,
@@ -198,6 +222,7 @@ public partial class OperatorScanQualityForm : Form
         lblScanMessage.Text = message;
     }
 
+    /// <summary>Resets every result value to "--".</summary>
     private void ClearResultValues()
     {
         lblFramesValue.Text = "--";
@@ -211,6 +236,10 @@ public partial class OperatorScanQualityForm : Form
         lblProcessingTime.Text = string.Empty;
     }
 
+    /// <summary>
+    /// Runs the action on the UI thread (queued with BeginInvoke when called from
+    /// another thread). Does nothing once the window is disposed.
+    /// </summary>
     private void RunOnUiThread(Action action)
     {
         if (IsDisposed)

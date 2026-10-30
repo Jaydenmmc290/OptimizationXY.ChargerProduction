@@ -204,7 +204,8 @@ namespace OptimizationXY.Charger.Services.Core
         /// </summary>
         public List<DeferredPeelView> DeferredPeelViews { get; } = new();
 
-        // Picture of the measured point cloud.
+        // Despite its name: the tail / middle / head cross-section picture
+        // (RotatingRadiusSectionOverlayBuilder).
         public Mat? PointCloudOverlay { get; set; }
 
         /// <summary>Single view from the head end of the block, shown in the main form overlay box.</summary>
