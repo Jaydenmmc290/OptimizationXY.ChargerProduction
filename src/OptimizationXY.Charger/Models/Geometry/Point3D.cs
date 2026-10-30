@@ -9,6 +9,13 @@ namespace OptimizationXY.Charger.Models.Geometry;
 /// for representing 3D coordinates in point clouds, geometry calculations, and
 /// spatial analysis. All coordinates are in millimeters.
 ///
+/// The scan point cloud uses this frame (see RotatingScanPointCloudBuilder):
+/// Z = distance along the log, 0 at the TAIL end, increasing toward the head;
+/// X/Y = position across the log, with (0,0) on the spindle axis the log was
+/// scanned on. X = r cos(angle), Y = r sin(angle), where angle is the frame's
+/// rotation angle. This is a log-fixed frame - it is NOT the machine's
+/// charger X/Y travel; the movement code converts between them.
+///
 /// Typical usage:
 /// - Representing points in a 3D point cloud from the laser scanner
 /// - Storing centerline positions along the log length
@@ -19,24 +26,21 @@ public class Point3D
     /// <summary>
     /// Gets or sets the X coordinate of this point in 3D space, measured in millimeters.
     ///
-    /// Typically represents horizontal position (left/right) or radial distance
-    /// depending on the coordinate system context.
+    /// In the scan point cloud: r x cos(rotation angle), across the log.
     /// </summary>
     public double X { get; set; }
 
     /// <summary>
     /// Gets or sets the Y coordinate of this point in 3D space, measured in millimeters.
     ///
-    /// Typically represents vertical position or second radial direction
-    /// depending on the coordinate system context.
+    /// In the scan point cloud: r x sin(rotation angle), across the log.
     /// </summary>
     public double Y { get; set; }
 
     /// <summary>
     /// Gets or sets the Z coordinate of this point in 3D space, measured in millimeters.
     ///
-    /// Typically represents axial position along the log length or depth
-    /// depending on the coordinate system context.
+    /// In the scan point cloud: distance along the log from the tail end.
     /// </summary>
     public double Z { get; set; }
 

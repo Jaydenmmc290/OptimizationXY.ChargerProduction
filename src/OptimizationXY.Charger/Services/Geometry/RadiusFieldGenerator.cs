@@ -2,6 +2,13 @@ using OptimizationXY.Charger.Models.Geometry;
 
 namespace OptimizationXY.Charger.Services.Geometry;
 
+/// <summary>
+/// Builds the CENTRELINE-relative radius field: for every point-cloud point,
+/// its distance from the fitted log centreline and its angle around it.
+/// Used for shape diagnostics (ovality, defect map, diameters). The spindle
+/// optimization uses the scanner-axis field instead
+/// (RotatingScanPointCloudBuilder.BuildMachineFrameRadiusField).
+/// </summary>
 public static class RadiusFieldGenerator
 {
     /// <summary>
@@ -45,6 +52,7 @@ public static class RadiusFieldGenerator
             throw new InvalidOperationException("Invalid centerline direction.");
         }
 
+        // Make the direction a unit vector so dot products give true distances.
         dxAxis /= axisLength;
         dyAxis /= axisLength;
         dzAxis /= axisLength;
@@ -55,18 +63,20 @@ public static class RadiusFieldGenerator
             double vy = p.Y - oy;
             double vz = p.Z - oz;
 
-            // Distance along fitted centerline
+            // Distance of the point along the fitted centreline (projection onto the
+            // axis direction: dot product of the point offset with the unit direction).
             double t =
                 vx * dxAxis +
                 vy * dyAxis +
                 vz * dzAxis;
 
-            // Closest point on centerline
+            // Closest point on the centreline to this surface point.
             double cx = ox + t * dxAxis;
             double cy = oy + t * dyAxis;
             double cz = oz + t * dzAxis;
 
-            // Radial vector from centerline to surface point
+            // Radial vector from the centreline to the surface point (perpendicular to
+            // the axis). Its length is the radius at this point.
             double rx = p.X - cx;
             double ry = p.Y - cy;
             double rz = p.Z - cz;

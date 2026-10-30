@@ -1,31 +1,35 @@
 
-/// <summary>
-/// Represents a column in the log profile, containing geometric information about a specific X coordinate.
-/// </summary>
+// LogProfileColumn.cs - one calibrated measurement from one image column.
 namespace OptimizationXY.Charger.Models.Geometry;
 
+/// <summary>
+/// One calibrated measurement from one image column of one frame: at image
+/// column <see cref="X"/>, the log surface was <see cref="RadiusMM"/> from the
+/// spindle axis. A frame's list of these is its "profile" along the log.
+/// </summary>
 public class LogProfileColumn 
 {
     /// <summary>
-    /// Gets or sets the X coordinate of the column.
+    /// Gets or sets the image column (pixels in the joined image). Converted to
+    /// a position along the log using the axial scale (pixels per mm).
     /// </summary>
     public int X { get; set; }  
 
 
 
     /// <summary>
-    /// Gets or sets the Y coordinate of the center of the column, calculated as the average of TopY and BottomY, representing the midpoint in the log profile at this X coordinate.
+    /// Gets or sets the image row (pixels) of the laser line centre in this column.
     /// </summary>
     public double CenterY { get; set; }  
 
     /// <summary>
-    /// Gets or sets the diameter of the column in millimeters, calculated from the pixel diameter using the appropriate conversion factor.
+    /// Gets or sets 2 x <see cref="RadiusMM"/>, in millimetres (the equivalent diameter at this point).
     /// </summary>
     public double DiameterMM { get; set; }  
 
     /// <summary>
-    /// Gets or sets the radius of the column in millimeters, calculated as half of the diameter,
-    /// representing the distance from the center to the edge of the column in the log profile at this X coordinate.
+    /// Gets or sets the calibrated radius in millimetres: the distance from the
+    /// spindle (home) axis to the log surface where the laser hits it, from the calibration lookup table.
     /// </summary>
     public double RadiusMM { get; set; } 
 }

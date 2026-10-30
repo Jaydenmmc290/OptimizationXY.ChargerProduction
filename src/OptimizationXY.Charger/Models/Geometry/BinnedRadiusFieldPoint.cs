@@ -7,6 +7,9 @@ namespace OptimizationXY.Charger.Models.Geometry;
 /// and circumferential angle. This cell contains statistical measures (mean, median, min, max,
 /// standard deviation) of all measurement points that fall within this bin.
 ///
+/// Bins are made by RadiusFieldBinner. ZBinMM / AngleBinDeg are the LOWER
+/// edges of the cell (e.g. Z 100-110 mm, angle 20-25 degrees).
+///
 /// Binned data provides:
 /// - Noise reduction through statistical aggregation
 /// - More efficient processing (fewer points to analyze)
@@ -34,8 +37,8 @@ public class BinnedRadiusFieldPoint
     /// <summary>
     /// Gets or sets the mean (average) radius of all points in this bin, measured in millimeters.
     ///
-    /// The primary metric for this bin's radius. Represents the central tendency
-    /// of all measurements at this location. Used as the reference for error calculations.
+    /// The main radius value of the cell. Used by the defect map and ovality
+    /// analysis (the defect map compares it with the slice median).
     /// </summary>
     public double MeanRadiusMM { get; set; }
 
@@ -52,8 +55,9 @@ public class BinnedRadiusFieldPoint
     /// Gets or sets the minimum radius measured in this bin, measured in millimeters.
     ///
     /// The smallest value among all points in the bin.
-    /// Useful for identifying worst-case local defects.
-    /// Important for determining if bin represents severe wane.
+    /// May ignore the N lowest readings (see RadiusFieldBinner.RobustMinimum) so
+    /// one bad laser reading does not make a cell look deeper than it is.
+    /// The inscribed-geometry optimizers use this conservative value.
     /// </summary>
     public double MinRadiusMM { get; set; }
 
@@ -80,8 +84,7 @@ public class BinnedRadiusFieldPoint
     /// Gets or sets the number of individual measurement points in this bin.
     ///
     /// Higher counts provide greater statistical confidence in the mean and standard deviation.
-    /// Low counts (1-2 points) indicate sparse data requiring caution in interpretation.
-    /// Zero count indicates an empty bin with no data.
+    /// Cells with fewer than the configured minimum points are not created at all.
     /// Used as a reliability indicator for this bin's measurements.
     /// </summary>
     public int Count { get; set; }

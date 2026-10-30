@@ -7,7 +7,13 @@ namespace OptimizationXY.Charger.Services.Geometry;
 
 
 /// <summary>
-/// Provides mathematical services for fitting centerlines to point clouds and analyzing local centerline slices.
+/// Fits the log's centreline. Pipeline order:
+/// <list type="number">
+/// <item><description><see cref="FitPcaAxis"/> - quick straight line through the whole point cloud.</description></item>
+/// <item><description><see cref="FitLocalCenterlines"/> - circle centre of each thin slice along the log.</description></item>
+/// <item><description><see cref="RefineAxisThroughSliceCenters"/> - straight line fitted through those slice centres.</description></item>
+/// </list>
+/// All coordinates are millimetres in the point-cloud frame.
 /// </summary>
 public static class CenterlineMathService
 {
@@ -25,6 +31,7 @@ public static class CenterlineMathService
     {
         try
         {
+            // Use MathNet's pure .NET maths (no native MKL library needed on the PC).
             MathNet.Numerics.Control.UseManaged();
 
             points = [.. points
@@ -40,6 +47,9 @@ public static class CenterlineMathService
             double meanY = points.Average(p => p.Y);
             double meanZ = points.Average(p => p.Z);
 
+            // PCA: build the 3x3 covariance matrix of the points around their mean.
+            // The eigenvector with the largest eigenvalue is the direction the points
+            // are most spread out in - for a log, its length direction.
             var covariance = Matrix<double>.Build.Dense(3, 3);
 
             foreach (var p in points)
@@ -77,6 +87,8 @@ public static class CenterlineMathService
                 }
             }
 
+            // NOTE: an eigenvector's sign is arbitrary, so the direction may point
+            // toward -Z. Callers that care about direction must check the Z sign.
             double dx = evd.EigenVectors[0, bestIndex];
             double dy = evd.EigenVectors[1, bestIndex];
             double dz = evd.EigenVectors[2, bestIndex];
@@ -107,15 +119,6 @@ public static class CenterlineMathService
     }
 
     /// <summary>
-    /// Fits local centerline slices to a point cloud by dividing the points into slices based on their Z-coordinate and computing the
-    /// average position and mean radius for each slice. The method filters out invalid points and requires a minimum
-    /// number of valid points per slice to include it in the result.
-    /// </summary>
-    /// <param name="points">The list of 3D points representing the point cloud.</param>
-    /// <param name="sliceThicknessMM">The thickness of each slice in millimeters.</param>
-    /// <param name="minPointsPerSlice">The minimum number of valid points required per slice.</param>
-    /// <returns>A list of LocalCenterlineSlice objects representing the fitted local centerline slices.</returns>
-    /// <summary>
     /// Refines the global PCA axis so that it passes through the fitted centres
     /// of the cross-sections.
     ///
@@ -136,6 +139,8 @@ public static class CenterlineMathService
         if (slices == null || slices.Count < minimumSlices)
             return pcaAxis;
 
+        // Ordinary least-squares line fit of slice centre X and Y against Z:
+        // slope = sum((z - meanZ)(x - meanX)) / sum((z - meanZ)^2), same for Y.
         double meanZ = slices.Average(s => s.ZMM);
         double meanX = slices.Average(s => s.CenterXMM);
         double meanY = slices.Average(s => s.CenterYMM);
@@ -159,6 +164,8 @@ public static class CenterlineMathService
         double slopeX = sumZX / sumZZ;
         double slopeY = sumZY / sumZZ;
 
+        // Keep the PCA origin's Z so the origin stays near the middle of the log,
+        // and put X/Y on the fitted line at that Z.
         double originZ = double.IsFinite(pcaAxis.OriginZ)
             ? pcaAxis.OriginZ
             : meanZ;
@@ -166,6 +173,8 @@ public static class CenterlineMathService
         double originX = meanX + slopeX * (originZ - meanZ);
         double originY = meanY + slopeY * (originZ - meanZ);
 
+        // Direction (slopeX, slopeY, 1) normalised to length 1. Because Z is +1
+        // before normalising, this direction always points toward +Z (the head).
         double length = Math.Sqrt(slopeX * slopeX + slopeY * slopeY + 1.0);
 
         if (!double.IsFinite(originX) ||
@@ -191,6 +200,12 @@ public static class CenterlineMathService
     /// Least-squares (algebraic) circle fit of one cross-section. Returns false
     /// when the fit is degenerate so the caller can keep the centroid.
     /// </summary>
+    /// <remarks>
+    /// "Kasa" algebraic fit: a circle satisfies x^2 + y^2 = A x + B y + C, which
+    /// is linear in A, B, C, so it can be solved directly with a 3x3 system
+    /// (Cramer's rule below). Coordinates are shifted by the point average first
+    /// (u, v) for numerical accuracy; the centre is mean + (A/2, B/2).
+    /// </remarks>
     private static bool TryFitCircleCenter(
         List<Point3D> points,
         double meanX,
@@ -268,6 +283,16 @@ public static class CenterlineMathService
         return true;
     }
 
+    /// <summary>
+    /// Cuts the point cloud into slices of <paramref name="sliceThicknessMM"/>
+    /// along Z and finds each slice's centre (least-squares circle fit, falling
+    /// back to the point average) and mean radius about that centre. Slices with
+    /// fewer than <paramref name="minPointsPerSlice"/> points are skipped.
+    /// </summary>
+    /// <param name="points">The point cloud.</param>
+    /// <param name="sliceThicknessMM">Thickness of each slice, millimetres.</param>
+    /// <param name="minPointsPerSlice">Minimum points a slice needs to be used.</param>
+    /// <returns>The slices, ordered from the tail end (low Z) to the head end.</returns>
     public static List<LocalCenterlineSlice> FitLocalCenterlines(
 List<Point3D> points,
 double sliceThicknessMM,

@@ -9,7 +9,11 @@ namespace OptimizationXY.Charger.Models.Geometry;
 /// coordinates (X, Y) of a measurement. The axial position (Z) identifies which cross-section
 /// this point belongs to.
 ///
-/// Radius field points are aggregated into RadiusFieldColumns for processing,
+/// There are two kinds of radius field in the program: one measured from the
+/// FITTED centreline (RadiusFieldGenerator - shape diagnostics) and one
+/// measured from the SCANNER/spindle axis at (0,0) (RotatingScanPointCloudBuilder.
+/// BuildMachineFrameRadiusField - used for machine-position optimization).
+/// Radius field points are grouped into Z/angle cells by RadiusFieldBinner,
 /// and form the basis for defect analysis and geometric calculations.
 /// </summary>
 public class RadiusFieldPoint
@@ -26,16 +30,16 @@ public class RadiusFieldPoint
     /// Gets or sets the circumferential angle of this measurement point, measured in degrees.
     ///
     /// Range: 0-360 degrees around the log circumference.
-    /// 0° typically corresponds to the +X axis (three o'clock position).
+    /// 0 degrees is the point-cloud +X direction (atan2(Y, X)); it is a log-fixed
+    /// angle, not a clock position on the machine.
     /// Combined with RadiusMM to specify position in polar coordinates.
     /// </summary>
     public double AngleDeg { get; set; }
 
     /// <summary>
-    /// Gets or sets the radial distance from the log centerline to this point, measured in millimeters.
+    /// Gets or sets the distance from the reference axis (fitted centreline or
+    /// spindle axis - see the class remarks) to this surface point, in millimetres.
     ///
-    /// Represents the actual measured distance from the geometric center (centerline)
-    /// to the log surface at this angular and axial position.
     /// This is the primary measurement used for defect analysis.
     /// </summary>
     public double RadiusMM { get; set; }
@@ -43,16 +47,14 @@ public class RadiusFieldPoint
     /// <summary>
     /// Gets or sets the X coordinate (Cartesian) of this measurement point, measured in millimeters.
     ///
-    /// Can be calculated from angle and radius using: X = RadiusMM * cos(AngleDeg)
-    /// Stored separately for convenience and efficiency in calculations.
+    /// The original point-cloud X of the surface point (not relative to the centreline).
     /// </summary>
     public double X { get; set; }
 
     /// <summary>
     /// Gets or sets the Y coordinate (Cartesian) of this measurement point, measured in millimeters.
     ///
-    /// Can be calculated from angle and radius using: Y = RadiusMM * sin(AngleDeg)
-    /// Stored separately for convenience and efficiency in calculations.
+    /// The original point-cloud Y of the surface point (not relative to the centreline).
     /// </summary>
     public double Y { get; set; }
 }

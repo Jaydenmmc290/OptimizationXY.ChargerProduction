@@ -1,14 +1,14 @@
 
-/// <summary>
-/// Represents a single column of laser profile data, including the X coordinate, the Y coordinates of the laser center, top, and bottom,
-/// the height of the stripe in pixels, and a confidence value for the measurement.
-/// </summary>
+// LaserProfileColumn.cs - one image column of the detected laser line.
+// Made by LaserStripeDetector; turned into a real radius by the calibration
+// lookup (LookupTableInterpolator) to give a LogProfileColumn.
 namespace OptimizationXY.Charger.Models.Geometry;
 
 
 /// <summary>
 /// Represents a single column of laser profile data, including the X coordinate,
-/// the Y coordinates of the laser center, top, and bottom,
+/// the Y coordinates of the laser center, top, and bottom, the stripe height and
+/// a confidence value. All positions are image pixels in the joined (head + tail) image.
 /// </summary>
 public class LaserProfileColumn 
 {
