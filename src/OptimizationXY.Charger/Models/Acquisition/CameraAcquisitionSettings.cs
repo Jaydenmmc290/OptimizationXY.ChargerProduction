@@ -207,6 +207,7 @@ public sealed class DualCameraConcatenationSettings
     /// <summary>
     /// Moves the tail image up or down (pixels) so the laser line lines up with
     /// the head image's laser line at the seam (vertical registration).
+    /// Positive = move down, negative = move up; uncovered rows are filled black.
     /// </summary>
     public int TailVerticalOffsetPixels { get; set; }
     /// <summary>How many pixels the two images overlap at the seam (0 = butt-joined).</summary>

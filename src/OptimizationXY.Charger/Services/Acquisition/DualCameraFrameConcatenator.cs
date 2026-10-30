@@ -8,7 +8,20 @@ namespace OptimizationXY.Charger.Services.Acquisition;
 /// <summary>
 /// Converts one synchronized head/tail camera pair into one full-length scan
 /// image. The processing pipeline receives exactly one concatenated frame per
-/// rotation position (36 pairs -> 36 processing frames).
+/// rotation position (N pairs -> N processing frames; a production scan is
+/// typically 85-100 pairs).
+///
+/// Steps for each pair (see <see cref="Concatenate"/>):
+/// <list type="number">
+/// <item><description>convert to greyscale (cameras are already Mono8, so usually a copy);</description></item>
+/// <item><description>crop each image's left/right edges;</description></item>
+/// <item><description>mirror each image if configured;</description></item>
+/// <item><description>shift the tail image up/down (vertical registration);</description></item>
+/// <item><description>check/pad heights so both are the same;</description></item>
+/// <item><description>place head and tail side by side with the configured overlap.</description></item>
+/// </list>
+/// These settings are part of the calibrated setup - the SAME code is used for
+/// calibration, live preview and production so every image is joined identically.
 ///
 /// The concatenation is performed on the raw grayscale measurements. Display
 /// normalization is intentionally not used because it would change the laser
@@ -38,6 +51,8 @@ public static class DualCameraFrameConcatenator
 
         settings.Validate();
 
+        // Pair head frame N with tail frame N (by capture order). If one camera has
+        // extra frames they are left unpaired and not used.
         int pairCount = Math.Min(headFrames.Count, tailFrames.Count);
 
         if (pairCount == 0)
@@ -85,6 +100,8 @@ public static class DualCameraFrameConcatenator
                 result.Add(new ScanFrame
                 {
                     FrameIndex = index,
+                    // Provisional angle only; RevolutionAngleAssigner replaces it with the
+                    // measured angle later in the pipeline.
                     AngleDeg = index * angularStepDegrees,
                     ImagePath = string.Empty,
                     GrayImage = concatenated,
@@ -96,6 +113,8 @@ public static class DualCameraFrameConcatenator
 
             return result;
         }
+        // If any pair fails, free the images already made so nothing leaks, then
+        // pass the error on.
         catch
         {
             DisposeFrames(result);
@@ -145,6 +164,8 @@ public static class DualCameraFrameConcatenator
             settings.ReverseTailHorizontal,
             settings.TailVerticalOffsetPixels);
 
+        // Production: different heights mean the camera registration is wrong, so
+        // stop rather than stretch a measurement image.
         if (settings.RequireEqualHeights &&
             headOriented.Rows != tailOriented.Rows)
         {
@@ -161,6 +182,7 @@ public static class DualCameraFrameConcatenator
         using Mat headPrepared = PadToHeight(headOriented, targetHeight);
         using Mat tailPrepared = PadToHeight(tailOriented, targetHeight);
 
+        // Decide which image goes on the left of the joined picture.
         Mat left = settings.HeadOnLeft ? headPrepared : tailPrepared;
         Mat right = settings.HeadOnLeft ? tailPrepared : headPrepared;
 
@@ -182,6 +204,7 @@ public static class DualCameraFrameConcatenator
         Mat right,
         int overlapPixels)
     {
+        // Overlap can be 0 up to one less than the narrower image.
         int overlap = Math.Clamp(
             overlapPixels,
             0,
@@ -246,6 +269,8 @@ public static class DualCameraFrameConcatenator
                 overlap,
                 output.Rows));
 
+        // In the overlap strip keep the BRIGHTER pixel of the two images, so the
+        // laser line from either camera survives at the seam.
         CvInvoke.Max(leftOverlap, rightOverlap, outputOverlap);
 
         return output;
@@ -343,6 +368,8 @@ public static class DualCameraFrameConcatenator
 
         shifted.SetTo(new Emgu.CV.Structure.MCvScalar(0));
 
+        // Positive offset moves the picture DOWN (copy to a lower row); negative
+        // moves it UP. Rows uncovered by the shift stay black.
         int sourceY = Math.Max(0, -verticalOffsetPixels);
         int destinationY = Math.Max(0, verticalOffsetPixels);
         int copyHeight = oriented.Rows - Math.Abs(verticalOffsetPixels);
