@@ -387,6 +387,9 @@ VALUES
 
         command.Parameters.AddWithValue("@RecommendedAction", ToDbNull(finalSetup.RecommendedAction));
 
+        // NOTE: TailX/TailY/HeadX/HeadY hold the best spindle-axis position found
+        // (BestTested…, point-cloud frame), NOT the PLC command. The PLC command
+        // (Command…) is the opposite sign and is 0 when the move was not allowed.
         command.Parameters.AddWithValue("@TailXIn", ToDbNull(finalSetup.BestTestedTailXMM / MM_PER_INCH));
         command.Parameters.AddWithValue("@TailYIn", ToDbNull(finalSetup.BestTestedTailYMM / MM_PER_INCH));
         command.Parameters.AddWithValue("@HeadXIn", ToDbNull(finalSetup.BestTestedHeadXMM / MM_PER_INCH));
