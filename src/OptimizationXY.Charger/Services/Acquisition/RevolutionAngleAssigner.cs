@@ -101,10 +101,33 @@ public sealed class RevolutionAngleResult
 /// rotation start and rotation stop are divided evenly over 360 degrees and the
 /// result is reported as not verified.
 /// </summary>
+/// <remarks>
+/// Why: the camera trigger is not locked to the log rotation, so the number of
+/// frames in one turn changes from scan to scan (about 85-87 on saved scans).
+/// Using a fixed 10 degrees per frame would smear the surface around the log.
+/// Measuring where the turn starts and ends gives each frame its true angle.
+/// <para>
+/// "Profile" here means a frame's radius-versus-image-column curve. Two frames
+/// are compared by the RMS (root-mean-square) radius difference over the
+/// columns they share (<see cref="Difference"/>).
+/// </para>
+/// <para>
+/// Method names reported in <see cref="RevolutionAngleResult.Method"/>:
+/// ProfileClosure (verified), ApproximateProfileClosure, RotatingFramesEvenly,
+/// AllFrames (could not detect rotation), FixedStep (feature switched off).
+/// </para>
+/// </remarks>
 public static class RevolutionAngleAssigner
 {
+    /// <summary>Two profiles must share at least this many image columns to be compared.</summary>
     private const int MinimumCommonColumns = 50;
 
+    /// <summary>
+    /// Sets <see cref="ScanFrame.AngleDeg"/> and <see cref="ScanFrame.ExcludedFromRevolution"/>
+    /// on every frame (in place) and returns how it was done.
+    /// </summary>
+    /// <param name="frames">All frames of the scan in capture order, with profiles already built.</param>
+    /// <param name="settings">Revolution-detection settings (tolerances, minimum frames, angle offset/direction).</param>
     public static RevolutionAngleResult Assign(
         List<ScanFrame> frames,
         RotatingScanSettings settings)
@@ -133,6 +156,7 @@ public static class RevolutionAngleAssigner
         int minimumFrames =
             Math.Max(3, settings.MinimumFramesPerRevolution);
 
+        // One radius-per-column array per frame (null for frames that cannot be compared).
         double[]?[] profiles = BuildProfiles(frames);
 
         List<int> profiled = [];
@@ -208,6 +232,9 @@ public static class RevolutionAngleAssigner
         int firstCandidatePosition = -1;
         double firstCandidateErrorMM = double.NaN;
 
+        // Search forward for the first "dip" in difference below the closure
+        // tolerance (at least minimumFrames after the start), take the best frame
+        // in that dip, and accept it if the log rests there afterwards.
         for (int position = startPosition + 1; position < profiled.Count; position++)
         {
             if (profiled[position] - start < minimumFrames)
@@ -270,6 +297,7 @@ public static class RevolutionAngleAssigner
             }
         }
 
+        // No dip was followed by a rest: use the first dip found anyway.
         if (closurePosition < 0 && firstCandidatePosition >= 0)
         {
             closurePosition = firstCandidatePosition;
@@ -298,6 +326,8 @@ public static class RevolutionAngleAssigner
                 }
             }
 
+            // Frames start .. end-1 cover 0..360 degrees; the closing frame itself is
+            // the 360-degree (= 0) position again and is excluded.
             ApplyAngles(frames, start, end - start + offset, settings, result);
             result.ClosureFrameOffset = offset;
             result.RevolutionVerified = true;
@@ -365,6 +395,7 @@ public static class RevolutionAngleAssigner
         // Where the final rest appears to begin (before any reset below).
         int restStartFrame = fallbackEnd;
 
+        // Too short to be a revolution - fall back to spreading ALL frames.
         if (fallbackEnd - start < minimumFrames)
         {
             start = 0;
@@ -481,6 +512,7 @@ public static class RevolutionAngleAssigner
         };
     }
 
+    /// <summary>Whole-frame version: the revolution is endExclusive - start frames long.</summary>
     private static void ApplyAngles(
         List<ScanFrame> frames,
         int start,
@@ -535,6 +567,9 @@ public static class RevolutionAngleAssigner
 
             if (index >= start && index < endExclusive)
             {
+                // Angle = laser offset + direction x frames since start x step.
+                // LaserAngleOffsetDeg and ReverseRotationDirection line the angles up with
+                // the machine X/Y frame (verify with an off-centre reference).
                 frame.AngleDeg = Normalize(
                     offsetDeg + direction * (index - start) * stepDeg);
                 frame.ExcludedFromRevolution = false;
@@ -551,6 +586,7 @@ public static class RevolutionAngleAssigner
             else
                 excludedAfter++;
 
+            // Excluded frames are also marked invalid so no later step uses them.
             if (frame.IsValid)
             {
                 frame.IsValid = false;
@@ -625,6 +661,7 @@ public static class RevolutionAngleAssigner
             if (shared < MinimumCommonColumns || dotDD <= 1e-12)
                 continue;
 
+            // Least-squares t for min |r + t d|: derivative 2(r.d + t d.d) = 0.
             double t = Math.Clamp(-dotRD / dotDD, 0.0, 1.0);
 
             double sum = 0.0;
@@ -656,6 +693,7 @@ public static class RevolutionAngleAssigner
         return bestOffset;
     }
 
+    /// <summary>Wraps an angle into 0 (inclusive) .. 360 (exclusive) degrees.</summary>
     private static double Normalize(double angleDeg)
     {
         angleDeg %= 360.0;
@@ -666,6 +704,12 @@ public static class RevolutionAngleAssigner
         return angleDeg;
     }
 
+    /// <summary>
+    /// Turns each valid frame's profile into an array indexed by image column
+    /// (NaN where nothing was measured), so frames can be compared column by
+    /// column. Frames that are invalid or have fewer than
+    /// <see cref="MinimumCommonColumns"/> points get null.
+    /// </summary>
     private static double[]?[] BuildProfiles(List<ScanFrame> frames)
     {
         int maxX = -1;
@@ -751,6 +795,7 @@ public static class RevolutionAngleAssigner
             : double.NaN;
     }
 
+    /// <summary>True when two profiles differ by no more than the tolerance (RMS mm).</summary>
     private static bool IsWithin(
         double[]? left,
         double[]? right,
@@ -760,6 +805,11 @@ public static class RevolutionAngleAssigner
         return Difference(left, right) <= toleranceMM;
     }
 
+    /// <summary>
+    /// True when, after the candidate closing frame, the log stays near the start
+    /// profile (median difference within tolerance) - i.e. the turn ended there and
+    /// the log is resting. Also true when there are no later frames.
+    /// </summary>
     private static bool IsRestingAfter(
         double[]?[] profiles,
         List<int> profiled,
