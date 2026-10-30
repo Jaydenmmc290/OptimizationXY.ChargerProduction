@@ -1,15 +1,15 @@
 using Emgu.CV;
 
+namespace OptimizationXY.Charger.Models.Calibration;
+
+
+
 /// <summary>
 /// A batch of joined (head + tail) frames captured while a calibration
 /// reference (a round tube of known diameter, or the home cable) is in the
 /// scanner, plus the camera settings snapshots in force at that moment. The
 /// batch owns the images: dispose it to free the image memory.
 /// </summary>
-namespace OptimizationXY.Charger.Models.Calibration;
-
-
-
 public sealed class CalibrationCaptureBatch : IDisposable
 {
     

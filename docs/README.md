@@ -37,6 +37,7 @@ New to the project? Read [Start here](getting-started/START_HERE.md) first.
 
 ### Design
 
+- [Code map](design/CODE_MAP.md): what every source file does, the words used in the code, and where to look for common questions.
 - [Architecture](design/ARCHITECTURE.md): system architecture and major components.
 - [Optimization modes](design/OPTIMIZATION_MODES.md): optimization strategy behavior.
 - [Implementation and validation report](design/IMPLEMENTATION_VALIDATION_REPORT.md): what was implemented and what must be validated on the machine.
