@@ -248,6 +248,10 @@ public sealed class DualCameraConcatenationSettings
 /// are NOT written; the camera keeps its own saved values. Those settings
 /// here are validated and recorded only. The camera's real width, height,
 /// offsets and pixel format are read back and stored in the capture snapshot.
+/// Note that ServerName, DeviceIndex, InitializationMode, PixelFormat, Mode,
+/// TriggerSource and TriggerActivation are part of the calibration
+/// fingerprint (ScannerCalibrationCompatibility), so changing any of them makes
+/// the active calibration refuse to load even when nothing in the camera changed.
 /// </para>
 /// </summary>
 public sealed class CameraDeviceSettings

@@ -61,7 +61,9 @@ public sealed class ScannerLookupTable
     // MinimumCalibratedRadiusMM is the minimum calibrated radius in millimeters.
     public double MinimumCalibratedRadiusMM { get; set; }
 
-    // MaximumCalibratedRadiusMM: largest calibrated radius (mm). Larger radii are extrapolated or rejected (see LookupTableInterpolator).
+    // MaximumCalibratedRadiusMM: largest calibrated radius (mm). A laser point a little past the largest
+    // reference is extrapolated (up to RotatingScan.MaximumCalibrationExtrapolationPixels); further out the
+    // point is rejected (see LookupTableInterpolator).
     public double MaximumCalibratedRadiusMM { get; set; }
 
     // References is a list of calibration reference summaries used in the calibration process.
