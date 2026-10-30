@@ -11,6 +11,14 @@ namespace OptimizationXY.Charger.Services.Calibration;
 /// Ownership of accepted CameraFrameEventArgs.Frame instances transfers to
 /// this session.
 /// </summary>
+/// <remarks>
+/// Used by the setup wizard: the wizard routes each camera's FrameAcquired
+/// event into <see cref="TryAddFrame"/>. When both cameras have delivered the
+/// requested number of frames, the pairs are joined with the SAME
+/// DualCameraFrameConcatenator used in production and <see cref="Completion"/>
+/// finishes with a <see cref="CalibrationCaptureBatch"/>. Extra frames are
+/// ignored; <see cref="Cancel"/> or Dispose ends the wait early.
+/// </remarks>
 public sealed class CalibrationFrameCaptureSession : IDisposable
 {
     private readonly Lock _sync = new();
@@ -221,6 +229,8 @@ public sealed class CalibrationFrameCaptureSession : IDisposable
                         "A concatenated calibration frame was empty."))
                 .ToList();
 
+            // The batch now owns the joined images; clear the references so the
+            // frames' own cleanup cannot dispose them.
             foreach (ScanFrame frame in combined)
             {
                 frame.GrayImage = null;

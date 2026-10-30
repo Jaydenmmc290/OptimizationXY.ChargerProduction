@@ -10,6 +10,12 @@ using Xunit;
 
 namespace OptimizationXY.Charger.Tests;
 
+/// <summary>
+/// Tests for the repeatability options: finding the exact (part-frame) point
+/// where the block has turned one full revolution, the cylinder-vs-oval
+/// tie-break in the peel comparison, and the batch-replay summary that compares
+/// repeat scans of the same block (including older summary.csv files).
+/// </summary>
 public class RepeatabilityTests
 {
     // ------------------------------------------------------------

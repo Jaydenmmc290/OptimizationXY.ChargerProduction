@@ -10,12 +10,23 @@ using System.Diagnostics;
 
 namespace OptimizationXY.Charger.Services.Optimization.Search;
 /// <summary>
-/// This class provides methods to optimize the spindle-axis setup for a charger system using a coarse-to-fine search strategy.
-/// /// It evaluates candidate setups based on wane scores, defect penalties, and spindle movement, applying scoring settings to determine the best configuration.
+/// LEGACY penalty-scored spindle search (PenaltyScored mode, and the "penalty"
+/// candidate in RecoveryOptimized mode) using a coarse-to-fine search strategy.
+/// It evaluates candidate setups based on wane scores, defect penalties, and spindle movement, applying scoring settings to determine the best configuration.
+/// Lower score = better. NOT used to choose the position in the production
+/// CompareInscribedGeometry mode. Note: this search does not check the hard
+/// travel limits itself; the pipeline checks the winner afterwards.
+/// </summary>
 public static class ChargerOptimizer
 {
 
 
+    /// <summary>
+    /// Three-pass search (coarse, then medium and fine around the previous
+    /// winner) over centre offset X/Y and sweep X/Y. Each candidate is scored by
+    /// <see cref="EvaluateCandidate"/>; the baseline (no move) is scored the same
+    /// way so the improvement percentage can be reported.
+    /// </summary>
     public static ChargerOptimizationResult FindBestSetupCoarseToFine(
         List<BinnedRadiusFieldPoint> binnedRadiusField,
         List<RadiusDefectPatch> patches,
@@ -325,6 +336,12 @@ public static class ChargerOptimizer
         return best;
     }
 
+    /// <summary>
+    /// Scores one candidate axis: wane score (radius spread around the axis) +
+    /// defect-patch penalty + movement cost. With UseCandidateAwareSearchScore
+    /// (default) these are turned into weighted risk percentages relative to the
+    /// baseline (see <see cref="ComputeCandidateAwareSearchScore"/>).
+    /// </summary>
     private static ChargerOptimizationResult EvaluateCandidate(
 List<BinnedRadiusFieldPoint> binnedRadiusField,
 List<RadiusDefectPatch> patches,
@@ -423,6 +440,14 @@ UsableRadiusSettings usableRadiusSettings)
         };
     }
 
+    /// <summary>
+    /// Score = wane risk % x WaneBalanceWeight + low-wood risk % x LowWoodRiskWeight
+    /// + movement risk % x SpindleMovementWeight, where wane and low-wood risk are
+    /// the candidate's value as a percentage of the baseline (100 = no change) and
+    /// movement risk is the move as a percentage of CoarseMaxMoveMM. A guard
+    /// penalty is added if the wane score gets worse than
+    /// MaximumAllowedWaneIncreasePercent above the baseline.
+    /// </summary>
     private static double ComputeCandidateAwareSearchScore(
         double candidateWaneScore,
         double baselineWaneScore,
@@ -470,6 +495,7 @@ UsableRadiusSettings usableRadiusSettings)
         return score;
     }
 
+    /// <summary>Movement part of the score only (for the result's MovementPenalty field).</summary>
     private static double ComputeCandidateMovementContribution(
         double maxSpindleMovementMM,
         double maxMoveForPenaltyMM,
@@ -482,6 +508,7 @@ UsableRadiusSettings usableRadiusSettings)
         return movementRiskPercent * (scoringSettings.SpindleMovementWeightPercent / 100.0);
     }
 
+    /// <summary>The larger of the tail and head move distances, mm.</summary>
     private static double MaxSpindleMovementMM(OptimizedSpindleMovement movement)
     {
         double tail = Math.Sqrt(
@@ -495,6 +522,11 @@ UsableRadiusSettings usableRadiusSettings)
         return Math.Max(tail, head);
     }
 
+    /// <summary>
+    /// Sets ImprovementPercent = (baseline - candidate) / baseline x 100 and marks
+    /// the result recommended when it is positive. (The pipeline applies the real
+    /// minimum-improvement threshold.)
+    /// </summary>
     private static void ApplyImprovementPercent(
         ChargerOptimizationResult result,
         double baselineFinalScore)
@@ -514,6 +546,7 @@ UsableRadiusSettings usableRadiusSettings)
         result.IsRecommended = result.ImprovementPercent > 0.0;
     }
 
+    /// <summary>Old (non candidate-aware) movement penalty: distance / maxOffset x weight.</summary>
     private static double ComputeMovementPenalty(
         double offsetXMM,
         double offsetYMM,
@@ -529,6 +562,7 @@ UsableRadiusSettings usableRadiusSettings)
         return (movement / maxOffsetMM) * weight;
     }
 
+    /// <summary>Values center - radius .. center + radius in steps of step, always including the centre and both ends.</summary>
     private static IEnumerable<double> Range(
         double center,
         double radius,
@@ -559,6 +593,7 @@ UsableRadiusSettings usableRadiusSettings)
             yield return value;
     }
 
+    /// <summary>Throws if the field/patches/settings are missing or a search setting is not usable.</summary>
     private static void ValidateInputs(
         List<BinnedRadiusFieldPoint> binnedRadiusField,
         List<RadiusDefectPatch> patches,

@@ -16,12 +16,22 @@ namespace OptimizationXY.Charger.Services.Storage;
 /// <summary>
 /// Provides functionality to save the current scan, including frames, overlays, calibration data, and other relevant information,
 /// to a structured folder on disk. It also handles retention of old scans based on user settings.
+/// <para>
+/// Folder layout: SavedScans\yyyy\MM\dd\Block_####\Scan_####\ with
+/// Frames\ (the joined input images), Overlays\ (pictures, including the
+/// peel views drawn now from the deferred queue), DiagnosticsReport.txt,
+/// frames.csv (frame manifest), the scan-quality result, the calibration
+/// snapshot, both camera settings snapshots and point_cloud.csv (measured
+/// points). ProductionAuditWriter adds the production audit files to the same
+/// folder. A failed save deletes the half-written Scan folder.
+/// </para>
 /// </summary>
 public sealed class SimpleScanSaveService
 {
     private static readonly Logger Logger =
         LogManager.GetCurrentClassLogger();
 
+    // Indented JSON so saved files are easy to read by eye.
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true
@@ -67,6 +77,8 @@ public sealed class SimpleScanSaveService
 
         Directory.CreateDirectory(dayFolder);
 
+        // Re-scans of the same block (replay from a saved Scan folder) go into the
+        // same Block folder; otherwise a new Block_#### folder is made for today.
         string blockFolder = ResolveBlockFolder(
             state.CurrentLogFolder,
             dayFolder);
@@ -305,6 +317,7 @@ public sealed class SimpleScanSaveService
         }
     }
 
+    /// <summary>Quotes a CSV field and doubles any quotes inside it.</summary>
     private static string EscapeCsv(string? value) =>
         (value ?? string.Empty).Replace("\"", "\"\"");
 

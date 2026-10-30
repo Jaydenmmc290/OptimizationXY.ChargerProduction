@@ -1,7 +1,9 @@
 namespace OptimizationXY.Charger.Models.Production;
 
 /// <summary>
-/// Immutable identity of the exact application binary that produced a scan record.
+/// Immutable identity of the exact application binary that produced a scan
+/// record (versions and a SHA-256 hash of the .exe/.dll), so any saved result
+/// can be traced to the exact software that made it.
 /// </summary>
 public sealed class SoftwareBuildIdentity
 {

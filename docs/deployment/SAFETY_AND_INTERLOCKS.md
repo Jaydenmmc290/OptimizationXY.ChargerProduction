@@ -15,8 +15,13 @@ effective multiplier = max(10.0, configured multiplier)
 clearance = max(minimum absolute clearance,
                 veneer thickness × effective multiplier)
             + additional commissioned carriage buffer
-safe carriage retract radius = largest measured radius + clearance
+safe carriage retract radius = clearance + the larger of
+    the block's largest distance from the current spindle axis and
+    its largest distance from the commanded spindle axis
 ```
+
+Measuring from both axes means the retract radius covers the block as it actually swings
+after the move, and it is never smaller than it would have been without the move.
 
 The settings validator rejects a configured multiplier below 10, and the runtime calculation still clamps it to at least 10 for defense in depth.
 

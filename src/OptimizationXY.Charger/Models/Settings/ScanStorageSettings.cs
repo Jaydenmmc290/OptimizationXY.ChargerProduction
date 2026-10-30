@@ -1,9 +1,11 @@
 
-/// <summary>
-/// Settings for the scan storage system, which manages how long saved scans are kept before being deleted.
-/// </summary>
+// ScanStorageSettings.cs - how long SavedScans folders are kept.
 namespace OptimizationXY.Charger.Models.Settings;
 
+/// <summary>
+/// How long saved scan folders under SavedScans are kept before the program
+/// deletes them (retention runs in the save service).
+/// </summary>
 public sealed class ScanStorageSettings
 {
 

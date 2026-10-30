@@ -23,6 +23,34 @@ using OptimizationXY.Charger.UI.Forms;
 namespace OptimizationXY.Charger.UI;
 /// <summary>
 /// The main form of the application that manages camera services, PLC integration, and user interface for the Optimization XY Charger.
+/// <para>
+/// MainForm is the "conductor" of the program. It owns the two camera
+/// services, the PLC service, the capture manager and the processing
+/// coordinator, and it drives one production cycle:
+/// </para>
+/// <list type="number">
+/// <item>PLC ScanStart rises → <see cref="PlcService_ScanStartRequested"/> starts a
+/// capture (same path as the Start button) when the program is ready.</item>
+/// <item>Frames from both cameras are handed to the capture manager
+/// (<see cref="HandleCameraFrame"/>) and shown in the live preview.</item>
+/// <item>PLC ScanComplete rises → <see cref="PlcService_ScanCompleteChanged"/> stops
+/// frame intake and calls <see cref="FinishCaptureAndProcessAsync"/>.</item>
+/// <item>The coordinator runs the processing pipeline; results are shown here and
+/// on the operator screen, and the scan-quality result is worked out.</item>
+/// <item>The production readiness checks decide whether the payload may be sent;
+/// if so it is written to the PLC. A blocked or failed scan goes through
+/// <see cref="FailScanAndGetReady"/>.</item>
+/// <item>The scan is saved (folder, SQL, audit). By default the save runs after the
+/// PLC write so the machine is not kept waiting
+/// (<see cref="SaveResultsAfterPlcWriteAsync"/>).</item>
+/// </list>
+/// <para>
+/// The file is split into banner sections (CAMERA INITIALIZATION, CAMERA EVENT
+/// HANDLERS, UI BUTTON HANDLERS, CAPTURE COMPLETION AND PROCESSING, FAILED SCAN
+/// HANDLING, RESULTS DISPLAY, UI STATE MANAGEMENT, DIAGNOSTICS OUTPUT). The
+/// production setup wizard is opened from here and talks back only through
+/// <see cref="ProductionSetupContext"/>.
+/// </para>
 /// </summary>
 
 public partial class MainForm : Form
@@ -1361,6 +1389,15 @@ public partial class MainForm : Form
     private DiscoveredCamera? _headOpenLocation;
     private DiscoveredCamera? _tailOpenLocation;
 
+    /// <summary>
+    /// Works out which discovered Sapera camera is the head camera and which is
+    /// the tail camera. With ExpectedSerialNumber set, cameras are matched by
+    /// serial number (each camera is opened briefly to read it); otherwise by the
+    /// configured ServerName and DeviceIndex. The same camera may not be both.
+    /// Only the location opened this time is stored; the saved settings are not
+    /// changed (they are part of the calibration fingerprint).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No cameras found, an assigned camera is missing, or one camera is assigned twice.</exception>
     private void ResolveAssignedCameras()
     {
         CameraDeviceSettings head =

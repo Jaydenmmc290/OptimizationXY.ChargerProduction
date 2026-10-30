@@ -6,7 +6,12 @@ using System.Text;
 namespace OptimizationXY.Charger.Services.Optimization.Scoring;
 
 /// <summary>
-/// Provides functionality to build an adaptive scoring profile based on log diagnostics and application settings.
+/// Builds the per-log scoring profile for the LEGACY penalty-scored search.
+/// The log is classed as Low-Wood Risk, Swept, Oval (these can combine) or
+/// Clean, and the copied scoring/defect/optimization weights are multiplied
+/// by the AdaptiveScoring multipliers for that class. Only used by
+/// LogProcessingPipeline.OptimizeSpindleAxis (PenaltyScored mode and the
+/// penalty candidate in RecoveryOptimized mode).
 /// </summary>
 public static class AdaptiveScoringProfileBuilder
 {
@@ -21,12 +26,12 @@ public static class AdaptiveScoringProfileBuilder
         AdaptiveLogDiagnostics diagnostics,
         AppSettings appSettings)
     {
-        ArgumentNullException.ThrowIfNull(diagnostics); // Defensive programming: Ensure diagnostics is not null
-        ArgumentNullException.ThrowIfNull(appSettings); // Defensive programming: Ensure appSettings is not null
+        ArgumentNullException.ThrowIfNull(diagnostics); // Fail fast if called without diagnostics
+        ArgumentNullException.ThrowIfNull(appSettings); // Fail fast if called without settings
 
-        var adaptive = appSettings.AdaptiveScoring;  // Defensive programming: Ensure adaptive scoring settings are not null
+        var adaptive = appSettings.AdaptiveScoring;  // Thresholds and multipliers that decide the log class
 
-        var profile = new AdaptiveScoringProfile  // Defensive programming: Ensure profile is initialized properly
+        var profile = new AdaptiveScoringProfile  // Start from COPIES of the saved settings so the originals are never changed
         {
             Enabled = adaptive.Enabled,
             LogClass = "Balanced",
@@ -44,16 +49,16 @@ public static class AdaptiveScoringProfileBuilder
         }
 
         bool highSweep =
-            diagnostics.CenterlineSweepIn >= adaptive.HighSweepIn ||  // Defensive programming: Ensure that the sweep and bow thresholds are checked correctly
+            diagnostics.CenterlineSweepIn >= adaptive.HighSweepIn ||  // "Swept" if the end-to-end sweep OR the bow is high
             diagnostics.MaxBowIn >= adaptive.HighBowIn;
 
         bool highLowWood =
             diagnostics.LowWoodPercent >= adaptive.HighLowWoodPercent ||
-            diagnostics.SevereLowWoodPercent >= adaptive.HighSevereLowWoodPercent ||  // Defensive programming: Ensure that the low-wood thresholds are checked correctly
+            diagnostics.SevereLowWoodPercent >= adaptive.HighSevereLowWoodPercent ||  // "Low-wood" if any low-wood measure is high
             diagnostics.DeepestLowWoodIn >= adaptive.DeepLowWoodIn;
 
         bool highOvality =
-            diagnostics.OutOfRoundIn >= adaptive.HighOutOfRoundIn;  // Defensive programming: Ensure that the out-of-round threshold is checked correctly
+            diagnostics.OutOfRoundIn >= adaptive.HighOutOfRoundIn;  // "Oval" if the out-of-round amount is high
 
         bool cleanLog =
             diagnostics.LowWoodPercent <= adaptive.CleanLowWoodMaxPercent &&

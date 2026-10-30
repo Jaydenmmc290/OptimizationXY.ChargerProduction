@@ -1,11 +1,14 @@
 using OptimizationXY.Charger.Models.Analysis;
 
 
-/// <summary>
-/// Represents the result of a comparison between different inscribed geometries and their corresponding peel simulations.
-/// </summary>
+// GeometryPeelComparisonResult.cs - CompareInscribedGeometry mode's result.
 namespace OptimizationXY.Charger.Models.Optimization.Geometry;
 
+/// <summary>
+/// Result of the CompareInscribedGeometry mode (production): the cylinder
+/// search result and the oval search result, the virtual peel of each, and
+/// which one was chosen and why (see GeometryPeelSelector).
+/// </summary>
 public sealed class GeometryPeelComparisonResult
 {
 
@@ -37,7 +40,7 @@ public sealed class GeometryPeelComparisonResult
 
 
     /// <summary>
-    /// Gets or sets the selected inscribed geometry kind based on the comparison results.
+    /// Gets or sets which geometry won the peel comparison; its spindle position is the one sent to the PLC.
     /// </summary>
     public InscribedGeometryKind SelectedKind { get; set; }
 
@@ -59,7 +62,7 @@ public sealed class GeometryPeelComparisonResult
             : OvalPeel;
 
     /// <summary>
-    /// Gets or sets the reason for the selection of the inscribed geometry kind.
+    /// Gets or sets a plain-language reason for the choice (logged and saved with the scan).
     /// </summary>
     public string SelectionReason { get; set; } = string.Empty;
 }

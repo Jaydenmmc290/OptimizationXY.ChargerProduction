@@ -4,6 +4,11 @@ using Xunit;
 
 namespace OptimizationXY.Charger.Tests;
 
+/// <summary>
+/// Tests for the timing report saved with each scan: the total is the real
+/// elapsed time (frames run in parallel, so per-frame times must not be added
+/// up), and the scan timeline lists each step with a running total.
+/// </summary>
 public class TimingReportTests
 {
     [Fact]

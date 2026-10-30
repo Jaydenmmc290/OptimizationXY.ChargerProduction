@@ -3,6 +3,12 @@ using OptimizationXY.Charger.Models.Geometry;
 
 namespace OptimizationXY.Charger.Services.Defects;
 
+/// <summary>
+/// Classifies every cell of the binned radius field as Good / LowRadius /
+/// SevereLowRadius / HighRadius by comparing it with the median radius of its
+/// Z slice. The result (a <see cref="RadiusDefectMap"/>) is used for defect
+/// patches, pictures and the legacy PenaltyScored optimizer.
+/// </summary>
 public static class RadiusDefectMapBuilder
 {
     /// <summary>
@@ -32,6 +38,7 @@ public static class RadiusDefectMapBuilder
         RadiusDefectMap map = new();
 
         var slices = radiusField
+            // Ignore empty cells (radius 0 = no data) and group the rest into Z slices.
             .Where(p => p.MeanRadiusMM > 0)
             .GroupBy(p => p.ZBinMM)
             .OrderBy(g => g.Key)
@@ -43,9 +50,12 @@ public static class RadiusDefectMapBuilder
                 .Where(p => p.MeanRadiusMM > 0)
                 .ToList();
 
+            // A slice needs at least 12 valid angle cells to give a trustworthy median.
             if (points.Count < 12)
                 continue;
 
+            // The "expected" radius is the slice median, so a defect means "lower/higher
+            // than the rest of this same cross-section", not lower than a fixed size.
             double expectedRadius = GetExpectedRadius(points);
 
             if (expectedRadius <= 0)
@@ -54,6 +64,7 @@ public static class RadiusDefectMapBuilder
             foreach (var p in points)
             {
                 double errorMM = p.MeanRadiusMM - expectedRadius;
+                // Percent is stored as a FRACTION (e.g. -0.045 = 4.5% below median).
                 double errorPercent = errorMM / expectedRadius;
 
                 RadiusDefectType type =
@@ -83,7 +94,9 @@ public static class RadiusDefectMapBuilder
     }
 
     /// <summary>
-    /// Calculates the expected radius for a given slice of binned radius field points.
+    /// Median radius of a slice (middle value; average of the two middle values
+    /// when the count is even). The median ignores a few extreme cells, so a deep
+    /// wane pocket does not drag the "expected" radius down with it.
     /// </summary>
     /// <param name="slice">The slice of binned radius field points to analyze.</param>
     /// <returns>The expected radius for the given slice.</returns>
@@ -128,6 +141,10 @@ public static class RadiusDefectMapBuilder
         double severeLowThresholdPercent,
         double highThresholdPercent)
     {
+        // Each level needs BOTH the millimetre AND the fractional threshold. The mm
+        // test stops tiny logs being flagged for small dips; the percent test stops
+        // big logs being flagged for dips that are small relative to their size.
+        // Checked worst-first so a severe point is not reported as just Low.
         bool severeLow =
             errorMM <= severeLowThresholdMM &&
             errorPercent <= severeLowThresholdPercent;

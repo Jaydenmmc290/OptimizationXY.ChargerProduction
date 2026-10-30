@@ -1,18 +1,20 @@
 namespace OptimizationXY.Charger.Models.Optimization.Scoring;
 
 /// <summary>
-/// Represents the diagnostic information for an adaptive log, including frame counts, log dimensions, and defect metrics.
+/// Measured facts about THIS log that AdaptiveScoringProfileBuilder uses to
+/// decide what kind of log it is (and so how to weight the penalty scores):
+/// frame counts, size, sweep/bow, out-of-roundness and defect amounts.
 /// </summary>
 public sealed class AdaptiveLogDiagnostics
 {
 
     /// <summary>
-    /// Gets or sets the total number of frames in the adaptive log.
+    /// Gets or sets the total number of frames captured for this log.
     /// </summary>
     public int TotalFrames { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of valid frames in the adaptive log.
+    /// Gets or sets the number of frames that produced a usable profile.
     /// </summary>
     public int ValidFrames { get; set; }
 
@@ -33,7 +35,7 @@ public sealed class AdaptiveLogDiagnostics
 
 
     /// <summary>
-    /// Gets or sets the maximum bow of the log in millimeters, which indicates the maximum deviation of the log's surface from a straight line.
+    /// Gets or sets the maximum bow in millimetres: the largest distance of a slice centre from the straight end-to-end centre line.
     /// </summary>
     public double MaxBowMM { get; set; }
 
@@ -43,22 +45,22 @@ public sealed class AdaptiveLogDiagnostics
     public double OutOfRoundMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the percentage of low wood in the log, which indicates the proportion of the log that has low-quality wood.
+    /// Gets or sets the percentage of radius cells classified LowRadius (missing wood, not wood quality).
     /// </summary>
     public double LowWoodPercent { get; set; }
 
     /// <summary>
-    /// Gets or sets the percentage of severe low wood in the log, which indicates the proportion of the log that has severely low-quality wood.
+    /// Gets or sets the percentage of radius cells classified SevereLowRadius.
     /// </summary>
     public double SevereLowWoodPercent { get; set; }
 
     /// <summary>
-    /// Gets or sets the percentage of high spots in the log, which indicates the proportion of the log that has high-quality wood.
+    /// Gets or sets the percentage of radius cells classified HighRadius (bumps above the slice median - not wood quality).
     /// </summary>
     public double HighSpotPercent { get; set; }
 
     /// <summary>
-    /// Gets or sets the deepest low wood measurement in millimeters, which indicates the maximum depth of low-quality wood in the log.
+    /// Gets or sets the deepest low-radius error in millimetres (negative = below the slice median).
     /// </summary>
     public double DeepestLowWoodMM { get; set; }
 
@@ -75,7 +77,8 @@ public sealed class AdaptiveLogDiagnostics
 
 
     /// <summary>
-    /// Gets the centerline sweep of the log in inches, which is derived from the centerline sweep in millimeters.
+    /// Inch versions of the values above, for the operator display (25.4 mm per inch).
+    /// DeepestLowWoodIn is reported as a positive depth.
     /// </summary>
     public double CenterlineSweepIn => CenterlineSweepMM / 25.4;
     public double MaxBowIn => MaxBowMM / 25.4;

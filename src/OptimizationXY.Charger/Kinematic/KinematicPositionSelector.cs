@@ -9,7 +9,10 @@ namespace OptimizationXY.Charger.Kinematic;
 
 /// <summary>
 /// Orchestrates the operator selection between Kinematic Rotation and Current XY positions.
-/// 
+/// Only used when Kinematic.EnableKinematicPositionSelection is true (DEFAULT
+/// OFF). With it off, LogProcessingCoordinator skips this class entirely and
+/// the optimizer's head/tail XY commands go to the PLC unchanged.
+///
 /// This service:
 /// 1. Presents a clear UI choice to the operator (MessageBox with two options)
 /// 2. If Kinematic selected: runs KinematicsCalculator to rotate positions
@@ -17,7 +20,7 @@ namespace OptimizationXY.Charger.Kinematic;
 /// 4. Validates output using same safety checks as PlcPayloadBuilder
 /// 5. Returns an updated FinalSpindleRecommendation with selected positions
 /// 6. Logs all decisions and calculations for testing/verification
-/// 
+///
 /// The service is stateless between calls and thread-safe for non-UI operations.
 /// UI interactions are synchronous (blocking) to ensure operator engagement.
 /// </summary>
@@ -28,9 +31,9 @@ public sealed class KinematicPositionSelector
     /// <summary>
     /// Presents operator with choice between Kinematic Rotation and Current XY positions,
     /// executes selected path, and returns updated FinalSpindleRecommendation.
-    /// 
+    ///
     /// This is the main entry point for the kinematic selection feature.
-    /// 
+    ///
     /// PROCESS:
     /// 1. Shows MessageBox asking operator to choose between two options
     /// 2. If operator cancels, returns original recommendation unchanged
@@ -44,8 +47,8 @@ public sealed class KinematicPositionSelector
     ///    - Returns original recommendation unchanged
     ///    - Logs operator decision
     /// 5. In both cases, adds diagnostics to state for audit trail
-    /// 
-    /// SAFETY: 
+    ///
+    /// SAFETY:
     /// - Both paths produce FinalSpindleRecommendation objects that pass through
     ///   PlcPayloadBuilder.ValidateFinite() before PLC write
     /// - Kinematic output validated identically to Optimization output
@@ -91,7 +94,7 @@ public sealed class KinematicPositionSelector
 
     /// <summary>
     /// Applies kinematic rotation logic to the optimization positions.
-    /// 
+    ///
     /// PROCESS:
     /// 1. Creates KinematicsCalculator with default config
     /// 2. Calls CalculateCorrectedPositions() to get rotated XY values
@@ -100,7 +103,7 @@ public sealed class KinematicPositionSelector
     /// 5. Creates new FinalSpindleRecommendation with kinematic-adjusted positions
     /// 6. Logs all intermediate results for testing verification
     /// 7. Returns updated recommendation for PLC write workflow
-    /// 
+    ///
     /// If validation fails, detailed error is logged but does not throw.
     /// This allows the system to proceed safely (existing positions remain valid fallback).
     /// </summary>
@@ -269,11 +272,11 @@ public sealed class KinematicPositionSelector
 
     /// <summary>
     /// Validates kinematic output using the same validation rules as PlcPayloadBuilder.ValidateFinite().
-    /// 
+    ///
     /// Checks:
     /// 1. All values are finite (not NaN, not Infinity)
     /// 2. All values within float range (can be represented in PLC FLOAT type)
-    /// 
+    ///
     /// This ensures kinematic output is safe to send to PLC.
     /// </summary>
     /// <returns>Empty string if valid, error message if invalid</returns>

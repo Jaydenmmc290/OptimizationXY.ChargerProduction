@@ -5,11 +5,14 @@ using System.Globalization;
 namespace OptimizationXY.Charger.Kinematic;
 
 /// <summary>
-/// Main graphical user interface for the Kinematic Solutions calculator.
-/// 
+/// Engineering window for the kinematic (spindle-rotation) calculator. Not part
+/// of the normal scan cycle: it is opened by hand for checking the kinematic
+/// maths, and its logic is also used by KinematicPositionSelector when
+/// Kinematic.EnableKinematicPositionSelection is switched on (default off).
+///
 /// This Windows Forms application provides a GUI for calculating actuator positions
 /// based on input component locations (dog/head and tail coordinates).
-/// 
+///
 /// KEY FEATURES:
 /// - Real-time kinematics calculations using the KinematicsCalculator engine
 /// - Visual representation of component positions and angles
@@ -17,14 +20,14 @@ namespace OptimizationXY.Charger.Kinematic;
 /// - Machine calibration offset configuration
 /// - Detailed calculation state tracking for debugging and verification
 /// - Multi-threaded calculation to keep UI responsive
-/// 
+///
 /// LAYOUT:
 /// - Input controls for dog X/Y and tail X/Y coordinates
 /// - Real-time visualization of positions and angles
 /// - Output display for calculated actuator positions (A1, B1, A2, B2)
 /// - Debug panel showing detailed calculation state
 /// - Configuration panel for rotation limits and offset settings
-/// 
+///
 /// The form maintains a KinematicGraphState object that captures all intermediate
 /// and final calculation results for visualization and debugging purposes.
 /// </summary>
@@ -34,8 +37,8 @@ public partial class KinematicForm : Form
 
     /// <summary>
     /// Internal state class that captures all calculation results and intermediate values.
-    /// 
-    /// This sealed class is used exclusively by MainForm to store the complete state
+    ///
+    /// This sealed class is used by this form (KinematicForm) to store the complete state
     /// of a kinematics calculation, including:
     /// - Input parameters (original dog/tail positions)
     /// - Intermediate results (after rotation, before offsets)
@@ -43,7 +46,7 @@ public partial class KinematicForm : Form
     /// - Angle information (input and output angles in degrees)
     /// - Zone and limit information (which components are in danger zone)
     /// - Calculation metadata (which rotation case was applied)
-    /// 
+    ///
     /// This data structure enables:
     /// - Accurate visualization of the kinematics state
     /// - Debug display of all calculation steps
@@ -228,10 +231,10 @@ public partial class KinematicForm : Form
     /// PLC correction offset tags for machine calibration - DOG (HEAD) component.
     /// These predefined values compensate for mechanical tolerances and calibration errors.
     /// They are applied to the DOG (HEAD) component when EnableXYCorrectionOffset is true.
-    /// 
+    ///
     /// HEAD_X_OFFSET: X-axis offset for head component (default: -1.0893002)
     /// HEAD_Y_OFFSET: Y-axis offset for head component (default: 0.34380007)
-    /// 
+    ///
     /// These values must match the PLC exactly for correct compensation.
     /// </summary>
     protected double HEAD_X_OFFSET = -1.0893002;
@@ -241,10 +244,10 @@ public partial class KinematicForm : Form
     /// PLC correction offset tags for machine calibration - TAIL component.
     /// These predefined values compensate for mechanical tolerances and calibration errors.
     /// They are applied to the TAIL component when EnableXYCorrectionOffset is true.
-    /// 
+    ///
     /// TAIL_X_OFFSET: X-axis offset for tail component (default: -0.11765)
     /// TAIL_Y_OFFSET: Y-axis offset for tail component (default: 0.500300)
-    /// 
+    ///
     /// These values must match the PLC exactly for correct compensation.
     /// </summary>
     protected double TAIL_X_OFFSET = -0.11765;
@@ -261,15 +264,15 @@ public partial class KinematicForm : Form
 
     // ============================================================
     // PLC HOME POSITION CYLINDER PIN-TO-PIN LENGTHS
-    // 
+    //
     // These values represent the base cylinder lengths in home position.
     // CRITICAL: These MUST match the PLC values exactly for correct calculations.
     // B1 and B2 control Y-axis movement (vertical)
     // A1 and A2 control X-axis movement (horizontal)
-    // 
+    //
     // NOTE: These values are assumed to be correctly measured from the hardware.
     // If calculations seem off, verify these values against actual machine measurements.
-    // 
+    //
     // PLC tag references:
     // - B1_Y_Pin2Pin_Length: Home position length for Y-axis, dog component
     // - A1_X_Pin2Pin_Length: Home position length for X-axis, dog component
@@ -302,10 +305,10 @@ public partial class KinematicForm : Form
 
     /// <summary>
     /// Initializes a new instance of the MainForm class.
-    /// 
+    ///
     /// This constructor initializes all Windows Forms components (UI controls)
     /// by calling InitializeComponent(), which is auto-generated by the Forms designer.
-    /// 
+    ///
     /// After initialization, the form is ready to accept user input and display calculations.
     /// </summary>
     public KinematicForm()
@@ -318,11 +321,11 @@ public partial class KinematicForm : Form
 
     /// <summary>
     /// Event handler triggered when the Calculate button is clicked by the user.
-    /// 
+    ///
     /// This method initiates the forward kinematics calculation based on the current
     /// input values (Head/Dog X and Y, Tail X and Y). The calculation is performed
     /// asynchronously to keep the UI responsive.
-    /// 
+    ///
     /// The calculation updates:
     /// - Calculated actuator positions (A1, B1, A2, B2)
     /// - Component angles and positions
@@ -342,14 +345,14 @@ public partial class KinematicForm : Form
     // ============================================================
     /// <summary>
     /// Attempts to read and parse the four input values from the user interface text boxes.
-    /// 
+    ///
     /// This method extracts the Head X/Y and Tail X/Y coordinates from the input controls
     /// and validates that they are valid numeric values. If parsing fails for any input,
     /// an error message is displayed and false is returned.
-    /// 
+    ///
     /// SUCCESS CONDITION:
     /// All four input values must be successfully parsed as doubles for this method to return true.
-    /// 
+    ///
     /// FAILURE HANDLING:
     /// If any input cannot be parsed as a double, the method:
     /// 1. Clears the diagnostics display
@@ -398,16 +401,16 @@ public partial class KinematicForm : Form
     // ============================================================
     /// <summary>
     /// Event handler triggered when any input text box value changes.
-    /// 
+    ///
     /// This handler is connected to the TextChanged events of:
     /// - textBoxHeadX
     /// - textBoxHeadY
     /// - textBoxTailX
     /// - textBoxTailY
-    /// 
+    ///
     /// Currently, this handler does not perform automatic recalculation on each keystroke.
     /// Users must click the Calculate button to update results.
-    /// 
+    ///
     /// FUTURE ENHANCEMENT:
     /// This handler could be expanded to provide real-time calculation and visualization
     /// as the user types, providing immediate feedback.
@@ -426,9 +429,9 @@ public partial class KinematicForm : Form
     // ============================================================
     /// <summary>
     /// Core calculation method that performs forward kinematics and updates all UI outputs.
-    /// 
+    ///
     /// This method contains the complete PLC-compatible kinematics calculation logic:
-    /// 
+    ///
     /// CALCULATION STEPS:
     /// 1. Read and validate user inputs (Head/Dog X and Y, Tail X and Y)
     /// 2. Calculate angles for both components (quadrant-aware manual ATAN logic)
@@ -441,10 +444,10 @@ public partial class KinematicForm : Form
     /// 9. Convert final positions to actuator cylinder targets (A1, B1, A2, B2)
     /// 10. Display all results and debug information in the UI
     /// 11. Render the kinematic visualization
-    /// 
+    ///
     /// ERROR HANDLING:
     /// If input parsing fails, the method returns early without updating any outputs.
-    /// 
+    ///
     /// THREADING:
     /// This method runs on the UI thread. Long calculations could be moved to a background
     /// thread using Task.Run() if performance becomes an issue.
@@ -712,7 +715,7 @@ public partial class KinematicForm : Form
         // DISTANCE FROM SPINDLE CENTER TO LOG CENTER
         // ========================================================
 
-        // Magnitude of the vector from the spindle center to the dog center 
+        // Magnitude of the vector from the spindle center to the dog center
         DogRotSC2LC =
             Math.Sqrt(
                 DOGXCalcI * DOGXCalcI +
@@ -1438,7 +1441,7 @@ TAIL_Y_OFFSET;
         double dog_theta_2 =
             270 * deg_to_rad;
 
-        //distance between x and y cylinder bottom pins 
+        //distance between x and y cylinder bottom pins
         double dog_r_3 =
             41.25;
 
@@ -2742,14 +2745,14 @@ BuildDiagnosticsReport(
 
         _graphState = new KinematicGraphState
         {
-            //orginal outputs 
+            //orginal outputs
             InputDogX = DOGXCalcI,
             InputDogY = DOGYCalcI,
 
             InputTailX = TailXCalcI,
             InputTailY = TailYCalcI,
 
-            //After PLC rotaion Logic 
+            //After PLC rotaion Logic
             //Before machine offset logic
 
 
@@ -2766,7 +2769,7 @@ BuildDiagnosticsReport(
             FinalTailX = TailXCalc,
             FinalTailY = TailYCalc,
 
-            //Angles 
+            //Angles
             InputDogAngleDeg = DogLCAngle,
             InputTailAngleDeg = TailLCAngle,
 
@@ -2819,7 +2822,7 @@ BuildDiagnosticsReport(
     //========================================================
     /// <summary>
     /// RENDER KINEMATIC GRAPH
-    /// 
+    ///
     /// Renders the visual representation of the current kinematics calculation state.
     /// This method creates a 2D graph showing:
     /// - The spindle center point
@@ -2828,11 +2831,12 @@ BuildDiagnosticsReport(
     /// - Current dog (head) and tail component positions
     /// - Their angles from the spindle center
     /// - Rotation zone indicators and labels
-    /// 
+    ///
     /// The graph provides visual feedback to verify correct kinematics behavior.
     /// If no valid calculation state exists, the method returns early without rendering.
     /// </summary>
     // ========================================================
+    /// <summary>Draws the kinematic graph picture (circles, zones, head/tail points) from the last calculation.</summary>
     private void RenderKinematicGraph()
     {
 
@@ -2891,7 +2895,7 @@ BuildDiagnosticsReport(
             plotRect.Height / 2f;
 
         //------------------------------------------------------------
-        //Auto Scale 
+        //Auto Scale
         // use all orgal, rotated,and final points to determine the scale of the graph
         //------------------------------------------------------------
 
@@ -2968,7 +2972,7 @@ BuildDiagnosticsReport(
 
 
         //-----------------------------------------------------
-        //Title 
+        //Title
         //------------------------------------------------
 
         using Font titleFont = new("Arial", 14, FontStyle.Bold);
@@ -3511,6 +3515,7 @@ BuildDiagnosticsReport(
     // ============================================================
 
 
+    /// <summary>Builds the step-by-step text report of one kinematic calculation (inputs, angles, zone checks, rotation, outputs).</summary>
     private string BuildDiagnosticsReport(
 double dogXInput,
 double dogYInput,
@@ -4248,6 +4253,7 @@ double tail_theta_4_new)
     //--------------------------------------------------------------
     // Helper methods for diagnostics report
     //--------------------------------------------------------------
+    /// <summary>Explains, as text, how the PLC-style angle for one point was worked out (quadrant rules).</summary>
     private static string DescribePlcAngleCalculation(
 string name,
 double x,
@@ -4378,6 +4384,7 @@ double resultAngle)
     //--------------------------------------------------------------
     // Helper methods for angle calculations
     //--------------------------------------------------------------
+    /// <summary>Wraps an angle into the range (-180, 180] degrees.</summary>
     private static double NormalizeSignedDegrees(double angle)
     {
         while (angle > 180.0)
@@ -4397,6 +4404,7 @@ double resultAngle)
     //--------------------------------------------------------------
     // Helper methods for diagnostics report
     //--------------------------------------------------------------
+    /// <summary>Angle of (x, y) in degrees for display (0 for the origin).</summary>
     private static double GetDisplayAngleDeg(
 double x,
 double y)
@@ -4426,6 +4434,7 @@ double y)
     // --------------------------------------------------------------
     // Helper method to append residual information to the diagnostics report.
     // --------------------------------------------------------------
+    /// <summary>Adds one "residual" line (difference between expected and calculated X/Y and its size) to the report.</summary>
     private static void AppendResidual(
 StringBuilder sb,
 string name,
@@ -4459,6 +4468,7 @@ double residualY)
     //--------------------------------------------------------------
 
     // Calculate the radius of a point in the graph based on its x and y coordinates.
+    /// <summary>Distance of (x, y) from the origin.</summary>
     private static double CalcGraphRadius(
         double x,
         double y)
@@ -4470,6 +4480,7 @@ double residualY)
 
 
     // Convert world coordinates (x, y) to screen coordinates (PointF) based on the center of the plot and the scaling factor (pixelsPerUnit).
+    /// <summary>Converts machine X/Y to picture pixels (screen Y points down, so Y is flipped).</summary>
     private static PointF WorldToScreen(
 double x,
 double y,
@@ -4487,6 +4498,7 @@ double pixelsPerUnit)
 
 
     // Fill a sector of a circle on the graphics object (g) with a specified brush, given the center coordinates, radius, and start/end angles in degrees.
+    /// <summary>Fills a pie slice between two maths-convention angles (counter-clockwise from +X).</summary>
     private static void FillMathSector(
 Graphics g,
 float centerX,
@@ -4576,11 +4588,11 @@ Brush brush)
 
     /// <summary>
     /// Draws a line representing an angle limit (boundary) on the graph with a label.
-    /// 
+    ///
     /// This method draws a radial line from the spindle center at a specified angle,
     /// extending to the edge of the graph area. A label showing the angle in degrees
     /// is placed near the line for identification.
-    /// 
+    ///
     /// Used to visualize the left and right boundaries of the rotation zone.
     /// </summary>
     /// <param name="g">Graphics object to draw with</param>
@@ -4645,11 +4657,11 @@ string label)
 
     /// <summary>
     /// Draws a text label for a zone (rotaton zone or safe zone) on the radial graph.
-    /// 
+    ///
     /// This method positions text at a specified angle and radius from the graph center,
     /// displayed in a specified color. Used to label the danger zone (which requires rotation)
     /// and the safe zones (which do not require rotation).
-    /// 
+    ///
     /// The text is positioned at the specified polar coordinates and centered at that point.
     /// </summary>
     /// <param name="g">Graphics object to draw with</param>
@@ -4711,6 +4723,7 @@ Font font)
 
 
     //  Draw a circular point on the graph at a specified location, with a given color and radius.
+    /// <summary>Draws a filled circle marker with a black outline.</summary>
     private static void DrawCirclePoint(
 Graphics g,
 PointF point,
@@ -4743,6 +4756,7 @@ float radius)
 
 
     // Draw a square point on the graph at a specified location, with a given color and half-size (distance from center to edge).
+    /// <summary>Draws a filled square marker with a black outline.</summary>
     private static void DrawSquarePoint(
 Graphics g,
 PointF point,
@@ -4780,6 +4794,7 @@ float halfSize)
 
 
     // Draw a diamond-shaped point on the graph at a specified location, with a given color and radius (distance from center to vertex).
+    /// <summary>Draws a filled diamond marker with a black outline.</summary>
     private static void DrawDiamondPoint(
 Graphics g,
 PointF point,
@@ -4826,7 +4841,7 @@ float radius)
 
     /// <summary>
     /// Draws a text label for a point on the graph at a specified pixel location.
-    /// 
+    ///
     /// This method displays a label next to a point (such as a component position)
     /// on the kinematics graph. The text is drawn in the specified color and font.
     /// Used to label component positions, angles, and other key points on the graph.

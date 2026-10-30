@@ -1,8 +1,11 @@
 namespace OptimizationXY.Charger.Models.Calibration;
 
 /// <summary>
-/// Maps one scanner image column and detected laser Y position to a known
-/// physical radius. RadiusBandId identifies the physical reference used to
+/// One calibration point: "at image column X, a laser line at image row
+/// LaserY means the surface is RadiusMM from the spindle (home) axis".
+/// Because the cameras look down at an angle, a bigger log moves the laser
+/// line to a different row; the table of these points is what turns a laser
+/// row into a real radius. RadiusBandId identifies the physical reference used to
 /// create the point so noisy fractional LaserY values are not mistaken for
 /// separate calibration bands.
 /// </summary>
@@ -15,13 +18,13 @@ public sealed class LookupPoint
     // Y is the detected laser Y position (pixel) coordinate.
     public double LaserY { get; set; }
 
-    // RadiusMM is the known physical radius in millimeters corresponding to the (X, LaserY) point.
+    // RadiusMM: known physical radius (mm) from the spindle/home axis for this (X, LaserY) point. 0 = the home cable.
     public double RadiusMM { get; set; }
 
     // RadiusBandId identifies the physical reference used to create the point,
     // ensuring that noisy fractional LaserY values are not mistaken for separate calibration bands.
     public int RadiusBandId { get; set; }
 
-    // SourceName is the name of the source from which the lookup point was obtained.
+    // SourceName: name of the reference (e.g. which tube) the point came from.
     public string SourceName { get; set; } = string.Empty;
 }

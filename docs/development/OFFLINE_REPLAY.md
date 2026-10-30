@@ -19,9 +19,13 @@ to match production.
 
 ## Building on the development computer
 
-Build in Visual Studio, or with `msbuild` from a Developer Command Prompt. The `dotnet` command line
-(`dotnet build`, `dotnet run`) cannot build this project: it stops with error MSB4803 because of the
-licensed-component file (`licenses.licx`).
+Build in Visual Studio, or with `msbuild` from a Developer Command Prompt. A plain `dotnet build` or
+`dotnet run` stops with error MSB4803 because of the licensed-component file (`licenses.licx`).
+
+The GitHub build check uses `dotnet build ... -p:UseSapera=false -p:SkipLicx=true` (see the main
+README). That build has no camera support and leaves out the licence file, so it is meant for compile
+and unit-test checks only. Use the normal Visual Studio build for replay, and never install the
+command-line build on the production machine.
 
 ## Batch replay: every saved scan at once
 

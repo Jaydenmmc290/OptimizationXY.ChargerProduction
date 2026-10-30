@@ -4,43 +4,58 @@ using System.Collections.ObjectModel;
 namespace OptimizationXY.Charger.Models.Acquisition;
 
 /// <summary>
-/// Immutable result of one completed dual-camera log capture.
+/// Immutable (read-only) result of one completed dual-camera log capture -
+/// everything the processing pipeline needs from the cameras for one block.
 ///
 /// The Frames collection contains the full-length concatenated processing
-/// images. Therefore 36 head frames plus 36 tail frames become exactly
-/// 36 processing frames, matching the supplied 40.zip example.
+/// images: each head frame is joined with the tail frame taken at the same
+/// moment, so N head frames plus N tail frames become N processing frames.
+/// A production scan keeps every pair between PLC ScanStart and ScanComplete
+/// (typically 85-100). If one camera delivered more frames than the other,
+/// the extra unpaired frames are not in <see cref="Frames"/>.
+/// <para>
+/// The capture also carries a byte-for-byte JSON snapshot of each camera's
+/// settings at capture time, saved with the scan so it is always known how
+/// the pictures were taken.
+/// </para>
 /// </summary>
 public sealed class CompletedLogCapture
 {
-    private readonly byte[] _headCameraConfigurationSnapshot; // Exact head-camera-configuration snapshot at the time of capture.
-    private readonly byte[] _tailCameraConfigurationSnapshot; // Exact tail-camera-configuration snapshot at the time of capture.
+    private readonly byte[] _headCameraConfigurationSnapshot; // Exact head-camera settings snapshot (JSON bytes) at the time of capture.
+    private readonly byte[] _tailCameraConfigurationSnapshot; // Exact tail-camera settings snapshot (JSON bytes) at the time of capture.
 
-    public string LogId { get; } // Unique identifier for the log capture.
+    public string LogId { get; } // Unique identifier for this log/block capture (used in folder names and logs).
 
     public ReadOnlyCollection<ScanFrame> Frames { get; } // Full-length concatenated processing frames from the dual-camera capture.
 
     public int HeadFrameCount { get; } // Number of head frames captured during the log capture.
     public int TailFrameCount { get; } // Number of tail frames captured during the log capture.
 
-    public int FramePairCount => Frames.Count; // Number of frame pairs in the concatenated Frames collection.
+    public int FramePairCount => Frames.Count; // Number of head/tail pairs = number of joined processing frames.
     public int TotalSourceFrameCount => HeadFrameCount + TailFrameCount; // Total number of source frames captured (head + tail).
 
     public double CaptureDurationSeconds { get; } // Duration of the log capture in seconds.
     public DateTime CaptureStartedUtc { get; } // UTC timestamp when the log capture started.
     public DateTime CaptureCompletedUtc { get; } // UTC timestamp when the log capture completed.
-    public int DroppedFrameCount { get; } // Number of frames dropped during the log capture (if any).
-    public AcquisitionMode AcquisitionMode { get; } // Mode of acquisition used during the log capture (e.g., FrameRate, Triggered, etc.).
+    public int DroppedFrameCount { get; } // Frames lost during capture (e.g. a full hand-off queue); 0 on a healthy scan.
+    public AcquisitionMode AcquisitionMode { get; } // Acquisition mode used for this capture: FrameRate (free-running) or Encoder (triggered).
     public string Notes { get; } // Optional notes or comments associated with the log capture.
 
-    // The following properties expose the exact camera configuration snapshots as read-only memory.
+    // Head-camera settings snapshot, exposed read-only so nobody can change it after capture.
     public ReadOnlyMemory<byte> HeadCameraConfigurationSnapshot =>
         new(_headCameraConfigurationSnapshot);
 
-    // The following properties expose the exact camera configuration snapshots as read-only memory.
+    // Tail-camera settings snapshot, exposed read-only so nobody can change it after capture.
     public ReadOnlyMemory<byte> TailCameraConfigurationSnapshot =>
         new(_tailCameraConfigurationSnapshot);
 
-    /// Constructor for creating a CompletedLogCapture instance.
+    /// <summary>
+    /// Creates the capture record. Checks that there is at least one frame, that
+    /// both camera snapshots are present, and that the number of joined frames
+    /// equals the smaller of the head and tail frame counts (one per pair).
+    /// The frame list and snapshots are copied so later changes to the caller's
+    /// lists cannot alter this record.
+    /// </summary>
     public CompletedLogCapture(
         string logId,
         IReadOnlyList<ScanFrame> concatenatedFrames,

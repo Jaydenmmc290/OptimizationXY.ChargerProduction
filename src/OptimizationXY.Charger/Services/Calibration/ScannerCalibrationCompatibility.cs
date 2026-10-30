@@ -10,6 +10,16 @@ namespace OptimizationXY.Charger.Services.Calibration;
 /// coordinate system used by the scanner lookup table. A calibration created
 /// with one crop, orientation, overlap, or seam configuration must not be used
 /// after those settings change.
+/// <para>
+/// The hash covers: TargetFramePairsPerLog, each camera's position, Sapera
+/// server name/device index, initialization mode, pixel format, acquisition
+/// mode, trigger source and activation, and every image-joining setting
+/// (head on left, mirroring, crops, tail vertical offset, overlap, equal-height
+/// rule). It is stored in the calibration (AcquisitionGeometrySha256) and
+/// re-computed before every scan (LogProcessingCoordinator) - a mismatch stops
+/// processing. Camera serial numbers are deliberately NOT included, so binding
+/// a camera by serial number does not invalidate an existing calibration.
+/// </para>
 /// </summary>
 public static class ScannerCalibrationCompatibility
 {
@@ -37,6 +47,8 @@ public static class ScannerCalibrationCompatibility
         DualCameraConcatenationSettings concatenation =
             settings.Concatenation;
 
+        // Changing the order or names of these fields changes every hash and would
+        // invalidate all existing calibrations - bump Schema only on purpose.
         var fingerprintRecord = new
         {
             Schema = 4,

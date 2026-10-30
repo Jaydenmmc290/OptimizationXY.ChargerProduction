@@ -3,12 +3,14 @@ using OptimizationXY.Charger.Models.Optimization.Geometry;
 using OptimizationXY.Charger.Models.Optimization.Spindle;
 
 
-/// <summary>
-/// Represents the result of a recovery candidate evaluation, including the strategy name,
-/// optimized spindle movement, peel simulation result, inscribed geometry result, and candidate search count.
-/// </summary>
+// RecoveryCandidateResult.cs - one strategy's answer in RecoveryOptimized mode.
 namespace OptimizationXY.Charger.Models.Optimization.Recovery;
 
+/// <summary>
+/// One strategy's proposed spindle position in RecoveryOptimized mode
+/// (e.g. baseline, penalty, cylinder, oval, direct search), with the virtual
+/// peel result for that position. RecoveryStrategySelector picks the best.
+/// </summary>
 public sealed class RecoveryCandidateResult
 {
 
@@ -28,18 +30,18 @@ public sealed class RecoveryCandidateResult
     public PeelSimulationResult Peel { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets the inscribed geometry result, which provides information about the inscribed geometry of the recovery candidate.
+    /// Gets or sets the inscribed-geometry result when the candidate came from the cylinder or oval search (otherwise null).
     /// </summary>
     public InscribedGeometryResult? Geometry { get; set; }
 
     /// <summary>
     /// Gets or sets the number of candidates that were searched during the recovery candidate evaluation.
-    /// This value indicates how many potential recovery strategies were considered before selecting the final result.
+    /// (How many spindle positions that strategy evaluated to produce this one.)
     /// </summary>
     public int CandidateSearchCount { get; set; }
 
     /// <summary>
-    /// Gets the maximum movement in millimeters among the tail and head movements in both X and Y directions.
+    /// Gets the largest absolute single-axis move (tail X, tail Y, head X or head Y), in millimetres.
     /// </summary>
 
     public double MaxMovementMM =>
@@ -54,7 +56,8 @@ public sealed class RecoveryCandidateResult
 
 
 /// <summary>
-/// Represents the result of the recovery optimization process, including the selected recovery candidate,
+/// Result of RecoveryOptimized mode: every strategy's candidate, the selected
+/// one, and why it was selected.
 /// </summary>
 public sealed class RecoveryOptimizationResult
 {

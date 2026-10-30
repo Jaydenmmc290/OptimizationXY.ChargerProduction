@@ -6,6 +6,14 @@ namespace OptimizationXY.Charger.Services.Optimization.Scoring;
 /// taking into account the spindle axis adjustment based on the provided tail and head coordinates.
 /// The penalty is calculated based on the depth, cell count, severity score, and spindle relief weight,
 /// with adjustments made for the position of the patches along the spindle axis.
+/// <para>
+/// Legacy penalty search only (report-only in the other modes). Per patch:
+/// base = |worst depth| x depthWeight + cells x cellWeight + severity x
+/// severityWeight, then reduced by "spindle relief" = distance of the
+/// candidate axis from the current axis at the patch's position x
+/// spindleReliefWeight (never below 0). NOTE: the relief depends only on how
+/// FAR the axis moves, not on whether it moves toward or away from the patch.
+/// </para>
 /// </summary>
 public static class PatchAwareWanePenalty
 {

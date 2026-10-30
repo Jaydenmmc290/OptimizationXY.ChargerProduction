@@ -5,10 +5,28 @@ using OptimizationXY.Charger.Services.Core;
 namespace OptimizationXY.Charger.Services.Production;
 
 /// <summary>
-/// Builds a PLC command payload from the current pipeline state, ensuring that all required data is present and valid.
+/// Builds the exact PLC payload for the current scan from the final spindle
+/// recommendation and the measured geometry, checking every value first.
 /// </summary>
+/// <remarks>
+/// Every value is converted from millimetres to INCHES here (the property
+/// names still end in "MM" for historical reasons). What is sent:
+/// <list type="bullet">
+/// <item><description>Head/tail X/Y: the recommendation's commands (Command = -selected axis offset).</description></item>
+/// <item><description>Small/large diameter: LogGeometryModel min/max (2 x min/max centreline radius).</description></item>
+/// <item><description>Largest/smallest measured radius: from the binned centreline field (max of cell max, min of cell min).</description></item>
+/// <item><description>Knife clearance: veneer thickness x max(10, multiplier) (+ buffer, minimum floor).</description></item>
+/// <item><description>Safe carriage retract radius: the largest of the measured radius and the largest swing radius about either the current or the commanded axis, plus the knife clearance.</description></item>
+/// <item><description>Block count: the production sequence number.</description></item>
+/// </list>
+/// Throws (so nothing is sent) if there is no recommendation, the move is not
+/// allowed, a value is not finite / out of FLOAT range, or the geometry is
+/// inconsistent.
+/// </remarks>
 public static class PlcPayloadBuilder
 {
+    // A 32-bit FLOAT represents every whole number exactly only up to 2^24
+    // (16,777,216); 16,000,000 keeps a safe margin.
     private const int MaximumExactlyRepresentablePlcBlockCount = 16_000_000;
     private const double MM_TO_INCHES = 1.0 / 25.4;  // Convert millimeters to inches for PLC transmission
 
@@ -98,6 +116,8 @@ public static class PlcPayloadBuilder
                 "PLC geometry ranges are internally inconsistent.");
         }
 
+        // Reuse the number already given to this scan (e.g. on a re-send) so the
+        // same scan never gets two block numbers.
         int blockCount = state.ProductionRunSequence > 0
             ? state.ProductionRunSequence
             : ProductionSequenceStore.GetNext();

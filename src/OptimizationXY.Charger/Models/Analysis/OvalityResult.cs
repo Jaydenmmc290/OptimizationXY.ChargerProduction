@@ -1,16 +1,21 @@
 namespace OptimizationXY.Charger.Models.Analysis;
 
 /// <summary>
-/// Represents the results of an ovality analysis performed on a log cross-section.
+/// Ovality ("out-of-roundness") of the WORST cross-section of the log.
 ///
 /// Ovality refers to the deviation of the log's cross-section from a perfect circle.
-/// This class captures both direct measurements (diameters) and harmonic decomposition
-/// of the cross-sectional shape, allowing for detailed shape analysis.
+/// How it is made (see OvalityAnalyzer): for every Z slice, the radius at each
+/// angle is fitted with r(theta) = A0 + A1 cos(theta) + B1 sin(theta)
+/// + A2 cos(2 theta) + B2 sin(2 theta) (a least-squares Fourier fit). The slice
+/// with the largest <see cref="OvalityMM"/> is reported. Diameters are taken
+/// from the fit, not measured directly across the log.
 ///
 /// The harmonic components break down the shape deviations into sinusoidal patterns:
 /// - Harmonic 0 (A0): Average radius component
-/// - Harmonic 1 (A1, B1): Asymmetric components
-/// - Harmonic 2 (A2, B2): Ovality (elliptical) components
+/// - Harmonic 1 (A1, B1): how far the fitted circle's centre is off the axis
+///   the radii were measured from (eccentricity), not a shape change
+/// - Harmonic 2 (A2, B2): ovality (elliptical) components
+/// Radii come from the binned radius field, so all lengths are in millimetres.
 /// </summary>
 public class OvalityResult
 {
@@ -26,21 +31,21 @@ public class OvalityResult
     /// Gets or sets the average radius of the log cross-section, measured in millimeters.
     ///
     /// Calculated from all measured radius points in the cross-section.
-    /// This represents the mean diameter component (harmonic 0) of the shape.
+    /// This is the A0 term of the fit (mean RADIUS, not diameter).
     /// </summary>
     public double MeanRadiusMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the largest diameter measured across any direction in the cross-section, measured in millimeters.
+    /// Gets or sets the major (largest) diameter of the fitted oval, in millimetres:
     ///
-    /// This is the maximum width of the oval-shaped cross-section.
+    /// 2 x (A0 + second-harmonic amplitude).
     /// </summary>
     public double MajorDiameterMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the smallest diameter measured across any direction in the cross-section, measured in millimeters.
+    /// Gets or sets the minor (smallest) diameter of the fitted oval, in millimetres:
     ///
-    /// This is the minimum width of the oval-shaped cross-section.
+    /// 2 x (A0 - second-harmonic amplitude).
     /// </summary>
     public double MinorDiameterMM { get; set; }
 
@@ -53,9 +58,9 @@ public class OvalityResult
     public double OvalityMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the ovality expressed as a percentage of the mean diameter.
+    /// Gets or sets the ovality expressed as a percentage of the MAJOR diameter.
     ///
-    /// Formula: (OvalityMM / (MeanRadiusMM * 2)) * 100
+    /// Formula: (OvalityMM / MajorDiameterMM) * 100 (0 if the major diameter is not positive).
     /// Provides a normalized measure of ovality relative to log size.
     /// </summary>
     public double OvalityPercent { get; set; }
@@ -71,15 +76,15 @@ public class OvalityResult
     /// <summary>
     /// Gets or sets the first harmonic cosine component (A1).
     ///
-    /// In harmonic analysis, this represents asymmetry in the cross-section.
-    /// Non-zero values indicate the oval is oriented off-center.
+    /// Together with B1 this is the offset of the fitted circle's centre from the
+    /// measurement axis (cosine part). Non-zero means the slice is off-centre, not oval.
     /// </summary>
     public double HarmonicA1 { get; set; }
 
     /// <summary>
     /// Gets or sets the first harmonic sine component (B1).
     ///
-    /// In harmonic analysis, this represents asymmetry in the cross-section.
+    /// Sine part of the same centre offset (see <see cref="HarmonicA1"/>).
     /// Combined with A1, describes the eccentric position of the center.
     /// </summary>
     public double HarmonicB1 { get; set; }
@@ -111,13 +116,15 @@ public class OvalityResult
     /// <summary>
     /// Gets or sets the orientation angle of the ovality, measured in degrees.
     ///
-    /// Indicates which direction the major axis of the oval is pointing (0-360 degrees).
+    /// Indicates which direction the major axis of the oval points, 0 to 180 degrees
+    /// (an oval looks the same after a half turn), in the same angle frame as the
+    /// radius-field angle bins: 0.5 x atan2(B2, A2).
     /// Useful for aligning correction movements.
     /// </summary>
     public double OrientationDeg { get; set; }
 
     /// <summary>
-    /// Gets or sets the total number of cross-sectional slices analyzed in this ovality analysis.
+    /// Gets or sets how many Z slices had enough valid angle bins to be analysed.
     ///
     /// More slices generally provide better resolution for detecting variations along
     /// the log length.
@@ -125,7 +132,7 @@ public class OvalityResult
     public int SliceCount { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of measurement points (e.g., from laser scan) in the slice
+    /// Gets or sets the number of valid angle bins in the slice
     /// where the worst ovality was detected.
     ///
     /// Higher point counts provide better angular resolution for ovality measurement.

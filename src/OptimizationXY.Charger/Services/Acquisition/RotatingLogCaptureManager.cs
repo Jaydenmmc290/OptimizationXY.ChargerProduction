@@ -9,6 +9,19 @@ namespace OptimizationXY.Charger.Services.Acquisition;
 /// Capture continues dynamically until explicitly stopped (via ScanComplete or manual cancellation).
 /// Both cameras capture independently and are paired during concatenation.
 /// </summary>
+/// <remarks>
+/// Life of one capture:
+/// <list type="number">
+/// <item><description><see cref="BeginCapture"/> - PLC ScanStart: clear old frames, start the safety timeout timer.</description></item>
+/// <item><description><see cref="AddFrame"/> - called from each camera's frame callback; the frame is stored in the head or tail list.</description></item>
+/// <item><description><see cref="StopFrameIntake"/> - PLC ScanComplete: accept only a few more frames (they may close the revolution).</description></item>
+/// <item><description><see cref="FinishCapture"/> - join head/tail pairs into full-length frames and return a <see cref="CompletedLogCapture"/>.</description></item>
+/// </list>
+/// Safety stops: if ScanComplete never comes, the capture is ended by
+/// CaptureTimeoutSeconds or MaxFramesPerCamera and <see cref="CaptureAborted"/>
+/// is raised. All shared state is protected by one lock because frames arrive
+/// on camera threads while the UI thread starts and finishes captures.
+/// </remarks>
 public sealed class RotatingLogCaptureManager
 {
     private readonly CameraAcquisitionSettings _settings;
@@ -27,6 +40,7 @@ public sealed class RotatingLogCaptureManager
     private byte[]? _headCameraConfigurationSnapshot;
     private byte[]? _tailCameraConfigurationSnapshot;
 
+    /// <summary>Progress / diagnostic text for the log and operator diagnostics.</summary>
     public event EventHandler<string>? DiagnosticsMessage;
 
     /// <summary>
@@ -37,6 +51,7 @@ public sealed class RotatingLogCaptureManager
     /// </summary>
     public event EventHandler<string>? CaptureAborted;
 
+    /// <summary>Creates the manager for the given acquisition settings (validated here).</summary>
     public RotatingLogCaptureManager(
         CameraAcquisitionSettings settings,
         DiagnosticsCollector diagnostics)
@@ -50,6 +65,7 @@ public sealed class RotatingLogCaptureManager
         _currentLogId = GenerateLogId();
     }
 
+    /// <summary>True between BeginCapture and Finish/Cancel (or a safety stop).</summary>
     public bool IsCapturingActive
     {
         get
@@ -59,6 +75,7 @@ public sealed class RotatingLogCaptureManager
         }
     }
 
+    /// <summary>Head frames stored so far in this capture.</summary>
     public int HeadFrameCount
     {
         get
@@ -68,6 +85,7 @@ public sealed class RotatingLogCaptureManager
         }
     }
 
+    /// <summary>Tail frames stored so far in this capture.</summary>
     public int TailFrameCount
     {
         get
@@ -90,11 +108,13 @@ public sealed class RotatingLogCaptureManager
     }
 
     /// <summary>
-    /// Begins a new dual-camera capture session. Both cameras must have a valid
+    /// Begins a new dual-camera capture session (called on PLC ScanStart). Both
+    /// cameras must have a valid settings snapshot; these snapshots are kept with
+    /// the capture. Any frames left from an abandoned capture are freed first.
     /// </summary>
     /// <param name="headCameraConfigurationSnapshot">The head camera configuration snapshot.</param>
     /// <param name="tailCameraConfigurationSnapshot">The tail camera configuration snapshot.</param>
-    /// <exception cref="InvalidOperationException"></exception>
+    /// <exception cref="InvalidOperationException">A snapshot is missing or a capture is already running.</exception>
     public void BeginCapture(
         ReadOnlyMemory<byte> headCameraConfigurationSnapshot,
         ReadOnlyMemory<byte> tailCameraConfigurationSnapshot)
@@ -160,22 +180,6 @@ public sealed class RotatingLogCaptureManager
     }
 
     /// <summary>
-    /// Adds a new frame from the specified camera position to the capture session.
-    /// Enforces frame-count limits and timeout to prevent stale-frame accumulation
-    /// if ScanComplete signal is missed or delayed.
-    /// </summary>
-    /// <param name="position">The camera position (head or tail) from which the frame was captured.</param>
-    /// <param name="frameArgs">The frame event arguments containing the captured frame.</param>
-    /// <returns>True if the frame was successfully added; false if rejected due to limit, timeout, or capture not active.</returns>
-    /// <remarks>
-    /// Frames are rejected if:
-    /// 1. Capture is not currently active
-    /// 2. Frame list for this camera has reached MaxFramesPerCamera
-    /// 3. Capture duration exceeds CaptureTimeoutSeconds
-    /// When rejected, the frame is disposed and a diagnostic message is logged.
-    /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    /// <summary>
     /// Limits how many more frames the active capture accepts, without finishing it.
     /// Called the moment the PLC reports ScanComplete. The block finishes its turn
     /// right around that signal, so a few more frames per camera are still accepted
@@ -194,6 +198,8 @@ public sealed class RotatingLogCaptureManager
             _frameIntakeStopped = true;
 
             int grace = Math.Max(0, additionalFramesPerCamera);
+            // The allowance is counted from the camera that is furthest ahead, so both
+            // cameras stop at the same frame number.
             int currentFrames = Math.Max(_headFrames.Count, _tailFrames.Count);
 
             _frameIntakeLimitPerCamera =
@@ -207,6 +213,23 @@ public sealed class RotatingLogCaptureManager
         }
     }
 
+    /// <summary>
+    /// Adds a new frame from the specified camera position to the capture session.
+    /// Called on the camera's callback thread. Enforces the frame-count limit and
+    /// timeout so stale frames cannot pile up if ScanComplete is missed or delayed.
+    /// </summary>
+    /// <param name="position">The camera position (head or tail) from which the frame was captured.</param>
+    /// <param name="frameArgs">The frame event arguments containing the captured frame. On success the capture takes ownership of the image.</param>
+    /// <returns>True if the frame was stored; false if it was rejected.</returns>
+    /// <remarks>
+    /// Frames are rejected (and the image disposed) if:
+    /// 1. the frame is empty;
+    /// 2. no capture is active;
+    /// 3. ScanComplete was received and the after-ScanComplete allowance is used up (not counted as dropped);
+    /// 4. the capture has run longer than CaptureTimeoutSeconds (capture is stopped, CaptureAborted raised);
+    /// 5. this camera already has MaxFramesPerCamera frames (capture is stopped, CaptureAborted raised).
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Unknown camera position.</exception>
     public bool AddFrame(
         CameraPosition position,
         CameraFrameEventArgs frameArgs)
@@ -302,6 +325,7 @@ public sealed class RotatingLogCaptureManager
                 var scanFrame = new ScanFrame
                 {
                     FrameIndex = frameIndex,
+                    // Provisional angle (index x nominal step); the measured angle is assigned later.
                     AngleDeg =
                         frameIndex *
                         _settings.GetAngularStepDegrees(),
@@ -331,7 +355,8 @@ public sealed class RotatingLogCaptureManager
     }
 
     /// <summary>
-    /// Determines whether the capture session is complete.
+    /// True when a capture is active and both cameras have delivered at least one
+    /// frame (i.e. there is something that FinishCapture could turn into a scan).
     /// </summary>
     /// <returns>True if the capture session is complete; otherwise, false.</returns>
     public bool IsCaptureComplete()
@@ -367,6 +392,7 @@ public sealed class RotatingLogCaptureManager
                     "head frame and one tail frame.");
             }
 
+            // Normal finish: stop accepting frames and cancel the safety timer.
             _isCapturingActive = false;
 
             // Stop and dispose the timeout timer since capture is completing normally
@@ -402,6 +428,7 @@ public sealed class RotatingLogCaptureManager
                 _tailFrames.Clear();
             }
 
+            // Both cameras use the same mode in production; record the head camera's.
             AcquisitionMode acquisitionMode =
                 _settings.HeadCamera.Mode;
 
@@ -481,7 +508,8 @@ public sealed class RotatingLogCaptureManager
     }
 
     /// <summary>
-    /// Invoked by the timeout timer when the configured capture timeout has elapsed.
+    /// Invoked on a thread-pool thread by the timeout timer when the configured
+    /// capture timeout has elapsed without a normal finish.
     /// Forcibly stops capture and logs diagnostics.
     /// </summary>
     private void OnCaptureTimeoutElapsed()
@@ -510,7 +538,7 @@ public sealed class RotatingLogCaptureManager
     }
 
     /// <summary>
-    /// Generates a unique log ID based on the current timestamp.
+    /// Generates a log ID from the local date/time, e.g. "Log_20261030_090412_123".
     /// </summary>
     /// <returns>The generated unique log ID.</returns>
     private static string GenerateLogId()

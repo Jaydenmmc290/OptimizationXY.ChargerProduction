@@ -4,6 +4,12 @@ using Xunit;
 
 namespace OptimizationXY.Charger.Tests;
 
+/// <summary>
+/// Tests for the --replay-batch tool: --set overrides change numbers, true/false
+/// and enum settings and refuse unknown names or bad values; summary.csv reads
+/// back exactly what was written; and summary.txt counts changed scans against
+/// a baseline and reports the spread between repeat scans of one block.
+/// </summary>
 public class BatchReplayTests
 {
     [Fact]

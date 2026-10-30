@@ -3,6 +3,14 @@ using OptimizationXY.Charger.Models.Geometry;
 
 namespace OptimizationXY.Charger.Services.Optimization.Wane;
 
+/// <summary>
+/// "Wane score" of a candidate spindle axis (legacy penalty search, and
+/// report-only numbers in the other modes): for each Z slice, the difference
+/// between the largest and smallest distance from the axis to the surface,
+/// averaged over all slices. 0 would be a perfectly round log centred on the
+/// axis; bigger = the axis is further off-centre or the log is less round.
+/// Lower is better. Returns double.MaxValue if no slice has enough angle bins.
+/// </summary>
 public static class SpindleAxisWaneOptimizer
 {
 
@@ -37,6 +45,8 @@ public static class SpindleAxisWaneOptimizer
         foreach (var slice in field.GroupBy(p => p.ZBinMM))
         {
             double z = slice.Key;
+            // Position of this slice along the log, 0 = tail end, 1 = head end; the
+            // candidate axis is interpolated in a straight line between its two ends.
             double t = (z - minZ) / length;
 
             double axisX = tailXMM + (headXMM - tailXMM) * t;
@@ -67,6 +77,7 @@ public static class SpindleAxisWaneOptimizer
             if (adjusted.Count < minAngleBinsPerSlice)
                 continue;
 
+            // Radius spread around the axis in this slice.
             double imbalance = adjusted.Max() - adjusted.Min();
 
             sliceScores.Add(imbalance);

@@ -4,14 +4,18 @@ namespace OptimizationXY.Charger.Models.Analysis;
 
 
 /// <summary>
-/// Represents the result of a peel simulation, including the processed image,
+/// Result of one virtual peel: the log is "turned" on the lathe around one
+/// fixed spindle axis (head X/Y and tail X/Y) and peeled down to the core,
+/// and the result records how much good veneer and wane that axis would give.
+/// The optimizers compare these results to choose the spindle position.
+/// Includes the (optional) picture,
 /// log dimensions, wane area percentages, and sheet analysis results.
 /// </summary>
 public sealed class PeelSimulationResult
 {
 
 
-   //  Gets or sets the processed image resulting from the peel simulation.
+   // The unwrapped-ribbon picture of the peel.
    //  Empty when the result came from UnwrappedPeelViewBuilder.ComputeMetrics
    //  (numbers only); the image is then drawn later by DeferredPeelViewRenderer.
     public Mat Image { get; set; } = new();
@@ -23,25 +27,26 @@ public sealed class PeelSimulationResult
     public double AxisHeadXMM { get; set; }
     public double AxisHeadYMM { get; set; }
 
-    //  Gets or sets the number of revolutions made during the peel simulation.
+    // Number of lathe revolutions simulated from the outer diameter down to the core.
     public int Revolutions { get; set; }
 
-    //  Gets or sets the outer diameter of the log in millimeters.
+    // Diameter (mm) at which the first veneer is cut around this axis.
     public double OuterDiameterMM { get; set; }
 
-    //  Gets or sets the core diameter of the log in millimeters.
+    // Diameter (mm) of the core left when peeling stops.
     public double CoreDiameterMM { get; set; }
 
-    //  Gets or sets the length of the log in millimeters.
+    // Block length (mm) used for the simulation.
     public double LogLengthMM { get; set; }
 
-    //  Gets or sets the total wane area percentage of the log.
+    // Percentage of the peeled ribbon area that is wane (no wood / bark gap).
     public double TotalWaneAreaPercent { get; set; }
 
-    //  Gets or sets the severe wane area percentage of the log.
+    // Percentage of the peeled ribbon area that is SEVERE wane.
     public double SevereWaneAreaPercent { get; set; }
 
-    //  Gets or sets the summary of peel sheet analysis results, including counts of full sheets, usable sheets, rejected sheets,
+    // Sheet counts copied from the PeelSheetSummary (see that class for definitions):
+    // total number of whole sheets in the ribbon.
     public int TotalFullSheets { get; set; }
 
     //  Gets or sets the number of usable full sheets after analysis.

@@ -9,6 +9,19 @@ namespace OptimizationXY.Charger.Visualization;
 
 /// <summary>
 /// Builds a 2D unwrapped view of a log peel simulation based on point cloud data and various settings.
+/// <para>
+/// "Virtual peel": the measured block is turned about a chosen spindle axis
+/// (tail X/Y, head X/Y) and peeled one veneer thickness per revolution from the
+/// outside in. Each revolution is unrolled into a strip (length = 2πr), so the
+/// picture shows the whole ribbon of veneer the lathe would produce, coloured
+/// by whether wood is there (good), missing (wane) or badly missing (severe
+/// wane). The strip is cut into sheets and each sheet is judged usable or not.
+/// </para>
+/// <para>
+/// <see cref="ComputeMetrics"/> gives the same numbers without drawing and is
+/// what the optimizer uses; <see cref="BuildSimulation"/> also draws the
+/// picture and is used later for the saved/displayed images.
+/// </para>
 /// </summary>
 public static class UnwrappedPeelViewBuilder
 {
@@ -1211,6 +1224,11 @@ Math.Min((veneerLengthInches / settings.VeneerLengthPerRevolutionInches) * 1.2, 
             Math.Clamp(r, 0, 255));
     }
 
+    /// <summary>
+    /// Radius of every revolution of the peel: from the outer radius inward in
+    /// steps of one veneer thickness, stopping at the core. A thickness of 0 or
+    /// less falls back to 3.2 mm.
+    /// </summary>
     private static List<double> BuildPeelRadii(
         double outerRadiusMM,
         double coreRadiusMM,

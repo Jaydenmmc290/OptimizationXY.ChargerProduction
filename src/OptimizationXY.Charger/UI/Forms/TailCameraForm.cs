@@ -2,7 +2,13 @@
 
 namespace OptimizationXY.Charger.UI.Forms;
 /// <summary>
-/// Represents a form that displays the tail camera view with exposure adjustment controls.
+/// Live preview window for the Tail camera, with a brightness slider.
+/// <para>
+/// The slider (-100 … +100, 0 = unchanged) only changes how bright the
+/// PREVIEW looks on screen (MainForm.TailPreviewExposure). It does NOT change
+/// the camera's exposure and does not affect captured frames, calibration or
+/// measurements. Closing the window only hides it.
+/// </para>
 /// </summary>
 
 public partial class TailCameraForm : Form
@@ -77,6 +83,10 @@ public partial class TailCameraForm : Form
         base.OnFormClosed(e);
     }
 
+    /// <summary>
+    /// The X button hides the window instead of closing it, so the camera view
+    /// host stays alive. Other close reasons (program exit) close it normally.
+    /// </summary>
     protected override void OnFormClosing(
     FormClosingEventArgs e)
     {
@@ -97,6 +107,7 @@ public partial class TailCameraForm : Form
     /// </summary>
     public sealed class DoubleBufferedPictureBox : PictureBox
     {
+        /// <summary>Turns on double buffering so the live image does not flicker.</summary>
         public DoubleBufferedPictureBox()
         {
             DoubleBuffered = true;
@@ -180,6 +191,10 @@ public partial class TailCameraForm : Form
         PerformLayout();
     }
 
+    /// <summary>
+    /// Slider moved: shows the value and passes it to MainForm, which brightens
+    /// or darkens the preview image only (display adjustment, not camera exposure).
+    /// </summary>
     private void ExposureTrackBar_Scroll(object? sender, EventArgs e)
     {
         if (_exposureTrackBar == null || _exposureLabel == null || _parentMainForm == null)

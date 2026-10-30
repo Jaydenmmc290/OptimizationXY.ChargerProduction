@@ -3,12 +3,13 @@ namespace OptimizationXY.Charger.Models.Defects;
 /// <summary>
 /// Represents a contiguous region or patch of defects on the log surface.
 ///
-/// A patch is a connected cluster of defect points (e.g., all LowRadius points in a region).
+/// A patch is a connected cluster of low-radius points (LowRadius and/or
+/// SevereLowRadius) that touch each other within a Z and angle tolerance.
 /// Multiple patches across the log comprise the complete RadiusDefectMap.
 /// Patches are useful for:
 /// - Locating defect clusters
 /// - Calculating regional severity
-/// - Optimizing spindle/charger position to address worst patches
+/// - Feeding the legacy PenaltyScored optimizer
 /// - Prioritizing which defects to correct
 /// </summary>
 public class RadiusDefectPatch
@@ -17,19 +18,16 @@ public class RadiusDefectPatch
     /// Gets or sets a unique identifier for this defect patch within the log.
     ///
     /// Used to reference and track individual patches in analysis and optimization.
-    /// Typically assigned sequentially (0, 1, 2, ...) as patches are detected.
+    /// Assigned sequentially from 1 as patches are found.
     /// </summary>
     public int Id { get; set; }
 
     /// <summary>
     /// Gets or sets the classification type of defects in this patch.
     ///
-    /// Represents the dominant defect type:
-    /// - LowRadius: Wane or material loss
-    /// - SevereLowRadius: Severe material loss
-    /// 
+    /// SevereLowRadius if ANY point in the patch is severe, otherwise LowRadius.
     ///
-    /// All points in a patch typically share the same defect type.
+    ///
     /// </summary>
     public RadiusDefectType DefectType { get; set; }
 
@@ -61,16 +59,16 @@ public class RadiusDefectPatch
     /// <summary>
     /// Gets or sets the starting circumferential angle of the patch, measured in degrees.
     ///
-    /// Represents the beginning angular position (0-360) of the patch around
-    /// the log circumference. May wrap around (e.g., 350° to 10°).
+    /// The smallest angle bin (0-360) of any point in the patch.
+    /// NOTE: this is a plain minimum, so a patch that crosses 0 degrees (e.g.
+    /// 350 to 10) is reported as roughly 0 to 360.
     /// </summary>
     public double StartAngleDeg { get; set; }
 
     /// <summary>
     /// Gets or sets the ending circumferential angle of the patch, measured in degrees.
     ///
-    /// Represents the ending angular position (0-360) of the patch around
-    /// the log circumference.
+    /// The largest angle bin (0-360) of any point in the patch (see StartAngleDeg note).
     /// </summary>
     public double EndAngleDeg { get; set; }
 
@@ -86,9 +84,8 @@ public class RadiusDefectPatch
     /// <summary>
     /// Gets or sets the maximum (worst-case) radius error in this patch, measured in millimeters.
     ///
-    /// The single largest error value among all points.
+    /// The most NEGATIVE error among the points (the deepest missing wood).
     /// Identifies the most severe location within the patch.
-    /// Critical for determining spindle positioning that must handle worst-case conditions.
     /// </summary>
     public double WorstErrorMM { get; set; }
 
@@ -96,7 +93,7 @@ public class RadiusDefectPatch
     /// Gets or sets the computed severity score for this patch.
     ///
     /// Higher values indicate more severe defects requiring more aggressive correction.
-    /// Typically calculated from error magnitude, patch size, and defect type.
+    /// Calculated as CellCount x |AverageErrorMM| (bigger and deeper = higher).
     /// Used for prioritization and optimization weighting.
     /// </summary>
     public double SeverityScore { get; set; }

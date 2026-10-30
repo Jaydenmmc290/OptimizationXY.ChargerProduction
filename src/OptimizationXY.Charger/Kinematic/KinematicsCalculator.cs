@@ -3,10 +3,13 @@
 namespace OptimizationXY.Charger.Kinematic;
 
 /// <summary>
+/// Kinematic rotation calculator (a C# copy of PLC logic). Only reached from the
+/// KinematicForm engineering window and from KinematicPositionSelector when
+/// Kinematic.EnableKinematicPositionSelection is on (default off).
 /// Thread-safe kinematics calculator that performs all mathematical calculations
 /// without accessing UI controls. This class is safe to use from any thread,
 /// including parallel worker threads.
-    /// 
+    ///
     /// This calculator implements forward kinematics logic that:
     /// 1. Takes input positions for the dog (head) and tail components
     /// 2. Calculates their angles from the spindle center
@@ -69,7 +72,7 @@ namespace OptimizationXY.Charger.Kinematic;
         /// Creates a new KinematicsCalculator with default configuration.
         /// Default rotation zone (danger zone): Left = 135°, Right = 315°
         /// Default correction offsets: disabled
-        /// 
+        ///
         /// This constructor is a convenience method that uses the parameterless
         /// KinematicsConfig constructor to create default settings.
         /// </summary>
@@ -79,7 +82,7 @@ namespace OptimizationXY.Charger.Kinematic;
 
         /// <summary>
         /// Creates a new KinematicsCalculator with custom configuration.
-        /// 
+        ///
         /// The configuration is validated immediately upon construction.
         /// If the configuration is invalid, an ArgumentException is thrown
         /// before the object is fully initialized.
@@ -103,11 +106,11 @@ namespace OptimizationXY.Charger.Kinematic;
 
         /// <summary>
         /// Performs forward kinematics calculation.
-        /// 
+        ///
         /// PROCESS OVERVIEW:
         /// Takes Head X/Y and Tail X/Y positions and calculates the corresponding actuator
         /// positions (A1, B1, A2, B2) required to achieve those end-effector positions.
-        /// 
+        ///
         /// The calculation includes:
         /// 1. Angle calculation for both dog (head) and tail components from spindle center
         /// 2. Distance calculation from spindle center to each component
@@ -116,7 +119,7 @@ namespace OptimizationXY.Charger.Kinematic;
         /// 5. Position recalculation with rotation applied
         /// 6. Optional correction offset application for machine calibration
         /// 7. Cylinder target calculation by adding offsets to home positions
-        /// 
+        ///
         /// This method is thread-safe and can be called from any thread.
         /// </summary>
         /// <param name="headX">X coordinate of the dog (head) component input position</param>
@@ -308,7 +311,7 @@ namespace OptimizationXY.Charger.Kinematic;
             // The final step converts the calculated positions into actuator
             // (pneumatic cylinder) targets by adding the calculated offsets
             // to the home position lengths.
-            // 
+            //
             // NOTE: B1 and B2 are INVERTED - we subtract the Y calculation
             // because the PLC cylinder logic is inverted on the Y-axis.
 
@@ -321,19 +324,19 @@ namespace OptimizationXY.Charger.Kinematic;
         /// <summary>
         /// Calculates corrected XY positions for head (dog) and tail components
         /// after applying rotation logic to avoid the danger zone.
-        /// 
+        ///
         /// PRIMARY OUTPUT METHOD FOR OPTIMIZATION SOFTWARE INTEGRATION:
         /// This is the method to call when integrating with an external optimization software.
-        /// 
+        ///
         /// PROCESS:
         /// 1. Accepts input XY positions from optimization software
         /// 2. Applies kinematics rotation logic to move components out of danger zone
         /// 3. Applies optional machine calibration correction offsets
         /// 4. Returns the final corrected XY positions
-        /// 
+        ///
         /// The A1, B1, A2, B2 actuator positions are calculated internally but
         /// not returned by this method. Call CalculateForwardKinematics() if you need those.
-        /// 
+        ///
         /// This method is thread-safe and can be called from any thread.
         /// </summary>
         /// <param name="headX">X coordinate of the head (dog) component input position</param>
@@ -478,16 +481,16 @@ namespace OptimizationXY.Charger.Kinematic;
 
         /// <summary>
         /// Calculates the angle in degrees for a given (x, y) coordinate.
-        /// 
+        ///
         /// This method uses the same PLC quadrant logic by manually checking each quadrant
         /// instead of using Math.Atan2(). This ensures exact compatibility with the PLC behavior.
-        /// 
+        ///
         /// QUADRANT BREAKDOWN:
-        /// - Q1 (0-90°): X > 0, Y > 0 - upper right
-        /// - Q2 (90-180°): X < 0, Y > 0 - upper left
-        /// - Q3 (180-270°): X < 0, Y < 0 - lower left
-        /// - Q4 (270-360°): X > 0, Y < 0 - lower right
-        /// 
+        /// - Q1 (0-90°): X &gt; 0, Y &gt; 0 - upper right
+        /// - Q2 (90-180°): X &lt; 0, Y &gt; 0 - upper left
+        /// - Q3 (180-270°): X &lt; 0, Y &lt; 0 - lower left
+        /// - Q4 (270-360°): X &gt; 0, Y &lt; 0 - lower right
+        ///
         /// SPECIAL CASES (on axes):
         /// - (0, Y+): 90° (positive Y-axis)
         /// - (X-, 0): 180° (negative X-axis)

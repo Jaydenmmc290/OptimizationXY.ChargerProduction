@@ -67,10 +67,15 @@ All dimensional values are sent in inches (the application calculates in millime
 The safe carriage-retract radius is:
 
 ```text
-largest measured radius
-+ max(10 × veneer thickness, minimum absolute clearance)
-+ additional commissioned buffer
+the larger of: the block's largest distance from the CURRENT spindle axis
+           and its largest distance from the COMMANDED spindle axis
++ max(veneer thickness × max(10, Safety.KnifeClearancePeelThicknessMultiplier),
+      Safety.MinimumKnifeClearanceMM)
++ Safety.AdditionalCarriageRetractBufferMM
 ```
+
+Using both axes means the retract radius covers the block as it actually swings after the
+move and is never smaller than before the move (see `PlcPayloadBuilder`).
 
 ## Write/readback policy
 

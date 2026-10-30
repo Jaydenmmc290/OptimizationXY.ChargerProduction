@@ -4,6 +4,12 @@ namespace OptimizationXY.Charger.Models.Acquisition;
 /// High-level application state for the main operator form.
 /// Tracks the overall workflow: camera initialization, capture, processing, and results.
 /// </summary>
+/// <remarks>
+/// MainForm moves between these states and enables/disables its buttons from
+/// them. Normal cycle: Idle/CameraReady -> Capturing -> CaptureComplete ->
+/// Processing -> Completed -> (next scan). Faulted, Cancelled and ScanFailed
+/// are the "something stopped the cycle" exits.
+/// </remarks>
 public enum ApplicationState 
 {
     /// <summary>

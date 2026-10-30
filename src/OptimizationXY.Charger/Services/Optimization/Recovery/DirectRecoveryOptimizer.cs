@@ -10,6 +10,11 @@ namespace OptimizationXY.Charger.Services.Optimization.Recovery;
 /// produced by the baseline, penalty, cylinder, and oval strategies. Candidate
 /// ranking is based directly on simulated usable veneer recovery, not penalty
 /// score. Search remains XY-only; rotation is never commanded here.
+/// Used only in RecoveryOptimized mode. Around EACH seed, every combination of
+/// tail X/Y and head X/Y changes in +/- DirectRefinementRadiusMM steps of
+/// DirectRefinementStepMM is tried (e.g. 3 x 3 x 3 x 3 = 81 per seed), small
+/// changes first, until MaximumDirectRecoveryCandidates unique positions have
+/// been attempted.
 /// </summary>
 public static class DirectRecoveryOptimizer
 {
@@ -43,6 +48,7 @@ public static class DirectRecoveryOptimizer
         int maximumCandidates = recoverySettings.MaximumDirectRecoveryCandidates;
 
         double[] deltas = BuildDeltas(radiusMM, stepMM);
+        // Positions already tried (several seeds can lead to the same position).
         var testedKeys = new HashSet<string>(StringComparer.Ordinal);
 
         DirectRecoverySearchResult? best = null;
@@ -60,6 +66,7 @@ public static class DirectRecoveryOptimizer
                 token.ThrowIfCancellationRequested();
 
                 if (attempted >= maximumCandidates)
+                    // Candidate budget used up: stop searching all seeds.
                     goto SearchComplete;
 
                 var movement = new OptimizedSpindleMovement
@@ -137,7 +144,8 @@ public static class DirectRecoveryOptimizer
     }
 
     /// <summary>
-    /// Builds an array of delta values for the search space based on the specified radius and step size.
+    /// Step values from -radius to +radius (always including 0 and both ends),
+    /// ordered smallest change first so the budget is spent near the seed first.
     /// </summary>
     /// <param name="radiusMM">The radius of the search space in millimeters.</param>
     /// <param name="stepMM">The step size for generating delta values in millimeters.</param>

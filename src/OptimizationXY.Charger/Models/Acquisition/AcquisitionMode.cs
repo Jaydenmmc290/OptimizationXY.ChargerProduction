@@ -6,13 +6,19 @@ namespace OptimizationXY.Charger.Models.Acquisition;
     public enum AcquisitionMode 
     {
 
-        /// Free-running frame rate mode — camera generates frames at a constant internal rate.
-        /// Used for testing and frame-rate-driven acquisition.
+        /// <summary>
+        /// Free-running mode (TriggerMode=Off): the camera takes pictures on its own
+        /// internal clock at whatever frame rate is saved in the camera.
+        /// Used for bench testing when there is no external trigger signal.
+        /// </summary>
 
         FrameRate,
 
-        /// Hardware-triggered or encoder-based mode — camera is externally triggered by hardware signals.
-        /// Used for production where frame timing is controlled by external hardware.
+        /// <summary>
+        /// Triggered mode (production default): the camera takes a picture each time
+        /// it receives a rising-edge pulse on its Line1 trigger input. The machine hardware, not the camera, decides when frames
+        /// are taken, so head and tail cameras fire together and stay paired.
+        /// </summary>
 
         Encoder
     }

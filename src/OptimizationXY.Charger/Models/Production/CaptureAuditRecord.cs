@@ -1,12 +1,14 @@
 using OptimizationXY.Charger.Models.Acquisition;
 
 
-/// <summary>
-/// Represents an audit record for a completed log capture, including details
-/// about the capture process, frame counts, duration, and acquisition mode.
-/// </summary>
+// CaptureAuditRecord.cs - capture facts saved with each scan for traceability.
 namespace OptimizationXY.Charger.Models.Production;
 
+/// <summary>
+/// Audit record of one completed capture (frame counts, timing, acquisition
+/// mode, PLC ScanComplete handshake), saved with the scan so every result can
+/// be traced back to how its images were taken.
+/// </summary>
 public sealed class CaptureAuditRecord
 {
 
@@ -26,7 +28,7 @@ public sealed class CaptureAuditRecord
     public int TailFrameCount { get; set; }
 
     /// <summary>
-    /// Gets or sets the total number of concatenated frames captured during the log capture process.
+    /// Gets or sets the number of joined head+tail processing frames (= number of pairs).
     /// </summary>
     public int ConcatenatedFrameCount { get; set; }
 
@@ -56,12 +58,12 @@ public sealed class CaptureAuditRecord
     public AcquisitionMode AcquisitionMode { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether a PLC scan completion is required for this capture audit record.
+    /// Gets or sets whether this capture had to be ended by the PLC ScanComplete signal (production).
     /// </summary>
     public bool PlcScanCompleteRequired { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the PLC scan completion has been verified for this capture audit record.
+    /// Gets or sets whether ScanComplete was actually received (false = stopped by a timeout or frame limit).
     /// </summary>
     public bool PlcScanCompleteVerified { get; set; }
 
@@ -74,8 +76,8 @@ public sealed class CaptureAuditRecord
     /// <summary>
     /// Creates a new instance of <see cref="CaptureAuditRecord"/> from a given <see cref="CompletedLogCapture"/>.
     /// </summary>
-    /// <param name="capture"></param>
-    /// <returns></returns>
+    /// <param name="capture">The completed capture to describe.</param>
+    /// <returns>A new record. The two PlcScanComplete flags are left false for the caller to set.</returns>
     public static CaptureAuditRecord FromCapture(CompletedLogCapture capture)
     {
         ArgumentNullException.ThrowIfNull(capture);

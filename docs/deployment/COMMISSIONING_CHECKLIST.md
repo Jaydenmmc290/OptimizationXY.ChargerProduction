@@ -15,8 +15,8 @@
 - [ ] Both physical cameras appear in automatic Sapera discovery.
 - [ ] The correct physical camera is assigned to Head / Dog.
 - [ ] The correct physical camera is assigned to Tail.
-- [ ] Head and Tail assigned serial numbers were read directly from the cameras.
-- [ ] Head and Tail serial numbers are populated and distinct.
+- [ ] After connecting, each camera's configuration snapshot shows its serial number (`Identity.DeviceSerialNumber`).
+- [ ] The Head and Tail serial numbers are populated and different from each other.
 - [ ] Camera assignments resolve successfully after a reconnect.
 - [ ] After a reconnect or reboot each camera is still found at its assigned Sapera server name and device index. If a server name changes, reassign in Production Setup; this invalidates the calibration.
 - [ ] Both camera previews can be hidden and reopened without a Sapera resource-lock error.

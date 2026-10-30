@@ -5,12 +5,35 @@ using OptimizationXY.Charger.Infrastructure;
 using OptimizationXY.Charger.Models.Calibration;
 
 
-/// <summary>
-/// Provides methods to manage the scanner calibration package, including activation, validation, and restoration of calibration data.
-/// </summary>
+// =============================================================================
+// CalibrationPackageStore.cs - saves, activates, checks and rolls back calibrations
+// -----------------------------------------------------------------------------
+// A calibration "package" is five files that must always travel together:
+//   scanner-lookup-table.json            the lookup table (used by every scan)
+//   scanner-calibration.json             metadata copy (must match the table)
+//   head-camera-configuration.snapshot   head camera settings used to calibrate
+//   tail-camera-configuration.snapshot   tail camera settings used to calibrate
+//   sha256-manifest.txt                  SHA-256 of each of the files above
+//
+// Folders (see ApplicationPaths):
+//   Config\Calibration\            the ACTIVE package
+//   Config\Calibration\Staging\<id> a new package is written and checked here first
+//   Config\Calibration\Archive\<time> previous active packages
+//
+// Activate(): stage -> validate -> archive the current package -> copy each
+// file into place via a temporary ".new" file and rename -> validate again
+// -> load it with the real production loader. On any failure the newest
+// valid archive is restored. EnsureActivePackageValid() runs before every
+// scan and also falls back to the newest valid archive if the active package
+// is damaged.
+// =============================================================================
 
 namespace OptimizationXY.Charger.Services.Calibration;
 
+/// <summary>
+/// Manages the scanner calibration package: activation, validation, archiving
+/// and restoring the newest valid archive.
+/// </summary>
 public static class CalibrationPackageStore
 {
 
@@ -248,7 +271,7 @@ public static class CalibrationPackageStore
     
     /// <summary>
     /// Archives the current calibration package if it exists.
-    /// </summary>  
+    /// </summary>
     private static void ArchiveCurrentCalibrationIfPresent()
     {
         if (!File.Exists(ApplicationPaths.CalibrationLookupTablePath))
@@ -345,7 +368,10 @@ public static class CalibrationPackageStore
     }
 
     /// <summary>
-    /// Validates the scanner calibration package in the specified directory by checking for required files, verifying the SHA-256 manifest,
+    /// Validates the scanner calibration package in the specified directory: all
+    /// five files present, SHA-256 manifest correct, lookup table valid (and with
+    /// the expected id, if given), metadata matching the table, and both camera
+    /// snapshots matching the hashes recorded in the table. Throws on any problem.
     /// </summary>
     /// <param name="directory">The directory containing the calibration package to validate.</param>
     /// <param name="expectedCalibrationId">The expected calibration identifier, or null to skip this check.</param>

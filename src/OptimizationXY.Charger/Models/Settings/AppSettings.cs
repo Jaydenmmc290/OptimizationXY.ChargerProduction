@@ -2,28 +2,43 @@ using OptimizationXY.Charger.Models.Acquisition;
 using OptimizationXY.Charger.Models.Optimization;
 
 
-/// <summary>
-/// Represents the application settings for the OptimizationXY Charger application.
-/// </summary>
+// =============================================================================
+// AppSettings.cs - every setting the program reads, in one tree
+// -----------------------------------------------------------------------------
+// The whole tree is saved as Config\appsettings.json (see AppSettingsStore and
+// ApplicationPaths). The values written after "=" below are only FIRST-RUN
+// DEFAULTS; the settings file on each computer overrides them.
+// AppSettingsValidator checks the loaded values before they are used.
+//
+// Units: lengths are millimetres unless the name ends in "In"/"Inches"; angles
+// are degrees; percentages are 0-100 unless the comment says "fraction".
+//
+// Machine conventions used in the comments: HEAD = end of the block nearest
+// the lathe operator, TAIL = far end. In the scan point cloud Z = 0 is the
+// tail end.
+// =============================================================================
 namespace OptimizationXY.Charger.Models.Settings;
 
+/// <summary>
+/// Root of the settings tree. Each property is one section of appsettings.json.
+/// </summary>
 public sealed class AppSettings
 {
     /// <summary>
-    /// The version of the settings schema. This is used to determine if the settings file is
-    /// compatible with the current application version.
+    /// The version of the settings file layout (currently 10). AppSettingsStore
+    /// upgrades older files when it loads them.
     /// </summary>
     public int SettingsVersion { get; set; } = 10;
 
 
     /// <summary>
-    /// Settings related to camera acquisition, including exposure, gain, and other camera parameters.
+    /// Camera, frame-pairing and image-joining settings (both cameras). Part of the calibrated setup.
     /// </summary>
     public CameraAcquisitionSettings Acquisition { get; set; } = new();
 
 
     /// <summary>
-    /// Settings related to the operator view, including display preferences and user interface settings.
+    /// Lathe-operator screen settings and the scan-completeness thresholds behind its Good/Warning/Failed verdict.
     /// </summary>
     public OperatorViewSettings OperatorView { get; set; } = new();
 
@@ -32,106 +47,109 @@ public sealed class AppSettings
     /// </summary>
     public UnitSettings Units { get; set; } = new(); 
     /// <summary>
-    /// Settings related to the rotating scan process, including minimum and preferred valid frames, expected angle step, and tolerances.
+    /// How frames from one revolution are checked and given angles, plus laser-line detection options.
     /// </summary>
     public RotatingScanSettings RotatingScan { get; set; } = new(); 
 
     /// <summary>
-    /// Settings for the peel view display, including maximum linear gap and angular neighbor frames for display fill.
+    /// Virtual-peel settings: sheet length, usable-sheet rules and the peel picture layout.
     /// </summary>
     public PeelViewSettings PeelView { get; set; } = new();  
 
     /// <summary>
-    /// Settings related to geometry analysis, including local centerline slice thickness, minimum points per slice, radius field bin sizes, and minimum points per radius bin.
+    /// Slice thickness and radius-field cell sizes used to turn the point cloud into geometry.
     /// </summary>
     public GeometrySettings Geometry { get; set; } = new(); 
     /// <summary>
-    /// Settings for sweep analysis, including end trim fraction and thresholds for good, warning, and bad sweep measurements.
+    /// How many slices at each end are averaged for the sweep/bow numbers.
     /// </summary>
     public SweepSettings Sweep { get; set; } = new(); 
 
     /// <summary>
-    /// Settings for wane analysis, including thresholds for good, warning, and bad wane measurements.
+    /// When a cell of the virtual peel counts as wane (missing wood) or severe wane.
     /// </summary>
     public WaneSettings Wane { get; set; } = new(); 
     /// <summary>
-    /// Settings for usable radius analysis, including thresholds for good, warning, and bad usable radius measurements.
+    /// Core size, veneer thickness and thin-cleanup warning used by the virtual peel.
     /// </summary>
     public UsableRadiusSettings UsableRadius { get; set; } = new(); 
 
     /// <summary>
-    /// Settings for defect analysis, including thresholds for good, warning, and bad defect measurements.
+    /// Radius-defect thresholds (mm below/above the slice median) and legacy scoring weights.
     /// </summary>
     public DefectSettings Defects { get; set; } = new(); 
     /// <summary>
-    /// Settings for optimization analysis, including parameters for optimization algorithms and criteria.
+    /// Search grid sizes (coarse/medium/fine) used by BOTH the inscribed-geometry
+    /// search (production) and the legacy penalty search, plus the legacy penalty weights.
     /// </summary>
     public OptimizationSettings Optimization { get; set; } = new(); 
     /// <summary>
-    /// The mode for spindle optimization.
+    /// Which strategy chooses the spindle position. Production: CompareInscribedGeometry.
     /// </summary>
     public SpindleOptimizationMode OptimizationMode { get; set; } = SpindleOptimizationMode.CompareInscribedGeometry;
     /// <summary>
-    /// Settings for inscribed geometry analysis.
+    /// Largest-inscribed cylinder/oval search settings (used by the production mode).
     /// </summary>
     public InscribedGeometrySettings InscribedGeometry { get; set; } = new();
     /// <summary>
-    /// Settings for scoring analysis, including weights and thresholds for different scoring metrics.
+    /// Legacy penalty-scored search: good/bad limits and weights of each score part.
     /// </summary>
     public ScoringSettings Scoring { get; set; } = new(); 
 
     /// <summary>
-    /// Settings for adaptive scoring, including parameters for adaptive scoring algorithms and criteria.
+    /// Legacy penalty-scored search: how the weights change for swept, oval, low-wood or clean logs.
     /// </summary>
     public AdaptiveScoringSettings AdaptiveScoring { get; set; } = new(); 
     /// <summary>
-    /// Settings for machine limits, including maximum and minimum operational parameters.
+    /// Largest allowed head/tail spindle moves (hard travel limits) and the warning level.
     /// </summary>
     public MachineLimitSettings MachineLimits { get; set; } = new(); 
     /// <summary>
-    /// Settings for production, including parameters for production processes and criteria.
+    /// Operating mode, which readiness checks are enforced, and the commissioning sign-off.
     /// </summary>
     public ProductionSettings Production { get; set; } = new(); 
     /// <summary>
-    /// Settings for PLC integration, including parameters for PLC communication and control.
+    /// PLC handshake, write order, readback and timeout settings.
     /// </summary>
     public PlcIntegrationSettings Plc { get; set; } = new(); 
     /// <summary>
-    /// Settings for safety, including parameters for safety checks and criteria.
+    /// Knife clearance / carriage retract rules and other safety switches.
     /// </summary>
     public SafetySettings Safety { get; set; } = new(); 
     /// <summary>
-    /// Settings for recovery optimization, including parameters for recovery optimization algorithms and criteria.
+    /// RecoveryOptimized mode: which strategies to compare and the direct-search size.
     /// </summary>
     public RecoveryOptimizationSettings RecoveryOptimization { get; set; } = new(); 
     /// <summary>
-    /// Settings for diagnostics, including thresholds and parameters for diagnostic checks.
+    /// What extra sections go into the saved diagnostics report.
     /// </summary>
     public DiagnosticsSettings Diagnostics { get; set; } = new();
 
     /// <summary>
-    /// Settings for scan folder information, including year, month, day, block number, and scan number.
+    /// Scan folder details (date, block and scan numbers). Not read anywhere at
+    /// run time - kept so existing settings files still load. The SQL save parses
+    /// the saved folder name into its own ScanFolderInfo instead.
     /// </summary>
     public ScanFolderInfo Scan { get; set; } = new();
 
 
     /// <summary>
-    /// Settings for database configuration, including connection strings and parameters for database access.
+    /// Optional SQL Server (Express) saving of scan results.
     /// </summary>
     public DatabaseSettings Database { get; set; } = new();
 
     /// <summary>
-    /// Settings for production setup, including parameters for production readiness and commissioning checks.
+    /// Progress flags written by the production setup wizard (database, cameras, laser, length and scanner calibration).
     /// </summary>
     public ProductionSetupSettings Setup { get; set; } = new();
 
     /// <summary>
-    /// Settings for scan storage, including parameters for scan data storage and management.
+    /// How long saved scan folders are kept.
     /// </summary>
     public ScanStorageSettings Storage { get; set; } = new();
 
     /// <summary>
-    /// Settings for kinematic rotation, including whether to enable the kinematic position selection UI.
+    /// Kinematic position-selection prompt (off by default).
     /// </summary>
     public KinematicSettings Kinematic { get; set; } = new();
 }
@@ -142,7 +160,7 @@ public sealed class AppSettings
 public sealed class UnitSettings
 {
     /// <summary>
-    /// Indicates whether internal calculations use millimeters (true) or inches (false). This setting affects how measurements are processed and displayed throughout the application.
+    /// Records that internal calculations are in millimetres. Leave true - the maths is written in millimetres.
     /// </summary>
     public bool InternalMathUsesMM { get; set; } = true;
 
@@ -162,7 +180,9 @@ public sealed class UnitSettings
 
 
 /// <summary>
-/// Represents the settings for the rotating scan process, including minimum and preferred valid frames, expected angle step, and tolerances.
+/// Settings for one rotating scan: frame validity, revolution detection (which
+/// frames make up exactly one turn and what angle each has), calibration
+/// extrapolation, and laser-stripe detection options.
 /// </summary>
 public sealed class RotatingScanSettings
 {
@@ -176,30 +196,34 @@ public sealed class RotatingScanSettings
     public int PreferredValidFrames { get; set; } = 36;  
 
     /// <summary>
-    /// Expected angle step in degrees between consecutive frames during the rotating scan.
+    /// Nominal angle step in degrees (10 = 36 frames per turn). Used by readiness
+    /// checks and the legacy fixed-step mode; with UseMeasuredRevolutionAngles the
+    /// real step is measured from each scan.
     /// </summary>
     public double ExpectedAngleStepDeg { get; set; } = 10.0;  
 
     /// <summary>
-    /// Minimum number of profile points required per frame for a valid rotating scan.
+    /// Minimum number of laser profile points a frame needs to count as valid.
     /// </summary>
     public int MinimumProfilePointsPerFrame { get; set; } = 50;
 
     /// <summary>
-    /// Tolerance in degrees for the angle step between consecutive frames during the rotating scan.
-    /// This value defines the acceptable range of variation from the expected angle step.
+    /// DISPLAY point cloud only: largest gap along the log (image pixels) that may be
+    /// filled by straight-line interpolation. Never used for measurement.
     /// </summary>
     public int DisplayFillMaxLinearGapPixels { get; set; } = 20;
 
     /// <summary>
-    /// Maximum number of angular neighbor frames to consider for display fill during the rotating scan.
-    /// This value defines how many adjacent frames can be used to fill in missing data for display purposes.
+    /// DISPLAY point cloud only: how many frames either side may be used to fill a
+    /// missing value. Never used for measurement.
     /// </summary>
     public int DisplayFillMaxAngularNeighborFrames { get; set; } = 2;
 
     /// <summary>
-    /// Minimum valid end diameter fraction for the rotating scan. This value defines
-    /// the minimum acceptable ratio of the end diameter to the overall diameter of the scanned object.
+    /// Minimum valid end-diameter fraction (0-1). In each frame's profile, the
+    /// columns at either end whose diameter is below this fraction of that
+    /// profile's largest diameter are trimmed off (fixture, glare or a collapsed
+    /// laser line rather than log body).
     /// </summary>
 
     public double MinValidEndDiameterFraction { get; set; } = 0.18;
@@ -272,8 +296,9 @@ public sealed class RotatingScanSettings
     public double LaserAngleOffsetDeg { get; set; } 
 
     /// <summary>
-    /// Indicates whether to fill in missing points during the rotating scan process. If true, the application will attempt to
-    /// interpolate or estimate missing data points based on available information; if false, missing points will remain unfilled.
+    /// Allows gap filling in the DISPLAY point cloud. NOTE: the setter is
+    /// internal, so this value is not read from appsettings.json and stays false;
+    /// in practice the display cloud is never filled. Measurement never uses filling.
     /// </summary>
     public bool FillMissingPoints { get; internal set; }
 
@@ -311,28 +336,28 @@ public sealed class GeometrySettings
 {
 
     /// <summary>
-    /// Thickness of each slice used for local centerline analysis in millimeters. This value defines how thick each slice of the log will be when analyzing the local centerline geometry.
+    /// Thickness (mm) of each slice when finding local centres along the log.
     /// </summary>
     public double LocalCenterlineSliceThicknessMM { get; set; } = 10.0;
 
 
     /// <summary>
-    /// Minimum number of points required per local centerline slice for valid analysis.
+    /// Minimum points a slice needs before its centre is fitted.
     /// </summary>
     public int MinPointsPerLocalCenterlineSlice { get; set; } = 8;  
 
     /// <summary>
-    /// Size of the Z-axis bins used for radius field analysis in millimeters.
+    /// Length (mm, along the log) of one radius-field cell.
     /// </summary>
     public double RadiusFieldZBinSizeMM { get; set; } = 10.0;  
 
     /// <summary>
-    /// Size of the angle bins used for radius field analysis in degrees.
+    /// Width (degrees, around the log) of one radius-field cell.
     /// </summary>
     public double RadiusFieldAngleBinSizeDeg { get; set; } = 10.0;  
 
     /// <summary>
-    /// Minimum number of points required per radius bin for valid analysis.
+    /// Minimum readings a cell needs; cells with fewer are left empty.
     /// </summary>
     public int MinPointsPerRadiusBin { get; set; } = 1;  
 
@@ -354,18 +379,19 @@ public sealed class SweepSettings
 {
 
     /// <summary>
-    /// Fraction of the log length to trim from each end for sweep analysis. This value defines how much of the log's ends
-    /// will be excluded from the sweep analysis to avoid edge effects and ensure accurate measurements.
+    /// Fraction (0-1) of the log length trimmed from each end before the sweep/
+    /// centreline calculation in the pipeline, so ragged block ends do not skew it.
     /// </summary>
     public double EndTrimFraction { get; set; } = 0.03;
 
     /// <summary>
-    /// Minimum number of slices to consider at each end of the log for sweep analysis.
+    /// Minimum number of slices averaged at each end for the end-centre positions.
     /// </summary>
     public int MinimumEndSlices { get; set; } = 3;
 
     /// <summary>
-    /// Fraction of the log length to consider at the end for sweep analysis. This value defines how much of the log's ends
+    /// Fraction (0-1) of all SLICES averaged at each end for the end-centre
+    /// positions (at least MinimumEndSlices).
     /// </summary>
     public double EndSliceFraction { get; set; } = 0.05; 
 
@@ -378,12 +404,12 @@ public sealed class SweepSettings
 public sealed class WaneSettings
 {
     /// <summary>
-    /// Tolerance for wane measurements in millimeters. Wane measurements within this tolerance are considered acceptable.
+    /// A virtual-peel cell counts as wane when the wood is missing by more than this many mm.
     /// </summary>
     public double WaneToleranceMM { get; set; } = 1.0;
 
     /// <summary>
-    /// Threshold for severe wane measurements in millimeters. Wane measurements exceeding this threshold are considered severe.
+    /// A virtual-peel cell counts as SEVERE wane when the wood is missing by more than this many mm.
     /// </summary>
     public double SevereWaneMM { get; set; } = 3.0;
 
@@ -402,24 +428,26 @@ public sealed class UsableRadiusSettings
 {
 
     /// <summary>
-    /// Core diameter in inches used for usable radius analysis. This value defines the minimum core diameter of the log that is considered usable for processing.
+    /// Diameter (inches) of the core left on the lathe; the virtual peel stops here.
     /// </summary>
     public double CoreDiameterInches { get; set; } = 4.0; 
 
     /// <summary>
-    /// Thickness of the veneer in millimeters. This value is used to determine the usable radius of the log.
+    /// Veneer thickness (mm). Also sets the knife clearance (Safety.KnifeClearancePeelThicknessMultiplier x this).
     /// </summary>
     public double VeneerThicknessMM { get; set; } = 3.2;  
 
     /// <summary>
-    /// Threshold for thin cleanup warning in millimeters. If the usable radius is below this threshold, a warning will be issued.
+    /// Peel-picture colouring: cells within this many mm of missing wood are drawn as "thin cleanup".
     /// </summary>
     public double ThinCleanupWarningMM { get; set; } = 1.0;  
 }
 
 
 /// <summary>
-/// Represents the settings for scoring analysis, including weights and thresholds for different scoring metrics.
+/// Legacy PenaltyScored search only. Each score part is scaled from 0 at its
+/// "Good" limit to full penalty at its "Bad" limit, then weighted by its
+/// WeightPercent. Not used to choose the position in the inscribed modes.
 /// </summary>
 public sealed class ScoringSettings
 {
@@ -516,7 +544,9 @@ public sealed class ScoringSettings
 
 
 /// <summary>
-/// Represents the settings for adaptive scoring, including parameters for adaptive scoring algorithms and criteria.
+/// Legacy PenaltyScored search only: thresholds that classify the log (swept,
+/// low-wood, oval or clean) and the weight multipliers used for each class
+/// (see AdaptiveScoringProfileBuilder).
 /// </summary>
 public sealed class AdaptiveScoringSettings
 {
@@ -622,7 +652,7 @@ public sealed class AdaptiveScoringSettings
     public double SensitiveLowRadiusMultiplier { get; set; } = 0.85;
 
     /// <summary>
-    /// Multiplier applied to the low radius threshold for relaxed scoring in the scoring system. This value adjusts the threshold for
+    /// Multiplier applied to the low radius threshold for relaxed scoring (makes the low-radius test less sensitive).
     /// </summary>
     public double RelaxedLowRadiusMultiplier { get; set; } = 1.25;
 
@@ -639,20 +669,23 @@ public sealed class AdaptiveScoringSettings
 }
 
 /// <summary>
-/// Represents the settings for defect analysis, including thresholds for good, warning, and bad defect measurements.
+/// Radius-defect classification thresholds and legacy scoring weights.
+/// Thresholds are millimetres relative to the MEDIAN radius of the same slice
+/// (negative = below it) and are combined with fixed percentage limits in
+/// RadiusDefectMapBuilder.
 /// </summary>
 public sealed class DefectSettings
 {
     /// <summary>
-    /// Threshold for low radius defects in millimeters. Defects with measured radius below this threshold are considered low radius defects.
+    /// A cell at least this far below its slice median (e.g. -2 mm) can be LowRadius.
     /// </summary>
     public double LowRadiusThresholdMM { get; set; } = -2.0; 
     /// <summary>
-    /// Threshold for severe low radius defects in millimeters. Defects with measured radius significantly below the nominal radius are considered severe low radius defects.
+    /// A cell at least this far below its slice median (e.g. -4 mm) can be SevereLowRadius.
     /// </summary>
     public double SevereLowRadiusThresholdMM { get; set; } = -4.0;  
     /// <summary>
-    /// Threshold for high radius defects in millimeters. Defects with measured radius above the nominal radius are considered high radius defects.
+    /// A cell at least this far above its slice median (e.g. +2 mm) can be HighRadius.
     /// </summary>
     public double HighRadiusThresholdMM { get; set; } = 2.0; 
 
@@ -689,7 +722,12 @@ public sealed class DefectSettings
 
 
 /// <summary>
-/// Represents the settings for optimization analysis, including parameters for optimization algorithms and criteria.
+/// Spindle search grid and legacy penalty settings. The coarse/medium/fine grid
+/// is used by the PRODUCTION inscribed-geometry search (InscribedGeometryOptimizer)
+/// and by the legacy penalty search (ChargerOptimizer). Each pass tries every
+/// combination of centre offset X/Y and sweep X/Y within +/- the pass radius in
+/// steps of the pass step, then the next pass is centred on the best result.
+/// The movement/wane-guard/improvement settings apply to the legacy search only.
 /// </summary>
 public sealed class OptimizationSettings
 {
@@ -716,9 +754,12 @@ public sealed class OptimizationSettings
     /// optimizer will search for optimal settings during the medium search phase.
     /// </summary>
     public double MediumSearchRadiusMM { get; set; } = 5.0; 
+    /// <summary>Grid step (mm) of the medium search.</summary>
     public double MediumStepMM { get; set; } = 2.5; 
 
+    /// <summary>Half-width (mm) of the fine search around the best medium point.</summary>
     public double FineSearchRadiusMM { get; set; } = 2.5;  
+    /// <summary>Grid step (mm) of the fine search.</summary>
     public double FineStepMM { get; set; } = 1.0;  
 
 
@@ -750,7 +791,7 @@ public sealed class OptimizationSettings
 
 /// <summary>
 /// Settings related to the inscribed geometry used in the optimization process.
-/// </summary>  
+/// </summary>
 public sealed class InscribedGeometrySettings
 {
     /// <summary>
@@ -775,7 +816,9 @@ public sealed class InscribedGeometrySettings
     /// </summary>
     public double MinimumAxisRatio { get; set; } = 0.55;
 
+    /// <summary>Step between tested minor/major axis ratios in the oval search (e.g. 0.55, 0.60, ...).</summary>
     public double AxisRatioStep { get; set; } = 0.05;
+    /// <summary>Step (degrees) between tested oval orientations.</summary>
     public double OrientationStepDeg { get; set; } = 10.0;
 
     /// <summary>
@@ -822,21 +865,27 @@ public sealed class InscribedGeometrySettings
 }
 
 /// <summary>
-/// Defines the operating modes for the charger, indicating whether it is in engineering, commissioning, or production mode.
+/// The program's operating mode. Only <see cref="Production"/> allows PLC
+/// machine commands ("Operating mode" is an essential readiness check).
 /// </summary>
 public enum ChargerOperatingMode
 {
+    /// <summary>Development/bench use. No PLC commands.</summary>
     Engineering = 0,
+    /// <summary>Setting up the machine. No PLC commands. (First-run default.)</summary>
     Commissioning = 1,
+    /// <summary>Normal production: PLC commands allowed when the essential checks pass.</summary>
     Production = 2
 }
 
 
 /// <summary>
-/// Represents the settings for production, including parameters for production readiness and commissioning checks.
+/// Production readiness settings: operating mode, which checks are enforced,
+/// commissioning sign-off and data-quality minimums (see ProductionReadinessEvaluator).
 /// </summary>
 public sealed class ProductionSettings
 {
+    /// <summary>Engineering, Commissioning or Production. Only Production lets the PLC write happen.</summary>
     public ChargerOperatingMode OperatingMode { get; set; } = ChargerOperatingMode.Commissioning;
 
     /// <summary>
@@ -850,8 +899,11 @@ public sealed class ProductionSettings
     public bool EnforceOnlyEssentialReadinessChecks { get; set; } = true;
 
     /// <summary>
-    /// Production PLC writes remain blocked until every commissioning item below
-    /// is explicitly completed on the real machine.
+    /// Commissioning sign-off items (and who approved them, when). They feed the
+    /// "commissioning" readiness check. That check is not in the essential list,
+    /// so while EnforceOnlyEssentialReadinessChecks is true (default) an
+    /// incomplete sign-off is reported as NOT ENFORCED instead of blocking. With
+    /// it false, PLC writes stay blocked until every item is completed.
     /// </summary>
     public bool CameraSeamCalibrationVerified { get; set; }
     public bool ScannerCalibrationVerified { get; set; }
@@ -861,17 +913,31 @@ public sealed class ProductionSettings
     public bool EmergencyStopAndInterlocksVerified { get; set; }
     public bool PlcRuntimeLicenseVerified { get; set; }
 
+    // Name of the person who signed off commissioning, and when (UTC).
     public string CommissioningApprovedBy { get; set; } = string.Empty;
     public DateTime? CommissioningApprovedUtc { get; set; }
 
+    /// <summary>Readiness check: the scan must have the expected frame count (non-essential).</summary>
     public bool RequireExactFrameCount { get; set; } = true;
+    /// <summary>Readiness check: both cameras must be in triggered (Encoder) mode (non-essential).</summary>
     public bool RequireEncoderAcquisition { get; set; } = true;
+    /// <summary>Readiness check: most source frames that may be dropped (non-essential).</summary>
     public int MaximumDroppedSourceFrames { get; set; }
+    /// <summary>Readiness check: minimum measured point-cloud size (non-essential).</summary>
     public int MinimumPointCloudPoints { get; set; } = 5000;
+    /// <summary>Readiness check: minimum number of centreline slices (non-essential).</summary>
     public int MinimumLocalCenterlineSlices { get; set; } = 20;
+    /// <summary>Readiness check: minimum number of radius-field cells (non-essential).</summary>
     public int MinimumBinnedRadiusCells { get; set; } = 500;
+    /// <summary>
+    /// Readiness check: the saved-record checks (scan folder/SQL record) must pass
+    /// before the PLC write. When results are sent before saving
+    /// (Plc.SendResultsBeforeSave) these checks are deferred and re-checked after
+    /// the save.
+    /// </summary>
     public bool RequireResultSaveBeforePlcWrite { get; set; } = true;
 
+    /// <summary>True when every commissioning item is ticked and an approver and date are recorded.</summary>
     public bool CommissioningComplete =>
         CameraSeamCalibrationVerified &&
         ScannerCalibrationVerified &&
@@ -885,13 +951,16 @@ public sealed class ProductionSettings
 }
 
 /// <summary>
-/// Represents the settings for PLC integration, including parameters for enabling the integration,
-/// automatic capture, result sending, and verification requirements.
+/// PLC handshake and write settings (see XyRestrictedPlcService and
+/// docs/plc/PLC_INTEGRATION.md).
 /// </summary>
 public sealed class PlcIntegrationSettings
 {
+    /// <summary>Connect to the PLC at all. False on the development computer.</summary>
     public bool Enabled { get; set; } = true;
+    /// <summary>Start capturing frames automatically when the PLC raises ScanStart.</summary>
     public bool AutoStartCaptureOnScanStart { get; set; } = true;
+    /// <summary>Send the result to the PLC automatically (no operator button press).</summary>
     public bool AutoSendResultsAfterSave { get; set; } = true;
 
     /// <summary>
@@ -906,10 +975,19 @@ public sealed class PlcIntegrationSettings
     /// PLC write and a failed save must then stop it.
     /// </summary>
     public bool SendResultsBeforeSave { get; set; } = true;
+    /// <summary>After writing, read the tags back and require them to match what was written.</summary>
     public bool RequireReadbackVerification { get; set; } = true;
+    /// <summary>
+    /// Require "good" everywhere: PLC tag updates with bad quality are ignored,
+    /// readbacks must have good quality, and the scan-quality gate accepts only a
+    /// Good scan (a Warning scan is then blocked, not just a Failed one).
+    /// </summary>
     public bool RequireGoodQuality { get; set; } = true;
+    /// <summary>How long to wait for the readback to match, in milliseconds.</summary>
     public int ReadbackTimeoutMilliseconds { get; set; } = 5000;
+    /// <summary>Largest difference allowed between a written and a read-back FLOAT value.</summary>
     public double FloatComparisonTolerance { get; set; } = 0.01;
+    /// <summary>Write the carriage-retract array before the head/tail command (required write order).</summary>
     public bool WriteCarriageRetractFirst { get; set; } = true;
 
     /// <summary>
@@ -925,18 +1003,26 @@ public sealed class PlcIntegrationSettings
 
     /// <summary>
     /// In production, processing waits for the PLC-controlled rotation cycle to
-    /// assert ScanComplete after all 36 synchronized frame pairs are present.
+    /// assert ScanComplete; every head/tail pair up to that signal is processed
+    /// (typically 85-100 pairs).
     /// </summary>
     public bool RequireScanCompleteBeforeProcessing { get; set; } = true;
 
+    /// <summary>How long to wait for ScanComplete before giving up on the scan, in milliseconds.</summary>
     public int ScanCompleteTimeoutMilliseconds { get; set; } = 30000;
 }
 
+/// <summary>
+/// Knife clearance and carriage-retract rules, plus safety switches used by
+/// the readiness checks.
+/// </summary>
 public sealed class SafetySettings
 {
     /// <summary>
     /// Clearance from the measured largest log radius used for the carriage
-    /// retract command. The requested production rule is ten peel thicknesses.
+    /// retract command, as a multiple of the veneer thickness. The requested
+    /// production rule is ten peel thicknesses; the code never uses less than 10
+    /// even if a smaller number is saved (see <see cref="ComputeKnifeClearanceMM"/>).
     /// </summary>
     public double KnifeClearancePeelThicknessMultiplier { get; set; } = 10.0;
 
@@ -952,7 +1038,9 @@ public sealed class SafetySettings
     /// </summary>
     public double AdditionalCarriageRetractBufferMM { get; set; }
 
+    /// <summary>Turn a large-move warning (MachineLimits.WarningMoveMM) into a blocking readiness check.</summary>
     public bool BlockOnMovementWarning { get; set; } = true;
+    /// <summary>Every command value must be a real finite number.</summary>
     public bool RequireFiniteCommands { get; set; } = true;
 
     /// <summary>
@@ -965,8 +1053,8 @@ public sealed class SafetySettings
 
     /// <summary>
     /// Computes the knife clearance in millimeters based on the given veneer thickness and the configured safety settings.
-    /// The effective clearance is calculated as the maximum of the minimum knife clearance and the product
-    /// of the veneer thickness and the knife clearance multiplier, plus any additional carriage retract buffer.
+    /// Clearance = max(MinimumKnifeClearanceMM, veneer thickness x max(10, multiplier))
+    /// + AdditionalCarriageRetractBufferMM. Example: 3.2 mm veneer x 10 = 32 mm.
     /// </summary>
     /// <param name="veneerThicknessMM">The thickness of the veneer in millimeters.</param>
     /// <returns>The computed knife clearance in millimeters.</returns>
@@ -996,10 +1084,13 @@ public sealed class RecoveryOptimizationSettings
     /// bounded direct veneer-recovery refinement using the physical circular peel.
     /// </summary>
     public bool IncludeBaselineCandidate { get; set; } = true;
+    /// <summary>Which strategies take part in the comparison (each is virtually peeled).</summary>
     public bool IncludePenaltyCandidate { get; set; } = true;
     public bool IncludeCylinderCandidate { get; set; } = true;
     public bool IncludeOvalCandidate { get; set; } = true;
+    /// <summary>Also search a small grid around each strategy's position for a better peel.</summary>
     public bool EnableDirectRecoveryRefinement { get; set; } = true;
+    /// <summary>On an exact tie, keep the candidate that moves the spindles less.</summary>
     public bool PreferLowerMovementOnExactTie { get; set; } = true;
 
     /// <summary>
@@ -1007,7 +1098,9 @@ public sealed class RecoveryOptimizationSettings
     /// step produces at most 81 combinations per seed before deduplication.
     /// </summary>
     public double DirectRefinementRadiusMM { get; set; } = 2.0;
+    /// <summary>Grid step (mm) of the direct refinement search.</summary>
     public double DirectRefinementStepMM { get; set; } = 2.0;
+    /// <summary>Upper limit on positions the direct search may peel (bounds its time).</summary>
     public int MaximumDirectRecoveryCandidates { get; set; } = 500;
 
     /// <summary>
@@ -1015,6 +1108,7 @@ public sealed class RecoveryOptimizationSettings
     /// coverage checks in addition to the global production-readiness checks.
     /// </summary>
     public int MinimumRecoverySearchZBins { get; set; } = 20;
+    /// <summary>Minimum angle bins with data for the direct search to run.</summary>
     public int MinimumRecoverySearchAngularBins { get; set; } = 30;
 }
 
@@ -1024,14 +1118,20 @@ public sealed class RecoveryOptimizationSettings
 public sealed class MachineLimitSettings
 {
     /// <summary>
-    /// Maximum movement allowed for the tail in the X and Y direction in millimeters.
-    /// This value defines the upper limit for how far the tail can move in the X and Y direction during operation.
+    /// HARD travel limits: the largest move (mm) allowed for each spindle end in
+    /// each direction, measured from the current axis. A command outside these is
+    /// blocked ("Hard machine travel limits" is an essential readiness check).
     /// </summary>
     public double MaxTailMoveXMM { get; set; } = 100; 
     public double MaxTailMoveYMM { get; set; } = 100; 
     public double MaxHeadMoveXMM { get; set; } = 100;  
     public double MaxHeadMoveYMM { get; set; } = 100; 
 
+    // A move larger than WarningMoveMM (but inside the hard limits) adds a WARNING
+    // to the recommendation. The "Movement warnings" readiness check then blocks
+    // when Safety.BlockOnMovementWarning is true, but that check is not essential,
+    // so with EnforceOnlyEssentialReadinessChecks = true (default) it is reported
+    // as NOT ENFORCED and does not stop the PLC write.
     public double WarningMoveMM { get; set; } = 80;  // Warning threshold for movement in millimeters. If the movement exceeds this value, a warning will be issued.
 }
 
@@ -1063,11 +1163,13 @@ public sealed class DiagnosticsSettings
 
 
 /// <summary>
-/// Represents the statistics for sheet quality analysis, including total cells analyzed,
-/// usable cells, wane-affected cells, and severe wane-affected cells.
+/// Cell counts for ONE virtual-peel sheet (filled while the peel view is
+/// drawn, UnwrappedPeelViewBuilder, to decide whether the sheet is usable).
 /// </summary>
 public sealed class SheetQualityStats
 {
+    // Grid cells in the sheet, how many are clean wood, how many show wane
+    // (gap/bark), and how many show severe wane.
     public int TotalCells { get; set; }
     public int UsableCells { get; set; } 
     public int WaneCells { get; set; } 
@@ -1075,8 +1177,9 @@ public sealed class SheetQualityStats
 }
 
 /// <summary>
-/// Represents information about a scan folder, including the date, block number, and scan number.
-/// </summary>  
+/// Date, block and scan numbers of a saved scan folder. SqlScanSaveService
+/// fills one by parsing the Scan_#### folder path; AppSettings.Scan is unused.
+/// </summary>
 public class ScanFolderInfo
 {
     public int Year { get; set; }
@@ -1085,6 +1188,7 @@ public class ScanFolderInfo
     public int BlockNumber { get; set; }
     public int ScanNumber { get; set; }
 
+    // Folder name (for example "Block_0003") and its full path.
     public string BlockName { get; set; } = string.Empty;
     public string BlockFolderPath { get; set; } = string.Empty;
 }
@@ -1092,21 +1196,39 @@ public class ScanFolderInfo
 
 /// <summary>
 /// Represents the settings for database integration, including parameters for enabling
-/// database saving and specifying the connection string.
+/// database saving and specifying the connection string. When saving is on,
+/// each scan is also written to SQL (SqlScanSaveService) after the folder save.
 /// </summary>
 public sealed class DatabaseSettings
 {
+    // Off by default. Turned off on load if no connection string can be resolved.
     public bool EnableDatabaseSaving { get; set; }
 
+    // SQL Server connection string. When the environment variable
+    // OPTIMIZATION_XY_SQL_CONNECTION_STRING is set, it is used instead.
     public string ConnectionString { get; set; } = string.Empty;
 }
 
 /// <summary>
 /// Represents the settings for production setup, including parameters for database configuration,
 /// camera verification, laser detection, length calibration, and scanner calibration.
+/// These flags are set by the production setup wizard; the main form opens the
+/// wizard automatically while <see cref="MinimumSetupComplete"/> is false.
 /// </summary>
 public sealed class ProductionSetupSettings
 {
+    // One flag per setup-wizard step, set true when that step is completed:
+    //   DatabaseConfigured                        database created/checked at the expected schema version
+    //   CameraConfigurationVerified               both cameras connected and configured (or laser check passed)
+    //   CameraPhysicalPositionsConfirmed          operator confirmed head/tail previews show the correct ends
+    //   LaserDetectionVerified                    laser line found in enough verification frames
+    //   LengthCalibrationConfigured               axial length scale measured and saved
+    //   ScannerCalibrationCreated                 scanner calibration built and activated
+    //   ScannerCalibrationRepeatabilityVerified   the new calibration has repeatability figures
+    // PendingLengthPixelsPerMM is the measured length scale (pixels per mm along
+    // the block); it is used to build the scanner calibration, which then keeps
+    // its own copy. LengthCalibrationMeasuredUtc is when it was measured.
+    // ActiveCalibrationId names the calibration package in use.
     public bool DatabaseConfigured { get; set; }
     public bool CameraConfigurationVerified { get; set; }
     public bool CameraPhysicalPositionsConfirmed { get; set; }
@@ -1119,6 +1241,7 @@ public sealed class ProductionSetupSettings
     public string ActiveCalibrationId { get; set; } = string.Empty;
     public DateTime? LastSetupCompletedUtc { get; set; }
 
+    /// <summary>True when every required setup step has been completed and a calibration is active.</summary>
     public bool MinimumSetupComplete =>
         DatabaseConfigured &&
         CameraConfigurationVerified &&

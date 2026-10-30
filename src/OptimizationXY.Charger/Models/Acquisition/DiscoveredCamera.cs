@@ -6,8 +6,10 @@ namespace OptimizationXY.Charger.Models.Acquisition;
 /// </summary>
 public sealed record DiscoveredCamera
 {
+    /// <summary>Sapera server (acquisition device) name the camera was found on.</summary>
     public required string ServerName { get; init; }
 
+    /// <summary>Resource index on that server.</summary>
     public required int DeviceIndex { get; init; }
 
     /// <summary>
@@ -23,11 +25,13 @@ public sealed record DiscoveredCamera
     /// </summary>
     public bool IdentityProbed { get; init; }
 
+    /// <summary>All identity strings joined with " / " for display, or a placeholder if none were reported.</summary>
     public string IdentityDescription =>
         IdentityStrings.Count == 0
             ? "<no identity reported>"
             : string.Join(" / ", IdentityStrings);
 
+    /// <summary>Short label "ServerName [DeviceIndex]" used in lists and logs.</summary>
     public string DisplayName =>
         $"{ServerName} [{DeviceIndex}]";
 
