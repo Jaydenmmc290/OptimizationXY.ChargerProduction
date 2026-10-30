@@ -1675,8 +1675,15 @@ BuildFinalSpindleRecommendation(
 
 
     /// <summary>
-    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
-    /// scoring profile, producing the final spindle setup for the log.
+    /// Stage 7 for the inscribed-geometry modes (PRODUCTION: CompareInscribedGeometry).
+    /// <list type="number">
+    /// <item><description>Search the largest inscribed cylinder and/or oval on the spindle-axis field (both at once in Compare mode).</description></item>
+    /// <item><description>Virtually peel the log around each found axis (numbers only, no pictures).</description></item>
+    /// <item><description>Compare mode: GeometryPeelSelector keeps the one with more usable veneer.</description></item>
+    /// <item><description>Check the move against the hard travel limits; if any is exceeded the command is all zeros and MachineMoveAllowed = false (so no PLC payload is built).</description></item>
+    /// <item><description>Build the FinalSpindleRecommendation with Command = -SpindleMovement.</description></item>
+    /// </list>
+    /// Defect/penalty numbers are calculated for the report only.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>
@@ -1870,6 +1877,7 @@ BuildFinalSpindleRecommendation(
 
             // The peels above are numbers only. Queue the images; they are
             // drawn after the PLC write when the scan is saved.
+            // Queue pictures: cylinder, oval, and the selected one (as "Unwrapped").
             DeferPeelView(PeelViewSlot.Cylinder, cylinderPeel);
             DeferPeelView(PeelViewSlot.Oval, ovalPeel);
             DeferPeelView(PeelViewSlot.Unwrapped, selectedPeel);
@@ -1885,6 +1893,7 @@ BuildFinalSpindleRecommendation(
                     move.HeadMoveYMM,
                     _state.Settings.MachineLimits);
 
+            // Any "BLOCKED" message (hard travel limit exceeded) stops the move.
             bool machineMoveAllowed =
                 machineWarnings.All(
                     warning =>
@@ -1892,6 +1901,8 @@ BuildFinalSpindleRecommendation(
                             "BLOCKED",
                             StringComparison.CurrentCulture));
 
+            // Report-only numbers: wane score and defect penalty on the current axis
+            // versus the chosen axis. They do not affect the choice.
             double baselineWaneScore =
                 SpindleAxisWaneOptimizer.ComputeAxisAdjustedWaneScore(
                     _state.OptimizationBinnedRadiusField,
@@ -1970,6 +1981,8 @@ BuildFinalSpindleRecommendation(
                     BaselineRiskRating = "NOT USED",
                     RiskScoreReductionPercent = 0.0,
 
+                    // THE PLC COMMAND: the negative of the selected axis offset (see
+                    // FinalSpindleRecommendation remarks). Zero when the move is not allowed.
                     CommandTailXMM =
                         machineMoveAllowed
                             ? -move.TailMoveXMM
@@ -2096,6 +2109,7 @@ BuildFinalSpindleRecommendation(
                       surfaceTotal
                     : 0.0;
 
+            // Plain-language summary placed at the top of the diagnostics report.
             string operatorSummary =
                 "=== OPERATOR SUMMARY ===\r\n" +
                 $"Optimization Mode: {mode}\r\n" +
@@ -2173,8 +2187,11 @@ BuildFinalSpindleRecommendation(
 
 
     /// <summary>
-    /// Optimizes the spindle axis based on the binned radius field, defect patches, and adaptive
-    /// scoring profile, producing the final spindle setup for the log.
+    /// Stage 7 for RecoveryOptimized mode: collects candidate axes from every
+    /// enabled strategy (baseline = no move, penalty search, cylinder, oval, and a
+    /// direct recovery search around them), virtually peels each, and keeps the
+    /// one with the best veneer recovery (RecoveryStrategySelector). Requires the
+    /// penalty search (OptimizeSpindleAxis) to have run first.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud, binned radius field, or radius defect patches are missing or empty.</exception>

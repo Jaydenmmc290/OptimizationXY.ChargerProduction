@@ -66,7 +66,7 @@ public sealed class FinalSpindleRecommendation
     public double RiskScore { get; set; }
 
     /// <summary>
-    /// Gets or sets the text rating for <see cref="RiskScore"/> (e.g. Low/Medium/High).
+    /// Gets or sets the text rating for <see cref="RiskScore"/>; "NOT USED" in the inscribed-geometry modes.
     /// </summary>
     public string RiskRating { get; set; } = string.Empty;
 
