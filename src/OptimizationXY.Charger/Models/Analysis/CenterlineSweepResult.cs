@@ -8,26 +8,35 @@ namespace OptimizationXY.Charger.Models.Analysis;
 /// (sweeps) in different directions along its length. It provides both directional
 /// sweep measurements (X, Y) and aggregate measures (total, average, max).
 ///
+/// How the numbers are made (see CenterlineSweepAnalyzer): the local centre
+/// slices are sorted by Z (position along the log). The average centre of the
+/// first few slices (lowest Z) is called the "tail" end and the average of the
+/// last few slices (highest Z) the "head" end. "Sweep" is the head-minus-tail
+/// shift of the centre; "bow" is how far each slice centre sits off the
+/// straight tail-to-head line. All values are in millimetres in the point-cloud
+/// (scanner) coordinate frame.
+///
 /// Sweep measurements are useful for detecting bow and other longitudinal defects
 /// in the log that affect its straightness and geometric quality.
 /// </summary>
 public class CenterlineSweepResult
 {
     /// <summary>
-    /// Gets or sets the maximum centerline sweep magnitude in the X direction, measured in millimeters.
+    /// Signed shift of the log centre in X from the tail end to the head end, in
+    /// millimetres (head centre X minus tail centre X).
     ///
-    /// This represents the absolute maximum deviation of the centerline from its nominal
-    /// position when viewed from the X-axis perspective (typically side view).
-    /// Higher values indicate more pronounced curvature in the X direction.
+    /// This is NOT an absolute or maximum value: it is a signed end-to-end
+    /// difference, so it is positive when the head-end centre has a larger X.
+    /// A large magnitude means the log axis is tilted (or swept) in X.
     /// </summary>
     public double XSweepMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum centerline sweep magnitude in the Y direction, measured in millimeters.
+    /// Signed shift of the log centre in Y from the tail end to the head end, in
+    /// millimetres (head centre Y minus tail centre Y).
     ///
-    /// This represents the absolute maximum deviation of the centerline from its nominal
-    /// position when viewed from the Y-axis perspective (typically front view).
-    /// Higher values indicate more pronounced curvature in the Y direction.
+    /// Like <see cref="XSweepMM"/> this is a signed end-to-end difference, not a
+    /// maximum. A large magnitude means the log axis is tilted (or swept) in Y.
     /// </summary>
     public double YSweepMM { get; set; }
 
@@ -43,32 +52,32 @@ public class CenterlineSweepResult
     /// <summary>
     /// Gets or sets the X coordinate of the log's tail end centerline position, measured in millimeters.
     ///
-    /// The tail is typically one end of the log. This coordinate represents the X position
-    /// of the centerline at that end.
+    /// "Tail" here means the low-Z end of the scanned slices. This coordinate is
+    /// the average centre X of the end slices there.
     /// </summary>
     public double TailCenterXMM { get; set; }
 
     /// <summary>
     /// Gets or sets the Y coordinate of the log's tail end centerline position, measured in millimeters.
     ///
-    /// The tail is typically one end of the log. This coordinate represents the Y position
-    /// of the centerline at that end.
+    /// "Tail" here means the low-Z end of the scanned slices. This coordinate is
+    /// the average centre Y of the end slices there.
     /// </summary>
     public double TailCenterYMM { get; set; }
 
     /// <summary>
     /// Gets or sets the X coordinate of the log's head end centerline position, measured in millimeters.
     ///
-    /// The head is typically the other end of the log. This coordinate represents the X position
-    /// of the centerline at that end.
+    /// "Head" here means the high-Z end of the scanned slices. This coordinate is
+    /// the average centre X of the end slices there.
     /// </summary>
     public double HeadCenterXMM { get; set; }
 
     /// <summary>
     /// Gets or sets the Y coordinate of the log's head end centerline position, measured in millimeters.
     ///
-    /// The head is typically the other end of the log. This coordinate represents the Y position
-    /// of the centerline at that end.
+    /// "Head" here means the high-Z end of the scanned slices. This coordinate is
+    /// the average centre Y of the end slices there.
     /// </summary>
     public double HeadCenterYMM { get; set; }
 
@@ -76,7 +85,8 @@ public class CenterlineSweepResult
     /// Gets or sets the maximum bow sweep deviation detected along the log's length, measured in millimeters.
     ///
     /// Bow refers to the curvature of the log. This value represents the worst-case
-    /// deviation from a straight line connecting the tail and head centerline positions.
+    /// distance (looking down the log, in the X/Y plane) of any slice centre from
+    /// the straight line through the tail and head centre positions.
     /// </summary>
     public double MaxBowSweepMM { get; set; }
 
@@ -89,10 +99,11 @@ public class CenterlineSweepResult
     public double AverageBowSweepMM { get; set; }
 
     /// <summary>
-    /// Gets or sets the worst bow Z-axis deviation value, measured in millimeters.
+    /// Gets or sets WHERE the worst bow is: the Z position (distance along the log,
+    /// millimetres) of the slice with <see cref="MaxBowSweepMM"/>.
     ///
-    /// This represents the most severe deviation in the Z direction at any point
-    /// along the log when measuring bow. Useful for identifying critical bow locations.
+    /// This is a position, not a size of deviation. Useful for locating the
+    /// critical bow along the block.
     /// </summary>
     public double WorstBowZMM { get; set; }
 }
