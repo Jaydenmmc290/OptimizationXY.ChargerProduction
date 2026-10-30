@@ -6,7 +6,9 @@ using OptimizationXY.Charger.Services.Calibration;
 namespace OptimizationXY.Charger.Services.Profile;
 
 /// <summary>
-/// Provides functionality to build a log profile from a laser profile using a lookup table and optional smoothing.
+/// Turns one frame's detected laser line (pixel rows per image column) into a
+/// calibrated profile (radius in mm per image column) using the scanner lookup
+/// table, then smooths it with a sliding median.
 /// </summary>
 public static class LaserRadiusProfileBuilder
 {
@@ -19,6 +21,7 @@ public static class LaserRadiusProfileBuilder
     /// <param name="smoothingWindow">The window size for the optional median smoothing filter.</param>
     /// <returns>A list of log profile columns representing the smoothed log profile.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the lookup table is invalid or has fewer than two points.</exception>
+    /// <param name="maximumLargeRadiusExtrapolationPixels">Passed to the lookup: how far past the largest calibration reference a point may be extrapolated (0 = never).</param>
     public static List<LogProfileColumn> BuildFromLookupTable(List<LaserProfileColumn> laserProfile,ScannerLookupTable lookupTable,int smoothingWindow = 9,double maximumLargeRadiusExtrapolationPixels = 0.0)
     {
         if (laserProfile == null || laserProfile.Count == 0)
@@ -65,6 +68,8 @@ public static class LaserRadiusProfileBuilder
             });
         }
 
+        // A sliding median (default 9 columns) removes single-column spikes from
+        // reflections without rounding off real edges the way an average would.
         if (smoothingWindow > 1)
             profile = Smooth(profile, smoothingWindow);
 

@@ -10,7 +10,9 @@ public static class ScanFrameLoader
 
     /// <summary>
     /// Loads scan frames from the specified folder. The method looks for image files (PNG, JPG, JPEG, BMP) in the folder, sorts them based
-    /// on the numeric part of their filenames, and calculates the angle for each frame based on the total number of frames.
+    /// on the numeric part of their filenames, and gives each a provisional angle of
+    /// index x 360 / file count (the pipeline replaces it with measured angles).
+    /// Images are not opened here; only paths are stored.
     /// </summary>
     /// <param name="folderPath">The path to the folder containing the image files.</param>
     /// <returns>A list of <see cref="ScanFrame"/> objects representing the loaded scan frames.</returns>
