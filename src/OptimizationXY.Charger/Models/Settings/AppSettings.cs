@@ -1127,8 +1127,11 @@ public sealed class MachineLimitSettings
     public double MaxHeadMoveXMM { get; set; } = 100;  
     public double MaxHeadMoveYMM { get; set; } = 100; 
 
-    // NOTE: WarningMoveMM is not read anywhere in the program at present; only
-    // the hard Max…MoveMM limits above are enforced.
+    // A move larger than WarningMoveMM (but inside the hard limits) adds a WARNING
+    // to the recommendation. The "Movement warnings" readiness check then blocks
+    // when Safety.BlockOnMovementWarning is true, but that check is not essential,
+    // so with EnforceOnlyEssentialReadinessChecks = true (default) it is reported
+    // as NOT ENFORCED and does not stop the PLC write.
     public double WarningMoveMM { get; set; } = 80;  // Warning threshold for movement in millimeters. If the movement exceeds this value, a warning will be issued.
 }
 

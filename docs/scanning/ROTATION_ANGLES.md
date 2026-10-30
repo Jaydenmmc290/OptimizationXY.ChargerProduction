@@ -18,9 +18,11 @@ every frame at the wrong angle.
    saved scan for audit, and never used for geometry.
 5. A frame that is invalid for another reason keeps its angle slot.
 
-If the return to the starting profile cannot be found, the frames between rotation start
-and rotation stop are divided evenly over 360 degrees and the readiness report shows a
-`Rotation coverage` warning.
+If no frame returns to the starting profile within `RevolutionClosureToleranceMM`, the frame
+that comes closest is still used as the 360 degree frame when it is within
+`ApproximateClosureToleranceMM`; the revolution is then reported as approximate, not verified.
+If even that fails, the frames between rotation start and rotation stop are divided evenly over
+360 degrees and the readiness report shows a `Rotation coverage` warning.
 
 After the PLC reports ScanComplete only a few more frames per camera are accepted
 (`FramesAcceptedAfterScanComplete`); the rest are the stationary block and are not captured.
@@ -34,11 +36,18 @@ All have defaults, so an existing `appsettings.json` keeps working unchanged.
 | `UseMeasuredRevolutionAngles` | `true` | `false` restores the legacy fixed step |
 | `StationaryProfileChangeMM` | `0.8` | RMS profile change below this is a resting log |
 | `RevolutionClosureToleranceMM` | `1.5` | RMS match needed to accept the 360 degree frame |
+| `ApproximateClosureToleranceMM` | `2.5` | Closest return accepted as an approximate (unverified) revolution; `0` disables |
+| `SubFrameRevolutionClosure` | `false` | `true` places the 360 degree point between frames (for example 84.6 frames) |
 | `MinimumFramesPerRevolution` | `20` | Shortest revolution accepted |
 | `MaximumCalibrationExtrapolationPixels` | `15` | Laser pixels a radius may be extrapolated past the largest measured reference; `0` disables |
 | `FramesAcceptedAfterScanComplete` | `8` | Frames per camera still accepted after ScanComplete, so the frame that closes the revolution is not cut off |
 | `ReverseRotationDirection` | `false` | Set after the off-centre reference test if Y is mirrored |
 | `LaserAngleOffsetDeg` | `0` | Machine angle at which the laser strikes the log |
+| `KeepAllStripeSegments` | `false` | `true` also keeps laser-line pieces that line up with the longest piece |
+| `SubPixelStripeCenter` | `false` | `true` uses the brightness-weighted stripe centre (about 0.1 px) |
+
+`SubFrameRevolutionClosure`, `KeepAllStripeSegments` and `SubPixelStripeCenter` are off by default. Compare them with `--replay-batch` before turning
+them on (see [Offline replay](../development/OFFLINE_REPLAY.md)).
 
 ## Other geometry changes
 
