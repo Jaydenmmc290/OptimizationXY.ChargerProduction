@@ -8,6 +8,8 @@ namespace OptimizationXY.Charger.Models.Acquisition;
 /// </summary>
 public enum CameraInitializationMode
 {
+    /// <summary>Open the camera by its Sapera location (or serial number) and write every feature from <see cref="CameraDeviceSettings"/>. Production default.</summary>
     Programmatic,
+    /// <summary>Legacy: load a Sapera .ccf configuration file. Kept only as a fallback.</summary>
     ConfigurationFile
 }
