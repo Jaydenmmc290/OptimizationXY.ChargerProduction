@@ -10,8 +10,10 @@ namespace OptimizationXY.Charger.Models.Operator;
 /// tells the operator whether the scan was good enough.
 /// </summary>
 /// <remarks>
-/// A <see cref="ScanQualityStatus.Failed"/> result is the scan-quality gate:
-/// it blocks the PLC write so a bad scan is never sent.
+/// This result is the scan-quality gate (an essential readiness check): a
+/// <see cref="ScanQualityStatus.Failed"/> result always blocks the PLC write, and
+/// a <see cref="ScanQualityStatus.Warning"/> result also blocks it while
+/// Plc.RequireGoodQuality is on (default), so only Good scans are sent.
 /// </remarks>
 public sealed class OperatorScanQualityResult
 {

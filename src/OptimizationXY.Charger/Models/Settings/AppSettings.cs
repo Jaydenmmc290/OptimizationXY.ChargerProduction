@@ -976,7 +976,11 @@ public sealed class PlcIntegrationSettings
     public bool SendResultsBeforeSave { get; set; } = true;
     /// <summary>After writing, read the tags back and require them to match what was written.</summary>
     public bool RequireReadbackVerification { get; set; } = true;
-    /// <summary>Require the operator scan-quality gate to pass (not Failed) before sending.</summary>
+    /// <summary>
+    /// Require "good" everywhere: PLC tag updates with bad quality are ignored,
+    /// readbacks must have good quality, and the scan-quality gate accepts only a
+    /// Good scan (a Warning scan is then blocked, not just a Failed one).
+    /// </summary>
     public bool RequireGoodQuality { get; set; } = true;
     /// <summary>How long to wait for the readback to match, in milliseconds.</summary>
     public int ReadbackTimeoutMilliseconds { get; set; } = 5000;
