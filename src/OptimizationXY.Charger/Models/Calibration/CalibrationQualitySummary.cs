@@ -20,13 +20,16 @@ public sealed class CalibrationQualitySummary
     // MaximumRadiusMM: largest reference radius in the table, mm. Logs bigger than this are outside the calibrated range.
     public double MaximumRadiusMM { get; set; }
 
-    // MeanRepeatabilityErrorMM: average error (mm) when the reference images are run back through the table.
+    // MeanRepeatabilityErrorMM: average error (mm) when the HELD-OUT frames of each reference (about the last
+    // quarter, not used to build the table) are run through the table and compared with the known radius.
+    // NaN when no reference had held-out frames (e.g. imported single images).
     public double MeanRepeatabilityErrorMM { get; set; }
 
-    // MaximumRepeatabilityErrorMM: worst-case error (mm) of that same check.
+    // MaximumRepeatabilityErrorMM: worst-case error (mm) of that same held-out check.
     public double MaximumRepeatabilityErrorMM { get; set; }
 
-    // IndependentValidationCompleted: true once held-out samples (not used to build the table) were checked against it.
+    // IndependentValidationCompleted: true when a separate validation (independent of the references used to
+    // build the table) was done and passed in by the setup wizard; its errors are in the two fields below.
     public bool IndependentValidationCompleted { get; set; }
 
     // IndependentValidationMeanErrorMM: The mean error measured during independent validation of the calibration, in millimeters.
@@ -35,7 +38,7 @@ public sealed class CalibrationQualitySummary
     // IndependentValidationMaximumErrorMM: The maximum error measured during independent validation of the calibration, in millimeters.
     public double? IndependentValidationMaximumErrorMM { get; set; }
 
-    // Status: calibration status text; "CommissioningOnly" until it has been validated for production.
+    // Status: "CommissioningOnly" without independent validation, "ValidatedPendingEngineeringApproval" with it.
     public string Status { get; set; } = "CommissioningOnly";
 
     // Notes: Additional notes or comments regarding the calibration process, with a default value of an empty string.
