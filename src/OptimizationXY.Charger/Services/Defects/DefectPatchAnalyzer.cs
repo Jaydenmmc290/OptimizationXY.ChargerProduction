@@ -32,6 +32,8 @@ public static class DefectPatchAnalyzer
                 .OrderByDescending(p => p.CellCount)
                 .FirstOrDefault();
 
+        // Radius errors are negative for missing wood, so ordering ascending puts
+        // the deepest patch first, and Min gives the deepest error.
         result.WorstPatch =
             patches
                 .OrderBy(p => p.WorstErrorMM)
@@ -43,6 +45,7 @@ public static class DefectPatchAnalyzer
         result.AverageDepthMM =
             patches.Average(p => p.AverageErrorMM);
 
+        // Severity = cells x |average error| per patch (see RadiusDefectPatchBuilder).
         result.TotalSeverityScore =
             patches.Sum(p => p.SeverityScore);
 

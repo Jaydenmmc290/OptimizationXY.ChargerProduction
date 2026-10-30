@@ -7,18 +7,23 @@ namespace OptimizationXY.Charger.Models.Defects;
 /// depths, and severity scores. It provides both individual patch references
 /// (largest, worst) and aggregate metrics for understanding overall log defect severity.
 ///
+/// Built by DefectPatchAnalyzer from the patches made by RadiusDefectPatchBuilder.
+/// Depths/errors are radius errors in millimetres and are NEGATIVE for missing
+/// wood (measured radius below the slice's expected radius).
+///
 /// Used for:
 /// - Quick assessment of overall log quality
 /// - Identifying critical patches needing correction
-/// - Computing aggregate penalty scores
-/// - Deciding if log is salvageable or must be culled
+/// - Computing aggregate penalty scores (only in the legacy PenaltyScored mode;
+///   the inscribed-geometry modes keep these numbers for diagnostics only)
+/// - Diagnostics saved with each scan
 /// </summary>
 public class DefectPatchAnalysis
 {
     /// <summary>
     /// Gets or sets the total number of distinct defect patches identified on the log.
     ///
-    /// Each patch is a contiguous region of similar defect types.
+    /// Each patch is a connected region of low-radius (LowRadius/SevereLowRadius) cells.
     /// Higher count indicates more fragmented defects.
     /// </summary>
     public int PatchCount { get; set; }
@@ -50,28 +55,26 @@ public class DefectPatchAnalysis
     public RadiusDefectPatch? LargestPatch { get; set; }
 
     /// <summary>
-    /// Gets or sets a reference to the most severe defect patch.
+    /// Gets or sets the DEEPEST defect patch: the one with the most negative
+    /// <see cref="RadiusDefectPatch.WorstErrorMM"/> (not the highest severity score).
     ///
     /// Nullable - will be null if no defects exist.
-    /// Severity is typically based on error magnitude and extent.
-    /// This patch requires highest priority for optimization.
-    /// May differ from LargestPatch if severity scores are not size-based.
+    /// May differ from LargestPatch.
     /// </summary>
     public RadiusDefectPatch? WorstPatch { get; set; }
 
     /// <summary>
-    /// Gets or sets the maximum (worst-case) depth of any defect patch, measured in millimeters.
+    /// Gets or sets the worst (most negative) radius error of any patch, in millimetres.
+    /// For example -14.2 means the deepest missing wood is 14.2 mm below expected.
     ///
-    /// Represents the single most severe material loss or deficiency.
-    /// Critical for determining if log meets minimum acceptable quality.
-    /// Zero or near-zero values indicate only superficial defects.
+    /// Values near zero indicate only shallow defects.
     /// </summary>
     public double WorstDepthMM { get; set; }
 
     /// <summary>
     /// Gets or sets the average depth across all defect patches, measured in millimeters.
     ///
-    /// Calculated as mean of all patch WorstErrorMM values.
+    /// Calculated as the mean of every patch's AverageErrorMM (negative = missing wood).
     /// Provides overall indication of typical defect severity.
     /// Lower values indicate log is less severely defective.
     /// </summary>
@@ -82,7 +85,6 @@ public class DefectPatchAnalysis
     ///
     /// Aggregates the individual SeverityScore from each patch.
     /// Provides overall quantification of total defect burden on the log.
-    /// Used to determine if optimization can sufficiently improve the log.
     /// </summary>
     public double TotalSeverityScore { get; set; }
 
@@ -100,15 +102,10 @@ public class DefectPatchAnalysis
     ///
     /// The highest individual patch severity score.
     /// Identifies the critical problem area requiring most aggressive correction.
-    /// Must be addressable by optimization or log is not salvageable.
     /// </summary>
     public double WorstSeverityScore { get; set; }
 
-    /// <summary>
-    /// Gets a value indicating whether any defects were detected on the log.
-    ///
-    /// Returns true if PatchCount > 0, false otherwise.
-    /// Quick check for whether the log has any defect patches.
-    /// </summary>
+    // (A "HasDefects" property used to be documented here but no longer exists;
+    // use PatchCount > 0 to check whether any defect patches were found.)
     
 }

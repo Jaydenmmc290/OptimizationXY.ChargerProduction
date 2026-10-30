@@ -1,9 +1,11 @@
 
-/// <summary>
-/// Represents a timing entry for a specific step in a processing pipeline.
-/// </summary>
+// One row of the processing timing report: how long a named pipeline step took.
+// The report is saved with every scan so slow stages can be found.
 namespace OptimizationXY.Charger.Models.Diagnostics;
 
+/// <summary>
+/// Timing for one processing step (see ScanTimeline / the pipeline timing report).
+/// </summary>
 public sealed class PipelineTimingEntry
 {
     /// <summary>
