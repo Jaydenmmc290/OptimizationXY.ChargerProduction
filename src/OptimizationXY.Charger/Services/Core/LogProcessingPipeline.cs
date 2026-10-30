@@ -2569,11 +2569,6 @@ BuildFinalSpindleRecommendation(
     }
 
     /// <summary>
-    /// Builds a peel simulation result for a given spindle movement, using the current point cloud and settings.
-    /// </summary>
-    /// <param name="movement">The optimized spindle movement to simulate.</param>
-    /// <returns>A peel simulation result for the given spindle movement.</returns>
-    /// <summary>
     /// Queues the image for a numbers-only peel. Any image left in that slot
     /// from earlier is released now; the new one is drawn when the scan is saved.
     /// </summary>
@@ -2595,6 +2590,13 @@ BuildFinalSpindleRecommendation(
             _state.DeferredPeelViews.Add(new DeferredPeelView(slot, peel));
     }
 
+    /// <summary>
+    /// Virtual peel (numbers only, no picture) of the measured point cloud around
+    /// the axis given by a spindle movement (tail/head X/Y offsets from the
+    /// current axis, point-cloud frame).
+    /// </summary>
+    /// <param name="movement">The candidate axis to simulate.</param>
+    /// <returns>Sheet counts and wane for that axis.</returns>
     private PeelSimulationResult BuildPeelForMovement(OptimizedSpindleMovement movement)
     {
         return UnwrappedPeelViewBuilder.ComputeMetrics(
@@ -2609,7 +2611,9 @@ BuildFinalSpindleRecommendation(
     }
 
     /// <summary>
-    /// Builds a peel simulation result for a given inscribed geometry result, using the current point cloud and settings.
+    /// Virtual peel (numbers only) around the axis an inscribed-geometry search
+    /// selected. The lathe always peels in a CIRCLE around that axis, even for the
+    /// oval result.
     /// </summary>
     /// <param name="geometry">The inscribed geometry result to simulate.</param>
     /// <returns>A peel simulation result for the given inscribed geometry result.</returns>
