@@ -36,12 +36,19 @@ namespace OptimizationXY.Charger.Services.Calibration;
 /// with the CURRENT appsettings crop/overlap values; the import stops if they do
 /// not. The camera configurations are not opened or changed: the camera
 /// snapshots of the active calibration are reused.
+///
+/// All switches: --small PATH, --large PATH, --home PATH (each may be repeated
+/// for several images), --small-diameter-in / --large-diameter-in (or -mm),
+/// --length-pixels-per-mm N (default: keep the active value), --operator NAME,
+/// --notes TEXT, --activate. A report is always written to
+/// Logs\CalibrationImageImport_&lt;time&gt;.txt.
 /// </summary>
 internal static class CalibrationImageImportRunner
 {
     public const string CommandLineSwitch = "--import-calibration-images";
 
     private const double MillimetersPerInch = 25.4;
+    // Fixed radius-band ids for the three references (stored with every point).
     private const int SmallBandId = 1;
     private const int LargeBandId = 2;
     private const int HomeBandId = 3;
@@ -53,12 +60,17 @@ internal static class CalibrationImageImportRunner
         WriteIndented = true
     };
 
+    /// <summary>True when the program was started with --import-calibration-images.</summary>
     public static bool IsRequested(string[] args) =>
         args.Any(argument => string.Equals(
             argument,
             CommandLineSwitch,
             StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Runs the whole import (preview, or activation with --activate) and writes
+    /// the report. Never throws: a failure is written to the report and log.
+    /// </summary>
     public static void Run(string[] args)
     {
         var report = new StringBuilder();
@@ -200,6 +212,10 @@ internal static class CalibrationImageImportRunner
         }
     }
 
+    /// <summary>
+    /// Loads one reference's images, checks their width matches the current
+    /// image-joining settings, and extracts the reference's lookup points.
+    /// </summary>
     private static CalibrationReferenceCapture ImportReference(
         StringBuilder report,
         string name,
@@ -287,6 +303,7 @@ internal static class CalibrationImageImportRunner
         return head + tail - overlap;
     }
 
+    /// <summary>Camera image width read back when the snapshot was made ("ReadbackWidth" in the JSON), or null.</summary>
     private static int? ReadbackWidth(byte[] snapshot)
     {
         try
@@ -310,6 +327,7 @@ internal static class CalibrationImageImportRunner
         }
     }
 
+    /// <summary>Mean / max error of the table against its own points (used when no held-out frames exist).</summary>
     private static (double Mean, double Maximum) InSampleError(ScannerLookupTable table)
     {
         var errors = new List<double>();
@@ -332,6 +350,7 @@ internal static class CalibrationImageImportRunner
             : (errors.Average(), errors.Max());
     }
 
+    /// <summary>Adds a human-readable summary of the new table (and a comparison with the previous one) to the report.</summary>
     private static void AppendTableSummary(
         StringBuilder report,
         ScannerLookupTable table,
@@ -381,6 +400,7 @@ internal static class CalibrationImageImportRunner
         report.AppendLine();
     }
 
+    /// <summary>Radius for a point as text, or the error message if it is outside the table.</summary>
     private static string TryRadius(ScannerLookupTable table, int x, double laserY)
     {
         try
@@ -395,6 +415,7 @@ internal static class CalibrationImageImportRunner
         }
     }
 
+    /// <summary>Saves the updated setup flags to appsettings.json (logs instead of throwing on failure).</summary>
     private static void AppSettingsStoreSaveIfAvailable(AppSettings settings)
     {
         try
@@ -407,6 +428,7 @@ internal static class CalibrationImageImportRunner
         }
     }
 
+    /// <summary>Writes the report file and logs where it is.</summary>
     private static void Finish(StringBuilder report, string reportPath, bool failed)
     {
         try
@@ -437,6 +459,7 @@ internal static class CalibrationImageImportRunner
         }
     }
 
+    /// <summary>The parsed command-line switches (see the class summary for the list).</summary>
     private sealed class ImportOptions
     {
         public List<string> SmallImages { get; } = [];
