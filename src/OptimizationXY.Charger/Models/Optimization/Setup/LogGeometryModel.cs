@@ -11,19 +11,22 @@ namespace OptimizationXY.Charger.Models.Optimization.Setup;
 public class LogGeometryModel 
 {
     /// <summary>
-    /// Gets or sets the average diameter of the log, in millimetres.
+    /// Gets or sets 2 x the average radius from the fitted centreline, in millimetres.
     /// </summary>
     public double AverageDiameterMM { get; set; }
 
 
     /// <summary>
-    /// Gets or sets the smallest diameter of the log, in millimetres (sent to the PLC as the small diameter).
+    /// Gets or sets 2 x the SMALLEST radius measured from the fitted centreline anywhere
+    /// on the log, in millimetres (sent to the PLC, in inches, as the small diameter).
+    /// This is a radius-based figure, not a measured cross-section width.
     /// </summary>
     public double MinDiameterMM { get; set; }
 
 
     /// <summary>
-    /// Gets or sets the largest diameter of the log, in millimetres (sent to the PLC as the large diameter).
+    /// Gets or sets 2 x the LARGEST radius measured from the fitted centreline, in
+    /// millimetres (sent to the PLC, in inches, as the large diameter).
     /// </summary>
     public double MaxDiameterMM { get; set; }
 

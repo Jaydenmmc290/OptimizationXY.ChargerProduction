@@ -505,6 +505,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
                 }
             });
 
+        // After all frames are done: cut stripe columns that run past the block end
+        // agreed by most frames (reflections / fixtures beyond the wood).
         string lengthConsensusReport = TrimFramesBeyondConsensusLength(lookupTable);
 
         totalProfilePoints = _state.ScanFrames
@@ -525,6 +527,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
         // Reports how much of the scan lies beyond the largest measured
         // calibration reference (values there are extrapolated).
         // ------------------------------------------------------------
+        // Count how many measured points needed extrapolation beyond the largest
+        // calibration reference (diagnostic only - the values are already used).
         double largestCalibratedRadiusMM = lookupTable.MaximumCalibratedRadiusMM;
         int extrapolatedPoints = 0;
         int measuredPoints = 0;
@@ -609,6 +613,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
             $"Frames Used For Geometry: {framesUsedForGeometry}\r\n" +
             $"{revolution.Message}\r\n\r\n";
 
+        // List the first 10 frames that failed for a real reason (resting frames
+        // outside the revolution are expected and not listed).
         foreach (var bad in _state.ScanFrames.Where(f => !f.IsValid && !f.ExcludedFromRevolution).Take(10))
         {
             _state.DiagnosticsReport +=
@@ -627,7 +633,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // _state.DisplayPointCloud = filled / averaged display-only data
     // ------------------------------------------------------------
     /// <summary>
-    /// Builds the rotating scan point cloud from the processed scan frames, using the calibration data and application settings.
+    /// Stage 3: builds the MEASURED point cloud (used for everything) and a
+    /// separate display-only cloud (may contain filled points) from the frames.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the scan frames or calibration data are missing or invalid.</exception>
@@ -704,7 +711,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Fits the centerline of the log from the rotating scan point cloud using PCA (Principal Component Analysis) and local centerline fitting.
+    /// Stage 4: fits the log centreline - PCA axis, per-slice circle centres,
+    /// sweep/bow from the trimmed slices, then the PCA axis refined through the
+    /// slice centres. The centreline is for SHAPE analysis only; spindle moves
+    /// are measured from the current spindle axis (0,0), not from it.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud is missing or the centerline fit fails.</exception>
@@ -768,6 +778,8 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
 
         // Where the block centreline sits relative to the machine origin
         // (current spindle axis = 0, 0) at each end of the scanned length.
+        // Evaluate the centreline line at the tail (min Z) and head (max Z) ends:
+        // position = origin + slope x (Z - originZ), with slope = direction / dirZ.
         double centerlineDirectionZ =
             Math.Abs(_state.Centerline.DirectionZ) > 1e-9
                 ? _state.Centerline.DirectionZ
@@ -803,7 +815,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Builds the radius field from the raw point cloud and fitted centerline, producing a list of radius field points with Z and angle information.
+    /// Stage 5: builds BOTH radius fields from the measured point cloud - the
+    /// centreline-relative field (RadiusField, shape diagnostics) and the
+    /// spindle-axis field (OptimizationRadiusField, used to choose the position) -
+    /// and fills the min/average/max diameter in the log model.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the point cloud is missing or the centerline fit fails.</exception>
@@ -838,6 +853,9 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
                 "Machine-frame optimization radius field returned no points.");
         }
 
+        // These diameters are 2 x the min / mean / max centreline radius of ALL
+        // points. The min and max are later sent to the PLC (in inches) as the
+        // small and large diameter.
         double minRadius = _state.RadiusField.Min(p => p.RadiusMM);  // Calculate the minimum radius from the radius field points
         double maxRadius = _state.RadiusField.Max(p => p.RadiusMM);  // Calculate the maximum radius from the radius field points
         double avgRadius = _state.RadiusField.Average(p => p.RadiusMM);  // Calculate the average radius from the radius field points
@@ -875,7 +893,10 @@ OptimizationXY.Charger.Models.Settings.MachineLimitSettings limits)
     // ------------------------------------------------------------
 
     /// <summary>
-    /// Bins the radius field points into discrete Z and angle bins based on the application settings, producing a binned radius field for further analysis.
+    /// Stage 6a: bins both radius fields into Z x angle cells. The optimization
+    /// field may ignore the lowest reading(s) in each cell
+    /// (Geometry.OptimizationCellIgnoreLowestReadings) so one bad reading cannot
+    /// decide the spindle position. Also builds the section and head-end pictures.
     /// </summary>
     /// <param name="token">A cancellation token to observe while waiting for the task to complete.</param>
     /// <exception cref="InvalidOperationException">Thrown when the radius field is missing or empty.</exception>
