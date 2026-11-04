@@ -27,12 +27,27 @@ public sealed class CameraFrameEventArgs : EventArgs
     public DateTime TimestampUtc { get; }
 
     /// <summary>
+    /// When the frame callback ran, <see cref="System.Diagnostics.Stopwatch"/>
+    /// ticks (high resolution, for pairing head and tail frames by time).
+    /// </summary>
+    public long HostTicks { get; }
+
+    /// <summary>
     /// Constructor to create camera frame event arguments.
     /// </summary>
     public CameraFrameEventArgs(Mat frame, long frameNumber, DateTime timestampUtc)
+        : this(frame, frameNumber, timestampUtc, System.Diagnostics.Stopwatch.GetTimestamp())
+    {
+    }
+
+    /// <summary>
+    /// Constructor with the host arrival time in Stopwatch ticks.
+    /// </summary>
+    public CameraFrameEventArgs(Mat frame, long frameNumber, DateTime timestampUtc, long hostTicks)
     {
         Frame = frame ?? throw new ArgumentNullException(nameof(frame));
         FrameNumber = frameNumber;
         TimestampUtc = timestampUtc;
+        HostTicks = hostTicks;
     }
 }

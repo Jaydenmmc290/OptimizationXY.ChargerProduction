@@ -2261,6 +2261,21 @@ string message)
             $"Head {completedCapture.HeadFrameCount} | " +
             $"Tail {completedCapture.TailFrameCount}";
 
+            int skippedTrash =
+                (_headCameraService?.TrashFramesThisCapture ?? 0) +
+                (_tailCameraService?.TrashFramesThisCapture ?? 0);
+            int skippedIncomplete =
+                (_headCameraService?.IncompleteFramesThisCapture ?? 0) +
+                (_tailCameraService?.IncompleteFramesThisCapture ?? 0);
+
+            if (skippedTrash > 0 || skippedIncomplete > 0)
+            {
+                AppendDiagnostics(
+                    $"WARNING: camera frames skipped during this scan: " +
+                    $"head {_headCameraService?.TrashFramesThisCapture ?? 0} trash / {_headCameraService?.IncompleteFramesThisCapture ?? 0} incomplete, " +
+                    $"tail {_tailCameraService?.TrashFramesThisCapture ?? 0} trash / {_tailCameraService?.IncompleteFramesThisCapture ?? 0} incomplete.");
+            }
+
             AppendDiagnostics(
                 $"Capture finished: " +
                 $"{completedCapture.FramePairCount} frame pairs, " +

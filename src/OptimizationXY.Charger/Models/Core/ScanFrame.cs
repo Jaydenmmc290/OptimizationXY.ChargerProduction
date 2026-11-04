@@ -20,6 +20,16 @@ public class ScanFrame
     // Position of the frame in capture order (0 = first pair after ScanStart).
     public int FrameIndex { get; set; }
 
+    /// <summary>
+    /// The camera's frame number for this image (counts every frame the camera
+    /// delivered during the capture, including ones skipped as incomplete), used
+    /// to pair head and tail frames in encoder mode. 0 when unknown.
+    /// </summary>
+    public long SourceFrameNumber { get; set; }
+
+    /// <summary>When the frame arrived, <see cref="System.Diagnostics.Stopwatch"/> ticks. 0 when unknown.</summary>
+    public long CaptureTicks { get; set; }
+
     // Rotation angle of the log (degrees) when this image was taken. Set from the
     // measured revolution (RevolutionAngleAssigner), not just frame index x step.
     public double AngleDeg { get; set; }

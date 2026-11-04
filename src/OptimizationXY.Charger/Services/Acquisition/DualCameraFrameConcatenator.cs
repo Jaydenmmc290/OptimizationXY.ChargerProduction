@@ -37,13 +37,19 @@ public static class DualCameraFrameConcatenator
     /// <param name="tailFrames">The list of tail camera frames.</param>
     /// <param name="settings">The concatenation settings.</param>
     /// <param name="angularStepDegrees">The angular step in degrees between frames.</param>
+    /// <param name="pairs">
+    /// Which head frame goes with which tail frame (indexes into the two lists in
+    /// FrameIndex order), from <see cref="FramePairing"/>. Null = capture order
+    /// (head N with tail N), the behaviour calibration capture keeps.
+    /// </param>
     /// <returns>A list of concatenated scan frames.</returns>
     /// <exception cref="InvalidOperationException"></exception>
     public static List<ScanFrame> ConcatenatePairs(
         IReadOnlyList<ScanFrame> headFrames,
         IReadOnlyList<ScanFrame> tailFrames,
         DualCameraConcatenationSettings settings,
-        double angularStepDegrees)
+        double angularStepDegrees,
+        IReadOnlyList<FramePair>? pairs = null)
     {
         ArgumentNullException.ThrowIfNull(headFrames);
         ArgumentNullException.ThrowIfNull(tailFrames);
@@ -51,9 +57,19 @@ public static class DualCameraFrameConcatenator
 
         settings.Validate();
 
-        // Pair head frame N with tail frame N (by capture order). If one camera has
-        // extra frames they are left unpaired and not used.
-        int pairCount = Math.Min(headFrames.Count, tailFrames.Count);
+        var headByIndex = headFrames
+            .OrderBy(frame => frame.FrameIndex)
+            .ToList();
+
+        var tailByIndex = tailFrames
+            .OrderBy(frame => frame.FrameIndex)
+            .ToList();
+
+        // Without a pairing, pair head frame N with tail frame N (capture order).
+        // Frames with no partner are left unpaired and not used.
+        pairs ??= FramePairing.PairByOrder(headByIndex.Count, tailByIndex.Count).Pairs;
+
+        int pairCount = pairs.Count;
 
         if (pairCount == 0)
         {
@@ -61,24 +77,14 @@ public static class DualCameraFrameConcatenator
                 "No synchronized head/tail frame pairs are available.");
         }
 
-        var headByIndex = headFrames
-            .OrderBy(frame => frame.FrameIndex)
-            .Take(pairCount)
-            .ToList();
-
-        var tailByIndex = tailFrames
-            .OrderBy(frame => frame.FrameIndex)
-            .Take(pairCount)
-            .ToList();
-
         var result = new List<ScanFrame>(pairCount);
 
         try
         {
             for (int index = 0; index < pairCount; index++)
             {
-                ScanFrame head = headByIndex[index];
-                ScanFrame tail = tailByIndex[index];
+                ScanFrame head = headByIndex[pairs[index].HeadIndex];
+                ScanFrame tail = tailByIndex[pairs[index].TailIndex];
 
                 if (head.GrayImage is null || head.GrayImage.IsEmpty)
                 {

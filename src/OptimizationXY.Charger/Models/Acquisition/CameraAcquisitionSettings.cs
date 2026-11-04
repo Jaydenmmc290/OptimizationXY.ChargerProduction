@@ -77,6 +77,13 @@ public sealed class CameraAcquisitionSettings
 
     /// <summary>How the head and tail images are cropped, flipped and joined. See <see cref="DualCameraConcatenationSettings"/>.</summary>
     public DualCameraConcatenationSettings Concatenation { get; set; } = new();
+
+    /// <summary>
+    /// How head and tail frames are matched up for a production scan. Not part
+    /// of the calibration fingerprint: it chooses which two images are joined,
+    /// not how they are joined. Calibration capture always uses capture order.
+    /// </summary>
+    public FramePairingSettings FramePairing { get; set; } = new();
     /// <summary>
     /// How many frames may wait in each camera's hand-off queue before frames
     /// are counted as dropped. Must be at least 1.
@@ -233,6 +240,28 @@ public sealed class DualCameraConcatenationSettings
         if (OverlapPixels < 0)
             throw new InvalidOperationException("Dual-camera overlap cannot be negative.");
     }
+}
+
+/// <summary>
+/// Head/tail frame pairing for production scans (Services/Acquisition/FramePairing).
+/// </summary>
+public sealed class FramePairingSettings
+{
+    /// <summary>
+    /// True: pair by encoder pulse (frame counters) in Encoder mode, otherwise
+    /// by arrival time; capture order only as the fallback. False: capture
+    /// order (head N with tail N), the earlier behaviour.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Leading pairs dropped from every scan. 0 by default: the revolution
+    /// angle assignment already finds and excludes the frames before the block
+    /// starts turning, so dropping more would only remove real rotation data.
+    /// (The Rebuild program drops 3 because it spreads frames evenly from the
+    /// first one.)
+    /// </summary>
+    public int FramePairsToToss { get; set; }
 }
 
 /// <summary>
