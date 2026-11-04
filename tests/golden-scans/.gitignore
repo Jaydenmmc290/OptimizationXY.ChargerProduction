@@ -1,0 +1,11 @@
+# Only what the golden-scan test needs is committed: the frame images, the
+# calibration saved with the scan, and the recorded settings / answer.
+# Overlays, point clouds, reports, zips and Thumbs.db stay on your PC.
+*
+!*/
+!.gitignore
+!README.md
+!**/Frames/*.png
+!**/scanner-calibration.json
+!**/golden-settings.json
+!**/golden-expected.json
