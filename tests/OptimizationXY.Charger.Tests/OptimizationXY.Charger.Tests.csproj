@@ -29,4 +29,11 @@
     <ProjectReference Include="..\..\src\OptimizationXY.Charger\OptimizationXY.Charger.csproj" />
   </ItemGroup>
 
+  <!-- The PLC tests use the in-memory PLC, whose surface uses the XYRestricted tag enum. -->
+  <ItemGroup>
+    <Reference Include="XYRestricted">
+      <HintPath>..\..\lib\XYRestricted\XYRestricted.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>
