@@ -111,7 +111,12 @@ public sealed class AppSettings
     /// <summary>
     /// PLC handshake, write order, readback and timeout settings.
     /// </summary>
-    public PlcIntegrationSettings Plc { get; set; } = new(); 
+    public PlcIntegrationSettings Plc { get; set; } = new();
+    /// <summary>
+    /// Final guard on the head/tail move sent to the PLC: keeps it inside what the
+    /// PLC's cylinder stroke will execute (the PLC moves nothing otherwise).
+    /// </summary>
+    public PlcStrokeGuardSettings PlcStrokeGuard { get; set; } = new();
     /// <summary>
     /// Knife clearance / carriage retract rules and other safety switches.
     /// </summary>
@@ -983,6 +988,12 @@ public sealed class PlcIntegrationSettings
     /// Good scan (a Warning scan is then blocked, not just a Failed one).
     /// </summary>
     public bool RequireGoodQuality { get; set; } = true;
+    /// <summary>
+    /// With readback on: write all three tags back to back, then read all three
+    /// back at once (one round trip). False reads each tag back before writing
+    /// the next (three round trips, the earlier behaviour).
+    /// </summary>
+    public bool VerifyReadbackAfterAllWrites { get; set; } = true;
     /// <summary>How long to wait for the readback to match, in milliseconds.</summary>
     public int ReadbackTimeoutMilliseconds { get; set; } = 5000;
     /// <summary>Largest difference allowed between a written and a read-back FLOAT value.</summary>
@@ -1010,6 +1021,62 @@ public sealed class PlcIntegrationSettings
 
     /// <summary>How long to wait for ScanComplete before giving up on the scan, in milliseconds.</summary>
     public int ScanCompleteTimeoutMilliseconds { get; set; } = 30000;
+
+    /// <summary>
+    /// How long the XY PLC waits after its own ScanComplete for this program's
+    /// result before it positions the block on its own fallback (about 18 s,
+    /// measured by the Rebuild program in Sept 2026). Used only to report a late
+    /// result; nothing is blocked.
+    /// </summary>
+    public double PlcResultWindowSeconds { get; set; } = 18.0;
+
+    /// <summary>A result written later than this after ScanComplete is logged as a WARNING.</summary>
+    public double LateResultWarningSeconds { get; set; } = 15.0;
+}
+
+/// <summary>
+/// Limits for the PLC stroke guard (Services/Plc/PlcStrokeGuard). All INCHES,
+/// in the PLC's own sign convention (the values in ScannedBlockData). Defaults
+/// are the limits measured on this charger by the Rebuild program in Sept 2026.
+/// The guard never changes how the position is found; it only scales a move the
+/// PLC would refuse down to the largest part it executes, keeping its direction.
+/// </summary>
+public sealed class PlcStrokeGuardSettings
+{
+    /// <summary>Turn the guard on. When false the values are sent as computed.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Longest head or tail move vector sent (inches). 0 disables. No block on this charger has needed more than about 2 in.</summary>
+    public double MaxEndMoveInches { get; set; } = 3.0;
+
+    /// <summary>Most negative predicted cylinder target sent for, as a positive number (inches). The PLC refuses beyond about -4.0. 0 disables.</summary>
+    public double MaxCylinderNegativeInches { get; set; } = 3.9;
+
+    /// <summary>Most positive predicted cylinder target (inches). The A cylinders stop at +3.04. 0 disables.</summary>
+    public double MaxCylinderPositiveInches { get; set; } = 3.0;
+
+    /// <summary>Largest X move after the PLC's rotation, either way, at either end (inches). The PLC refuses beyond about 1.775. 0 disables.</summary>
+    public double MaxXAfterRotationInches { get; set; } = 1.7;
+
+    /// <summary>The PLC's Rotation_Needed_Left_Lim (degrees). 135 as the controller holds it.</summary>
+    public double ZoneLeftLimitDegrees { get; set; } = 135.0;
+
+    /// <summary>The PLC's Rotation_Needed_Right_Lim (degrees). 315 as the controller holds it.</summary>
+    public double ZoneRightLimitDegrees { get; set; } = 315.0;
+
+    /// <summary>Set true only when the PLC's Bypass_Rotation_Zone bit is on.</summary>
+    public bool BypassRotationZone { get; set; }
+
+    /// <summary>
+    /// The PLC adds its correction offsets (Enable_XY_Correction_Offset,
+    /// HEAD/TAIL_X/Y_OFFSET) before solving. This program cannot read them, so
+    /// enter them here when they are enabled on the PLC.
+    /// </summary>
+    public bool CorrectionOffsetsEnabled { get; set; }
+    public double HeadXOffsetInches { get; set; }
+    public double HeadYOffsetInches { get; set; }
+    public double TailXOffsetInches { get; set; }
+    public double TailYOffsetInches { get; set; }
 }
 
 /// <summary>

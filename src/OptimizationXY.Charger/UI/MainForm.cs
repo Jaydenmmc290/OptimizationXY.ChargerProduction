@@ -2261,6 +2261,21 @@ string message)
             $"Head {completedCapture.HeadFrameCount} | " +
             $"Tail {completedCapture.TailFrameCount}";
 
+            int skippedTrash =
+                (_headCameraService?.TrashFramesThisCapture ?? 0) +
+                (_tailCameraService?.TrashFramesThisCapture ?? 0);
+            int skippedIncomplete =
+                (_headCameraService?.IncompleteFramesThisCapture ?? 0) +
+                (_tailCameraService?.IncompleteFramesThisCapture ?? 0);
+
+            if (skippedTrash > 0 || skippedIncomplete > 0)
+            {
+                AppendDiagnostics(
+                    $"WARNING: camera frames skipped during this scan: " +
+                    $"head {_headCameraService?.TrashFramesThisCapture ?? 0} trash / {_headCameraService?.IncompleteFramesThisCapture ?? 0} incomplete, " +
+                    $"tail {_tailCameraService?.TrashFramesThisCapture ?? 0} trash / {_tailCameraService?.IncompleteFramesThisCapture ?? 0} incomplete.");
+            }
+
             AppendDiagnostics(
                 $"Capture finished: " +
                 $"{completedCapture.FramePairCount} frame pairs, " +
@@ -2283,7 +2298,29 @@ string message)
                     processingCancellation.Token);
                 ScanTimeline.Mark("Scan processed, position chosen");
 
-                AppendDiagnostics(diagnosticsReport);
+                // The full report and the result boxes are shown AFTER the PLC write
+                // (ShowResultsOnce below): appending the whole report to the log box
+                // and the log file on the UI thread used to sit between the position
+                // being chosen and the PLC getting it.
+                bool resultsShown = false;
+
+                void ShowResultsOnce()
+                {
+                    if (resultsShown)
+                        return;
+
+                    resultsShown = true;
+
+                    try
+                    {
+                        AppendDiagnostics(diagnosticsReport);
+                        DisplayFinalResults();
+                    }
+                    catch (Exception displayEx)
+                    {
+                        Logger.Warn(displayEx, "Showing the scan results failed.");
+                    }
+                }
 
                 if (PipelineState.Instance.CaptureAudit is not null)
                 {
@@ -2295,8 +2332,8 @@ string message)
 
                 _latestResult = PipelineState.Instance.FinalSpindleRecommendation;
 
-                stage = "Showing the results";
-                DisplayFinalResults();
+                // The scan-quality gate result is needed before the PLC write.
+                stage = "Checking scan quality";
 
                 OperatorScanQualityResult operatorResult =
                     OperatorScanQualityAnalyzer.Analyze(PipelineState.Instance);
@@ -2360,6 +2397,8 @@ string message)
 
                         if (saveFailureBlocksPlc)
                         {
+                            ShowResultsOnce();
+
                             throw new InvalidOperationException(
                                 "Production result saving failed. PLC delivery is blocked because the scan audit record was not preserved.",
                                 saveEx);
@@ -2424,6 +2463,25 @@ string message)
                                 transmission.Success
                                     ? "PLC write + readback verified"
                                     : "PLC write attempted (failed)");
+
+                            // The PLC waits about PlcResultWindowSeconds after its
+                            // ScanComplete, then positions the block on its own
+                            // fallback. Say on every block how long it waited.
+                            if (plcScanCompleteVerified)
+                            {
+                                var plcSettings = PipelineState.Instance.Settings.Plc;
+                                string timing = PlcResultWindow.Describe(
+                                    ScanTimeline.ElapsedSeconds,
+                                    plcSettings.LateResultWarningSeconds,
+                                    plcSettings.PlcResultWindowSeconds,
+                                    out bool late);
+
+                                AppendDiagnostics((late ? "[PLC] WARNING: " : "[PLC] ") + timing);
+
+                                if (late)
+                                    Logger.Warn(timing);
+                            }
+
                             ScanTimeline.Stop();
 
                             LogProcessingCoordinator.RecordPlcTransmission(transmission);
@@ -2494,6 +2552,8 @@ string message)
                 }
                 finally
                 {
+                    ShowResultsOnce();
+
                     if (sendBeforeSave)
                     {
                         // Not awaited here on purpose: the scan cycle is finished

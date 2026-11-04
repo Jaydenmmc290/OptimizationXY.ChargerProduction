@@ -52,7 +52,16 @@ public sealed class GenieNanoCameraService : IDisposable
     private byte[]? _loadedConfigurationSnapshot;
     private int _frameCounter;
     private readonly Lock _frameCounterLock = new();
-    private bool _isCapturingManagedFrames;
+    private volatile bool _isCapturingManagedFrames;
+
+    // Frames skipped during the current managed capture (reset at its start).
+    private int _trashFramesThisCapture;
+    private int _incompleteFramesThisCapture;
+
+    // Incomplete-frame check safety switch (see OnFrameReady).
+    private const int DisableFrameSizeCheckAfter = 20;
+    private int _consecutiveIncompleteFrames;
+    private volatile bool _frameSizeCheckDisabled;
 
     // Trigger settings found in the camera before this program changed them;
     // put back on disconnect so other programs (e.g. CamExpert) see the camera as it was.
@@ -717,6 +726,9 @@ options);
     /// <param name="args">The SapXferNotifyEventArgs instance containing event data.</param>
     private void OnFrameReady(object sender, SapXferNotifyEventArgs args)
     {
+        // Arrival time first, before anything else in the callback can delay it.
+        long hostTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+
         if (args.Context is SapView view)
             view.Show();
 
@@ -724,6 +736,53 @@ options);
         // while a capture is running (StartManagedFrameCapture).
         if (!_isCapturingManagedFrames)
             return;
+
+        // Every callback during a capture advances the frame number, including
+        // the ones skipped below, so in encoder mode the head and tail numbers
+        // stay one-per-pulse and can be paired on (FramePairing).
+        long frameNumber;
+        lock (_frameCounterLock)
+            frameNumber = ++_frameCounter;
+
+        // Trash: the program fell behind and Sapera wrote this frame into the
+        // spare trash buffer. Its data is not a reliable new frame; skip it.
+        if (args.Trash)
+        {
+            int trash = Interlocked.Increment(ref _trashFramesThisCapture);
+            if (trash == 1 || trash % 10 == 0)
+                LogDiagnostics($"Frame {frameNumber} went to the trash buffer (the program fell behind); skipped. {trash} this capture.");
+            return;
+        }
+
+        // GigE packet loss leaves a frame with fewer bytes than the image. It
+        // would be copied as a full image with a garbage or stale lower part.
+        if (!_frameSizeCheckDisabled &&
+            !IsFrameComplete(out int bytesReceived, out int bytesExpected))
+        {
+            // Safety: if EVERY frame reads short, the byte count is not what this
+            // check assumes (e.g. the driver reports it differently). Stop
+            // checking instead of throwing every frame away.
+            if (++_consecutiveIncompleteFrames >= DisableFrameSizeCheckAfter)
+            {
+                _frameSizeCheckDisabled = true;
+                LogDiagnostics(
+                    $"ERROR: {DisableFrameSizeCheckAfter} frames in a row read {bytesReceived} of {bytesExpected} bytes. " +
+                    "The incomplete-frame check is switched off for this session so frames are not all discarded; " +
+                    "check the camera pixel format and the network (packet size) settings.");
+                // Fall through and use this frame as before.
+            }
+            else
+            {
+                int incomplete = Interlocked.Increment(ref _incompleteFramesThisCapture);
+                if (incomplete == 1 || incomplete % 10 == 0)
+                    LogDiagnostics($"Frame {frameNumber} incomplete: {bytesReceived} of {bytesExpected} bytes received (packet loss); skipped. {incomplete} this capture.");
+                return;
+            }
+        }
+        else
+        {
+            _consecutiveIncompleteFrames = 0;
+        }
 
         try
         {
@@ -734,10 +793,6 @@ options);
                 return;
             }
 
-            long frameNumber;
-            lock (_frameCounterLock)
-                frameNumber = ++_frameCounter;
-
             EventHandler<CameraFrameEventArgs>? handler = FrameAcquired;
             if (handler is null)
             {
@@ -745,7 +800,7 @@ options);
                 return;
             }
 
-            handler(this, new CameraFrameEventArgs(managedFrame, frameNumber, DateTime.UtcNow));
+            handler(this, new CameraFrameEventArgs(managedFrame, frameNumber, DateTime.UtcNow, hostTicks));
         }
         catch (Exception ex)
         {
@@ -753,6 +808,34 @@ options);
         }
     }
 
+
+    /// <summary>
+    /// True unless the current buffer holds fewer bytes than a full Mono8 image
+    /// (GigE packet loss). When the byte count cannot be read the frame is
+    /// treated as complete, as before.
+    /// </summary>
+    private bool IsFrameComplete(out int bytesReceived, out int bytesExpected)
+    {
+        bytesReceived = 0;
+        bytesExpected = 0;
+
+        SapBuffer? buffer = _buffer;
+        if (buffer is null)
+            return true;
+
+        try
+        {
+            bytesExpected = checked((int)buffer.Width * (int)buffer.Height);
+            bytesReceived = buffer.get_SpaceUsed(buffer.Index);
+
+            // 0 means the driver did not report it; do not reject on that.
+            return bytesReceived <= 0 || bytesReceived >= bytesExpected;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
+    }
 
     /// <summary>
     /// Extracts a managed Emgu CV Mat frame from the current Sapera buffer. Validates the buffer geometry and pixel
@@ -848,6 +931,8 @@ options);
             throw new InvalidOperationException("Camera is not connected.");
         lock (_frameCounterLock)
             _frameCounter = 0;
+        Interlocked.Exchange(ref _trashFramesThisCapture, 0);
+        Interlocked.Exchange(ref _incompleteFramesThisCapture, 0);
         _isCapturingManagedFrames = true;
     }
 
@@ -855,6 +940,12 @@ options);
     /// Stops managed frame capture, which stops raising the FrameAcquired event for each frame.
     /// </summary>
     public void StopManagedFrameCapture() => _isCapturingManagedFrames = false;
+
+    /// <summary>Frames skipped as trash (program fell behind) since the last StartManagedFrameCapture.</summary>
+    public int TrashFramesThisCapture => Volatile.Read(ref _trashFramesThisCapture);
+
+    /// <summary>Frames skipped as incomplete (GigE packet loss) since the last StartManagedFrameCapture.</summary>
+    public int IncompleteFramesThisCapture => Volatile.Read(ref _incompleteFramesThisCapture);
 
     /// <summary>
     /// Attempts to restore the camera's original settings (TriggerMode, TriggerSource) that were present

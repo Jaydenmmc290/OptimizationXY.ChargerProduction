@@ -42,6 +42,18 @@ public static class ScanTimeline
         }
     }
 
+    /// <summary>Seconds since <see cref="Start"/> (frozen once stopped).</summary>
+    public static double ElapsedSeconds
+    {
+        get
+        {
+            lock (Sync)
+            {
+                return Clock.Elapsed.TotalSeconds;
+            }
+        }
+    }
+
     /// <summary>Stops the timeline; later marks are ignored until the next Start.</summary>
     public static void Stop()
     {

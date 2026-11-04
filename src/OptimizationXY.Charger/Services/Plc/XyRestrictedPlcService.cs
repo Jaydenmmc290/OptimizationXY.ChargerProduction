@@ -266,47 +266,51 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         }
 
         var written = new List<string>();
+        var sendClock = System.Diagnostics.Stopwatch.StartNew();
+
+        // Default order: the carriage retract radius goes first so the carriage
+        // can clear the block before the new head/tail position is acted on.
+        // ScannedBlockData is the complete result packet.
+        (XyTag Tag, float[] Values)[] writes = _settings.WriteCarriageRetractFirst
+            ?
+            [
+                (XyTag.CarriageRetract, payload.CarriageRetract),
+                (XyTag.RoundupComplete, payload.RoundupComplete),
+                (XyTag.ScannedBlockData, payload.ScannedBlockData)
+            ]
+            :
+            [
+                (XyTag.ScannedBlockData, payload.ScannedBlockData),
+                (XyTag.CarriageRetract, payload.CarriageRetract),
+                (XyTag.RoundupComplete, payload.RoundupComplete)
+            ];
 
         try
         {
-            // Default order: the carriage retract radius goes first so the carriage
-            // can clear the block before the new head/tail position is acted on.
-            if (_settings.WriteCarriageRetractFirst)
+            if (_settings.RequireReadbackVerification &&
+                _settings.VerifyReadbackAfterAllWrites)
             {
-                await WriteAndVerifyAsync(
-                    XyTag.CarriageRetract,
-                    payload.CarriageRetract,
-                    written,
-                    token).ConfigureAwait(false);
+                // Write all three back to back, then read all three back at
+                // once: still verified, but one PLC round trip instead of three
+                // before the block can move.
+                foreach ((XyTag tag, float[] values) in writes)
+                    WriteOnly(tag, values, written, token);
 
-                await WriteAndVerifyAsync(
-                    XyTag.RoundupComplete,
-                    payload.RoundupComplete,
-                    written,
-                    token).ConfigureAwait(false);
+                await VerifyReadbacksAsync(writes, token).ConfigureAwait(false);
+            }
+            else
+            {
+                foreach ((XyTag tag, float[] values) in writes)
+                {
+                    await WriteAndVerifyAsync(
+                        tag,
+                        values,
+                        written,
+                        token).ConfigureAwait(false);
+                }
             }
 
-            // ScannedBlockData is written last and acts as the complete result packet.
-            await WriteAndVerifyAsync(
-                XyTag.ScannedBlockData,
-                payload.ScannedBlockData,
-                written,
-                token).ConfigureAwait(false);
-
-            if (!_settings.WriteCarriageRetractFirst)
-            {
-                await WriteAndVerifyAsync(
-                    XyTag.CarriageRetract,
-                    payload.CarriageRetract,
-                    written,
-                    token).ConfigureAwait(false);
-
-                await WriteAndVerifyAsync(
-                    XyTag.RoundupComplete,
-                    payload.RoundupComplete,
-                    written,
-                    token).ConfigureAwait(false);
-            }
+            Log($"PLC write{(_settings.RequireReadbackVerification ? " + readback" : string.Empty)} took {sendClock.Elapsed.TotalMilliseconds:F0} ms.");
 
             record.Success = true;
             // Reaching here means every write (and readback, if required) succeeded.
@@ -328,6 +332,101 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
             record.Message = $"PLC payload transmission failed: {ex.Message}";
             Log(record.Message);
             return record;
+        }
+    }
+
+    /// <summary>Writes one tag without waiting for a readback.</summary>
+    private void WriteOnly(
+        XyTag tag,
+        float[] values,
+        List<string> written,
+        CancellationToken token)
+    {
+        if (_xy is null || !_xy.IsConnected)
+            throw new InvalidOperationException("PLC connection was lost before write.");
+
+        token.ThrowIfCancellationRequested();
+
+        string tagName = tag.ToTagName();
+        _xy.WriteTag(tag, values);
+        written.Add(tagName);
+        Log($"PLC write: {tagName} [{string.Join(", ", values.Select(v => v.ToString("F3", CultureInfo.InvariantCulture)))}]");
+    }
+
+    /// <summary>
+    /// Reads every written tag back at once and requires each to match what was
+    /// written (same rules as <see cref="WriteAndVerifyAsync"/>). One timeout,
+    /// ReadbackTimeoutMilliseconds, covers all of them.
+    /// </summary>
+    private async Task VerifyReadbacksAsync(
+        IReadOnlyList<(XyTag Tag, float[] Values)> writes,
+        CancellationToken token)
+    {
+        if (_xy is null || !_xy.IsConnected)
+            throw new InvalidOperationException("PLC connection was lost before readback.");
+
+        var waiters = new List<(string TagName, float[] Expected, TaskCompletionSource<TagDataChangedEventArgs> Waiter)>();
+
+        try
+        {
+            foreach ((XyTag tag, float[] values) in writes)
+            {
+                string tagName = tag.ToTagName();
+                var tcs = new TaskCompletionSource<TagDataChangedEventArgs>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+
+                if (!_pendingReadbacks.TryAdd(tagName, tcs))
+                {
+                    throw new InvalidOperationException(
+                        $"A readback request is already pending for {tagName}.");
+                }
+
+                waiters.Add((tagName, values, tcs));
+            }
+
+            foreach ((XyTag tag, _) in writes)
+                _xy.ReadTag(tag);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeoutCts.CancelAfter(_settings.ReadbackTimeoutMilliseconds);
+
+            foreach ((string tagName, float[] expected, TaskCompletionSource<TagDataChangedEventArgs> waiter) in waiters)
+            {
+                TagDataChangedEventArgs readback;
+
+                try
+                {
+                    readback = await waiter.Task
+                        .WaitAsync(timeoutCts.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"Timed out waiting for PLC readback of {tagName}.");
+                }
+
+                if (_settings.RequireGoodQuality && !readback.IsGood)
+                {
+                    throw new InvalidOperationException(
+                        $"PLC readback quality was bad for {tagName}.");
+                }
+
+                double[] actual = FlattenNumericValues(readback);
+
+                if (!ValuesMatch(expected, actual, _settings.FloatComparisonTolerance))
+                {
+                    throw new InvalidOperationException(
+                        $"PLC readback mismatch for {tagName}. " +
+                        $"Expected [{string.Join(", ", expected)}], " +
+                        $"received [{string.Join(", ", actual.Select(v => v.ToString("F3", CultureInfo.InvariantCulture)))}].");
+                }
+            }
+        }
+        finally
+        {
+            foreach ((string tagName, _, _) in waiters)
+                _pendingReadbacks.TryRemove(tagName, out _);
         }
     }
 

@@ -15,6 +15,7 @@ using OptimizationXY.Charger.Models.Settings;
 using OptimizationXY.Charger.Models.Production;
 using OptimizationXY.Charger.Models.Plc;
 using OptimizationXY.Charger.Models.Operator;
+using OptimizationXY.Charger.Services.Plc;
 
 namespace OptimizationXY.Charger.Services.Core
 {
@@ -77,6 +78,8 @@ namespace OptimizationXY.Charger.Services.Core
         public ProductionReadinessReport? ProductionReadiness { get; set; }
         /// <summary>The exact payload (inches) built for the PLC, or null if it could not be built.</summary>
         public PlcCommandPayload? PlcPayload { get; set; }
+        /// <summary>What the PLC stroke guard did to the head/tail move in <see cref="PlcPayload"/> (null until the payload is built).</summary>
+        public PlcStrokeGuardResult? PlcStrokeGuard { get; set; }
         /// <summary>What happened when the payload was written to the PLC.</summary>
         public PlcTransmissionRecord? PlcTransmission { get; set; }
         /// <summary>Feedback read back from the PLC after the write.</summary>
@@ -235,6 +238,7 @@ namespace OptimizationXY.Charger.Services.Core
             ProductionRunSequence = 0;
             ProductionReadiness = null;
             PlcPayload = null;
+            PlcStrokeGuard = null;
             PlcTransmission = null;
             MachineFeedback = null;
             OperatorScanQuality = null;

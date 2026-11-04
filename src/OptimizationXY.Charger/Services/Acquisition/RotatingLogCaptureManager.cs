@@ -325,6 +325,8 @@ public sealed class RotatingLogCaptureManager
                 var scanFrame = new ScanFrame
                 {
                     FrameIndex = frameIndex,
+                    SourceFrameNumber = frameArgs.FrameNumber,
+                    CaptureTicks = frameArgs.HostTicks,
                     // Provisional angle (index x nominal step); the measured angle is assigned later.
                     AngleDeg =
                         frameIndex *
@@ -408,6 +410,13 @@ public sealed class RotatingLogCaptureManager
 
             List<ScanFrame> concatenatedFrames;
 
+            // Which head frame goes with which tail frame (FramePairing): by
+            // encoder pulse or arrival time, so one extra or missing frame on one
+            // camera does not shift every pair after it. Capture order is the
+            // fallback, and the only method when FramePairing.Enabled is false.
+            FramePairingResult pairing = PairFrames(_headFrames, _tailFrames);
+            LogDiagnostics($"Frame pairing: {pairing.Describe()}.");
+
             try
             {
                 concatenatedFrames =
@@ -415,7 +424,8 @@ public sealed class RotatingLogCaptureManager
                         _headFrames,
                         _tailFrames,
                         _settings.Concatenation,
-                        _settings.GetAngularStepDegrees());
+                        _settings.GetAngularStepDegrees(),
+                        pairing.Pairs);
             }
             finally
             {
@@ -470,6 +480,44 @@ public sealed class RotatingLogCaptureManager
         }
     }
     
+    /// <summary>
+    /// Pairs this capture's head and tail frames (both in FrameIndex order) per
+    /// the FramePairing settings, dropping FramePairsToToss leading pairs.
+    /// </summary>
+    private FramePairingResult PairFrames(List<ScanFrame> headFrames, List<ScanFrame> tailFrames)
+    {
+        List<ScanFrame> head = [.. headFrames.OrderBy(frame => frame.FrameIndex)];
+        List<ScanFrame> tail = [.. tailFrames.OrderBy(frame => frame.FrameIndex)];
+
+        FramePairingSettings pairingSettings = _settings.FramePairing ?? new();
+
+        FramePairingResult pairing = pairingSettings.Enabled
+            ? FramePairing.Pair(
+                [.. head.Select(f => f.CaptureTicks)],
+                [.. tail.Select(f => f.CaptureTicks)],
+                [.. head.Select(f => f.SourceFrameNumber)],
+                [.. tail.Select(f => f.SourceFrameNumber)],
+                pulseTriggered: _settings.HeadCamera.Mode == AcquisitionMode.Encoder &&
+                                _settings.TailCamera.Mode == AcquisitionMode.Encoder)
+            : FramePairing.PairByOrder(head.Count, tail.Count);
+
+        int toss = Math.Clamp(pairingSettings.FramePairsToToss, 0, Math.Max(0, pairing.Pairs.Count - 1));
+
+        if (toss > 0)
+        {
+            foreach (FramePair pair in pairing.Pairs.Take(toss))
+            {
+                pairing.UnpairedHead.Add(pair.HeadIndex);
+                pairing.UnpairedTail.Add(pair.TailIndex);
+            }
+
+            pairing.Pairs.RemoveRange(0, toss);
+            pairing.Method += $", first {toss} pair(s) tossed";
+        }
+
+        return pairing;
+    }
+
     /// <summary>
     /// Cancels the current capture session and releases all resources.
     /// </summary>

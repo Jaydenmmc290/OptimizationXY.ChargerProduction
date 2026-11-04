@@ -43,6 +43,17 @@ jobs:
           Select-String -Path build.log -Pattern ': error ' | Select-Object -First 40 | ForEach-Object { Write-Output "::error::$($_.Line)" }
           exit $code
 
+      # Compiles the camera code (GenieNanoCameraService, #if SAPERA) against the
+      # Sapera assembly kept in lib/Sapera8, so a camera-code change that would
+      # not build on the production computer is caught here. Compile only.
+      - name: Compile check with the bundled Sapera reference
+        shell: pwsh
+        run: |
+          dotnet build src/OptimizationXY.Charger/OptimizationXY.Charger.csproj -c Release -p:UseSapera=false -p:UseSapera8=true -p:SkipLicx=true -p:Platform=x64 -o sapera-check -clp:NoSummary 2>&1 | Tee-Object -FilePath sapera.log
+          $code = $LASTEXITCODE
+          Select-String -Path sapera.log -Pattern ': error ' | Select-Object -First 40 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+          exit $code
+
       - name: Run tests
         shell: pwsh
         run: |

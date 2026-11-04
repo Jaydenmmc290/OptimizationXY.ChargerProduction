@@ -51,7 +51,18 @@ public sealed class LogProcessingCoordinator
         // The previous block may still be saving (the save now runs after the
         // PLC write). Processing clears and reuses the shared pipeline state, so
         // it must not begin until that save has completely finished.
+        var saveWait = Stopwatch.StartNew();
+        bool saveWasRunning = IsSaveInProgress;
         await WaitForPendingSaveAsync();
+
+        // This wait sits between ScanComplete and the PLC write. Report it so a
+        // slow save (frame PNGs, SQL) shows up as the cause of a late result.
+        if (saveWasRunning)
+        {
+            LogDiagnostics(
+                $"{(saveWait.Elapsed.TotalSeconds >= 1.0 ? "WARNING: " : string.Empty)}" +
+                $"Waited {saveWait.Elapsed.TotalSeconds:F2} s for the previous block's save to finish before processing this block.");
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -126,7 +137,12 @@ public sealed class LogProcessingCoordinator
             LogDiagnostics("Loading scanner calibration...");
             // Load the active calibration and refuse to continue if this capture was
             // not taken with the same camera settings / image geometry it was built for.
-            var lookupTable = LookupTableStore.Load();
+            // Fully re-validated whenever the calibration folder changes; otherwise
+            // the table validated on an earlier scan is reused (saves re-hashing the
+            // package between ScanComplete and the PLC write on every block).
+            var calibrationClock = Stopwatch.StartNew();
+            var lookupTable = LookupTableStore.LoadForScan();
+            LogDiagnostics($"Scanner calibration ready in {calibrationClock.Elapsed.TotalMilliseconds:F0} ms.");
             VerifyCaptureMatchesCalibration(
                 lookupTable,
                 state.HeadCameraConfigurationSnapshot,
@@ -363,6 +379,28 @@ public sealed class LogProcessingCoordinator
                         $"including {state.PlcPayload.KnifeClearanceMM:F3} in knife clearance " +
                         "(payload values are inches)."
                 });
+        }
+
+        // The stroke guard never blocks: a move the PLC would refuse has already
+        // been scaled to what it executes. Reported as a warning so it is visible.
+        if (state.PlcStrokeGuard is not null)
+        {
+            string guardSummary = state.PlcStrokeGuard.Summary();
+
+            state.ProductionReadiness.Checks.Add(
+                new ProductionReadinessCheck
+                {
+                    Name = "PLC stroke guard",
+                    Status = state.PlcStrokeGuard.Limited
+                        ? ProductionCheckStatus.Warning
+                        : ProductionCheckStatus.Pass,
+                    Message = guardSummary
+                });
+
+            LogDiagnostics(
+                state.PlcStrokeGuard.Limited
+                    ? "WARNING: " + guardSummary
+                    : guardSummary);
         }
 
         string report = state.ProductionReadiness.BuildSummary();

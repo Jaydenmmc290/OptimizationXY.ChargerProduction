@@ -70,6 +70,88 @@ public static class LookupTableStore
     }
 
 
+    // ------------------------------------------------------------------
+    // Per-scan cache. Load() hashes every package file and parses the JSON;
+    // done on every scan that sits between ScanComplete and the PLC write.
+    // LoadForScan() does the same full Load() the first time and whenever any
+    // file in the calibration folder changes (name, size or write time), and
+    // otherwise hands back the table it already validated. The calibration
+    // itself is never changed here; the table is only read by the pipeline.
+    // ------------------------------------------------------------------
+    private static ScannerLookupTable? _cachedTable;
+    private static string? _cachedFingerprint;
+
+    /// <summary>
+    /// The active lookup table for a production scan: the full validated
+    /// <see cref="Load"/> when the calibration folder has changed since the last
+    /// call, otherwise the table already validated. The caller must not modify it.
+    /// </summary>
+    public static ScannerLookupTable LoadForScan()
+    {
+        lock (Sync)
+        {
+            string? fingerprint = TryFingerprintCalibrationFolder();
+
+            if (fingerprint is not null &&
+                _cachedTable is not null &&
+                string.Equals(fingerprint, _cachedFingerprint, StringComparison.Ordinal))
+            {
+                return _cachedTable;
+            }
+
+            ScannerLookupTable table = Load();
+
+            // Taken after Load(): a damaged package may just have been restored.
+            _cachedFingerprint = TryFingerprintCalibrationFolder();
+            _cachedTable = _cachedFingerprint is null ? null : table;
+            return table;
+        }
+    }
+
+    /// <summary>Forgets the cached table (after a calibration is activated or restored).</summary>
+    public static void InvalidateScanCache()
+    {
+        lock (Sync)
+        {
+            _cachedTable = null;
+            _cachedFingerprint = null;
+        }
+    }
+
+    /// <summary>Name, size and write time of every file in the calibration folder; null if it cannot be read.</summary>
+    private static string? TryFingerprintCalibrationFolder()
+    {
+        try
+        {
+            var directory = new DirectoryInfo(ApplicationPaths.CalibrationDirectory);
+
+            if (!directory.Exists)
+                return null;
+
+            var sb = new StringBuilder();
+
+            foreach (FileInfo file in directory
+                .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
+                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.Append(file.Name)
+                  .Append('|').Append(file.Length)
+                  .Append('|').Append(file.LastWriteTimeUtc.Ticks)
+                  .Append(';');
+            }
+
+            return sb.ToString();
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// Validates the loaded scanner lookup table (<see cref="ScannerLookupTable.IsValid"/>)
     /// and rejects tables made by the old "estimated scanner-orientation grid" fallback.

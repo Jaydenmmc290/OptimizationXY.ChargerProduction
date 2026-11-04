@@ -23,9 +23,10 @@ using OptimizationXY.Charger.Models.Calibration;
 // Activate(): stage -> validate -> archive the current package -> copy each
 // file into place via a temporary ".new" file and rename -> validate again
 // -> load it with the real production loader. On any failure the newest
-// valid archive is restored. EnsureActivePackageValid() runs before every
-// scan and also falls back to the newest valid archive if the active package
-// is damaged.
+// valid archive is restored. EnsureActivePackageValid() runs on every full
+// load (LookupTableStore.Load: the first scan, and every scan after any file
+// in the calibration folder changes) and also falls back to the newest valid
+// archive if the active package is damaged.
 // =============================================================================
 
 namespace OptimizationXY.Charger.Services.Calibration;
@@ -123,6 +124,9 @@ public static class CalibrationPackageStore
             tailCameraConfiguration);
 
         ApplicationPaths.EnsureCreated();
+
+        // A production scan must never reuse the table cached before this activation.
+        LookupTableStore.InvalidateScanCache();
 
         string stagingDirectory = Path.Combine(
             ApplicationPaths.CalibrationStagingDirectory,

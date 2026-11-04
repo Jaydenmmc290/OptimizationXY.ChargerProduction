@@ -58,6 +58,12 @@ public sealed class GenieNanoCameraService : IDisposable
     {
     }
 
+    /// <summary>Always 0 without Sapera.</summary>
+    public int TrashFramesThisCapture => 0;
+
+    /// <summary>Always 0 without Sapera.</summary>
+    public int IncompleteFramesThisCapture => 0;
+
     public void Disconnect()
     {
     }
