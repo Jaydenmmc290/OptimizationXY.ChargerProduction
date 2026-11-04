@@ -467,6 +467,9 @@ public sealed class LogProcessingCoordinator
             ScanSaveResult result = ScanResultSaveService.Save(PipelineState.Instance);
 
             LogDiagnostics($"Results saved to: {result.FolderPath}");
+
+            if (FrameArchiveWriter.Backlog > 0)
+                LogDiagnostics($"Frame images still being written in the background: {FrameArchiveWriter.Backlog}.");
             LogDiagnostics(result.DatabaseStatus);
 
             return result.FolderPath;

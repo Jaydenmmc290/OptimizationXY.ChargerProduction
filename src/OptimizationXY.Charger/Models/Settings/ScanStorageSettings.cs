@@ -19,4 +19,14 @@ public sealed class ScanStorageSettings
     /// </summary>
     public bool AutoDeleteOldScans { get; set; } = true;
 
+    /// <summary>
+    /// Write the scan's frame PNGs on a background thread (FrameArchiveWriter)
+    /// so the next block is not held up by the archive. No frame is dropped: a
+    /// full queue writes the frame straight away. False writes them inside the
+    /// save, as before.
+    /// </summary>
+    public bool BackgroundFrameArchive { get; set; } = true;
+
+    /// <summary>Frames that may wait for the archive thread (about 3 blocks at ~100 frames each).</summary>
+    public int FrameArchiveQueueCapacity { get; set; } = 300;
 }
