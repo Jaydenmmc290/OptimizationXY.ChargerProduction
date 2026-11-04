@@ -58,6 +58,11 @@ public sealed class GenieNanoCameraService : IDisposable
     private int _trashFramesThisCapture;
     private int _incompleteFramesThisCapture;
 
+    // Incomplete-frame check safety switch (see OnFrameReady).
+    private const int DisableFrameSizeCheckAfter = 20;
+    private int _consecutiveIncompleteFrames;
+    private volatile bool _frameSizeCheckDisabled;
+
     // Trigger settings found in the camera before this program changed them;
     // put back on disconnect so other programs (e.g. CamExpert) see the camera as it was.
     private string? _originalTriggerMode;
@@ -751,12 +756,32 @@ options);
 
         // GigE packet loss leaves a frame with fewer bytes than the image. It
         // would be copied as a full image with a garbage or stale lower part.
-        if (!IsFrameComplete(out int bytesReceived, out int bytesExpected))
+        if (!_frameSizeCheckDisabled &&
+            !IsFrameComplete(out int bytesReceived, out int bytesExpected))
         {
-            int incomplete = Interlocked.Increment(ref _incompleteFramesThisCapture);
-            if (incomplete == 1 || incomplete % 10 == 0)
-                LogDiagnostics($"Frame {frameNumber} incomplete: {bytesReceived} of {bytesExpected} bytes received (packet loss); skipped. {incomplete} this capture.");
-            return;
+            // Safety: if EVERY frame reads short, the byte count is not what this
+            // check assumes (e.g. the driver reports it differently). Stop
+            // checking instead of throwing every frame away.
+            if (++_consecutiveIncompleteFrames >= DisableFrameSizeCheckAfter)
+            {
+                _frameSizeCheckDisabled = true;
+                LogDiagnostics(
+                    $"ERROR: {DisableFrameSizeCheckAfter} frames in a row read {bytesReceived} of {bytesExpected} bytes. " +
+                    "The incomplete-frame check is switched off for this session so frames are not all discarded; " +
+                    "check the camera pixel format and the network (packet size) settings.");
+                // Fall through and use this frame as before.
+            }
+            else
+            {
+                int incomplete = Interlocked.Increment(ref _incompleteFramesThisCapture);
+                if (incomplete == 1 || incomplete % 10 == 0)
+                    LogDiagnostics($"Frame {frameNumber} incomplete: {bytesReceived} of {bytesExpected} bytes received (packet loss); skipped. {incomplete} this capture.");
+                return;
+            }
+        }
+        else
+        {
+            _consecutiveIncompleteFrames = 0;
         }
 
         try
