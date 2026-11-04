@@ -365,6 +365,28 @@ public sealed class LogProcessingCoordinator
                 });
         }
 
+        // The stroke guard never blocks: a move the PLC would refuse has already
+        // been scaled to what it executes. Reported as a warning so it is visible.
+        if (state.PlcStrokeGuard is not null)
+        {
+            string guardSummary = state.PlcStrokeGuard.Summary();
+
+            state.ProductionReadiness.Checks.Add(
+                new ProductionReadinessCheck
+                {
+                    Name = "PLC stroke guard",
+                    Status = state.PlcStrokeGuard.Limited
+                        ? ProductionCheckStatus.Warning
+                        : ProductionCheckStatus.Pass,
+                    Message = guardSummary
+                });
+
+            LogDiagnostics(
+                state.PlcStrokeGuard.Limited
+                    ? "WARNING: " + guardSummary
+                    : guardSummary);
+        }
+
         string report = state.ProductionReadiness.BuildSummary();
         state.DiagnosticsReport += Environment.NewLine + report;
         LogDiagnostics(report.TrimEnd());

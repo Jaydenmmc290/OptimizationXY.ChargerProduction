@@ -1,6 +1,7 @@
 using OptimizationXY.Charger.Models.Geometry;
 using OptimizationXY.Charger.Models.Plc;
 using OptimizationXY.Charger.Services.Core;
+using OptimizationXY.Charger.Services.Plc;
 
 namespace OptimizationXY.Charger.Services.Production;
 
@@ -12,7 +13,9 @@ namespace OptimizationXY.Charger.Services.Production;
 /// Every value is converted from millimetres to INCHES here (the property
 /// names still end in "MM" for historical reasons). What is sent:
 /// <list type="bullet">
-/// <item><description>Head/tail X/Y: the recommendation's commands (Command = -selected axis offset).</description></item>
+/// <item><description>Head/tail X/Y: the recommendation's commands (Command = -selected axis offset), passed
+/// through <see cref="PlcStrokeGuard"/> so the PLC executes them (an end the PLC would refuse is scaled
+/// down, direction kept; see state.PlcStrokeGuard for what changed).</description></item>
 /// <item><description>Small/large diameter: LogGeometryModel min/max (2 x min/max centreline radius).</description></item>
 /// <item><description>Largest/smallest measured radius: from the binned centreline field (max of cell max, min of cell min).</description></item>
 /// <item><description>Knife clearance: veneer thickness x max(10, multiplier) (+ buffer, minimum floor).</description></item>
@@ -72,6 +75,31 @@ public static class PlcPayloadBuilder
             state.Settings.Safety.ComputeKnifeClearanceMM(
                 state.Settings.UsableRadius.VeneerThicknessMM);
 
+        ValidateFinite(
+            recommendation.CommandHeadXMM,
+            recommendation.CommandHeadYMM,
+            recommendation.CommandTailXMM,
+            recommendation.CommandTailYMM);
+
+        // Final guard: the PLC refuses (and moves nothing) when a cylinder target
+        // or the X move after its rotation is past what the machine executes. The
+        // optimizer's position is not changed; only a move the PLC would refuse is
+        // scaled down, direction kept. Done before the retract radius below so the
+        // radius is worked out for the axis the PLC will actually move to.
+        PlcStrokeGuardResult guard = PlcStrokeGuard.Apply(
+            recommendation.CommandHeadXMM * MM_TO_INCHES,
+            recommendation.CommandHeadYMM * MM_TO_INCHES,
+            recommendation.CommandTailXMM * MM_TO_INCHES,
+            recommendation.CommandTailYMM * MM_TO_INCHES,
+            state.Settings.PlcStrokeGuard ?? new());
+
+        state.PlcStrokeGuard = guard;
+
+        double sentHeadXMM = guard.Sent[0] / MM_TO_INCHES;
+        double sentHeadYMM = guard.Sent[1] / MM_TO_INCHES;
+        double sentTailXMM = guard.Sent[2] / MM_TO_INCHES;
+        double sentTailYMM = guard.Sent[3] / MM_TO_INCHES;
+
         // The carriage must clear the block as it actually turns. largestRadiusMM
         // above is measured from the fitted PCA centreline, but the block spins
         // around the spindle axis, which is offset from that centreline by up to
@@ -80,20 +108,20 @@ public static class PlcPayloadBuilder
         // never smaller than it was and covers the real swing.
         double swingRadiusMM = LargestSwingRadiusMM(
             state.PointCloud,
-            recommendation.CommandTailXMM,
-            recommendation.CommandTailYMM,
-            recommendation.CommandHeadXMM,
-            recommendation.CommandHeadYMM);
+            sentTailXMM,
+            sentTailYMM,
+            sentHeadXMM,
+            sentHeadYMM);
 
         double retractBaseRadiusMM = double.IsFinite(swingRadiusMM)
             ? Math.Max(largestRadiusMM, swingRadiusMM)
             : largestRadiusMM;
 
         ValidateFinite(
-            recommendation.CommandHeadXMM,
-            recommendation.CommandHeadYMM,
-            recommendation.CommandTailXMM,
-            recommendation.CommandTailYMM,
+            sentHeadXMM,
+            sentHeadYMM,
+            sentTailXMM,
+            sentTailYMM,
             state.Model.MinDiameterMM,
             state.Model.MaxDiameterMM,
             largestRadiusMM,
@@ -134,10 +162,10 @@ public static class PlcPayloadBuilder
         PlcCommandPayload payload = new()
         {
             BlockCount = blockCount,
-            HeadXMM = recommendation.CommandHeadXMM * MM_TO_INCHES,
-            HeadYMM = recommendation.CommandHeadYMM * MM_TO_INCHES,
-            TailXMM = recommendation.CommandTailXMM * MM_TO_INCHES,
-            TailYMM = recommendation.CommandTailYMM * MM_TO_INCHES,
+            HeadXMM = guard.Sent[0],
+            HeadYMM = guard.Sent[1],
+            TailXMM = guard.Sent[2],
+            TailYMM = guard.Sent[3],
             SmallDiameterMM = state.Model.MinDiameterMM * MM_TO_INCHES,
             LargeDiameterMM = state.Model.MaxDiameterMM * MM_TO_INCHES,
             LargestMeasuredRadiusMM = largestRadiusMM * MM_TO_INCHES,
