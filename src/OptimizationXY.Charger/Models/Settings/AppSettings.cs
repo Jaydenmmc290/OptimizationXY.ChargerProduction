@@ -988,6 +988,12 @@ public sealed class PlcIntegrationSettings
     /// Good scan (a Warning scan is then blocked, not just a Failed one).
     /// </summary>
     public bool RequireGoodQuality { get; set; } = true;
+    /// <summary>
+    /// With readback on: write all three tags back to back, then read all three
+    /// back at once (one round trip). False reads each tag back before writing
+    /// the next (three round trips, the earlier behaviour).
+    /// </summary>
+    public bool VerifyReadbackAfterAllWrites { get; set; } = true;
     /// <summary>How long to wait for the readback to match, in milliseconds.</summary>
     public int ReadbackTimeoutMilliseconds { get; set; } = 5000;
     /// <summary>Largest difference allowed between a written and a read-back FLOAT value.</summary>

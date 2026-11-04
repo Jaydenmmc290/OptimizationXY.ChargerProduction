@@ -75,7 +75,7 @@ public class PlcStrokeGuardTests
     [InlineData(-1.297507, 0.4901847, 0.7506393, -0.3777358, 0.568, 315.0, 129.0)]
     [InlineData(-1.216916, 0.5188028, 0.5568191, -0.1917769, 1.061, 135.0, 319.1)]
     [InlineData(-1.272461, 0.4113593, 0.5234476, -0.2710099, 0.575, 315.0, 125.5)]
-    public void Predict_ReproducesThePlcsRotation(double dx, double dy, double tx, double ty, double src, double newDog, double newTail)
+    public void PredictReproducesThePlcsRotation(double dx, double dy, double tx, double ty, double src, double newDog, double newTail)
     {
         KinematicZonePrediction p = PlcStrokeGuard.Predict(dx, dy, tx, ty, L, R, false);
 
@@ -89,7 +89,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void Angle_MatchesTheRoutine()
+    public void AngleMatchesTheRoutine()
     {
         Assert.Equal(45.0, PlcStrokeGuard.Angle(1, 1), 0.01);
         Assert.Equal(135.0, PlcStrokeGuard.Angle(-1, 1), 0.01);
@@ -103,7 +103,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void Model_ReproducesThePlcTargets_FromTheValuesSent()
+    public void ModelReproducesThePlcTargetsFromTheValuesSent()
     {
         foreach (Record r in Records)
         {
@@ -120,7 +120,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void Block65_HeadScaledUntilA1IsAtTheNegativeLimit_TailUntouched()
+    public void Block65HeadScaledUntilA1IsAtTheNegativeLimitTailUntouched()
     {
         Record r = Records[2];
         PlcStrokeGuardResult x = Apply(r.Sent, Settings());
@@ -142,7 +142,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void Block85_TailScaledUntilA2IsAtThePositiveLimit()
+    public void Block85TailScaledUntilA2IsAtThePositiveLimit()
     {
         PlcStrokeGuardResult x = Apply(Records[4].Sent, Settings());
 
@@ -154,7 +154,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void EveryOverLimitBlock_IsBroughtWithinTheLimits_AndTheRestUntouched()
+    public void EveryOverLimitBlockIsBroughtWithinTheLimitsAndTheRestUntouched()
     {
         foreach (Record r in Records)
         {
@@ -174,7 +174,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void XLimit_EveryRefusedBlockEndsWithinTheLimit_ExecutedOnesKeepTheirMove()
+    public void XLimitEveryRefusedBlockEndsWithinTheLimitExecutedOnesKeepTheirMove()
     {
         foreach (Record r in XRefused)
         {
@@ -202,7 +202,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void Defaults_AreTheMeasuredLimits()
+    public void DefaultsAreTheMeasuredLimits()
     {
         var s = new PlcStrokeGuardSettings();
 
@@ -217,7 +217,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void EndMoveCap_ShortensAMoveLongerThanTheLimit_DirectionKept()
+    public void EndMoveCapShortensAMoveLongerThanTheLimitDirectionKept()
     {
         var s = new PlcStrokeGuardSettings { MaxCylinderNegativeInches = 0, MaxCylinderPositiveInches = 0, MaxXAfterRotationInches = 0 };
         PlcStrokeGuardResult x = PlcStrokeGuard.Apply(0, 4.0, 0.3, 0.4, s);
@@ -230,7 +230,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void SmallMove_IsSentUnchanged()
+    public void SmallMoveIsSentUnchanged()
     {
         PlcStrokeGuardResult x = PlcStrokeGuard.Apply(0.25, -0.10, 0.40, 0.05, new PlcStrokeGuardSettings());
 
@@ -240,7 +240,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void Disabled_SendsTheValuesAsComputed()
+    public void DisabledSendsTheValuesAsComputed()
     {
         PlcStrokeGuardResult x = PlcStrokeGuard.Apply(2.5, 0, 2.5, 0, new PlcStrokeGuardSettings { Enabled = false });
 
@@ -250,7 +250,7 @@ public class PlcStrokeGuardTests
     }
 
     [Fact]
-    public void NaNEnd_IsLeftAlone_TheOtherEndStillGuarded()
+    public void NaNEndIsLeftAloneTheOtherEndStillGuarded()
     {
         PlcStrokeGuardResult x = PlcStrokeGuard.Apply(double.NaN, double.NaN, 2.5, 0, new PlcStrokeGuardSettings());
 
@@ -268,7 +268,7 @@ public class PlcResultWindowTests
     [InlineData(4.2, false, "(PLC waits 18 s)")]
     [InlineData(15.5, true, "close to the PLC's 18 s wait")]
     [InlineData(21.0, true, "fallback may already have positioned")]
-    public void Describe_SaysHowCloseTheResultCameToThePlcsWait(double seconds, bool late, string expected)
+    public void DescribeSaysHowCloseTheResultCameToThePlcsWait(double seconds, bool late, string expected)
     {
         string text = PlcResultWindow.Describe(seconds, 15.0, 18.0, out bool isLate);
 
