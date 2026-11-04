@@ -28,19 +28,25 @@ namespace OptimizationXY.Charger.Services.Plc;
 /// already high when the program starts is never treated as a new cycle.
 /// Tag changes arrive on the PLC library's thread (OnTagDataChanged).
 /// </remarks>
-public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : IDisposable
+public sealed class XyRestrictedPlcService(
+    PlcIntegrationSettings settings,
+    Func<IXyPlcConnection>? connectionFactory = null) : IDisposable
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly string ScanStartName = XyTag.ScanStart.ToTagName();
     private static readonly string ScanCompleteName = XyTag.ScanComplete.ToTagName();
 
     private readonly PlcIntegrationSettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<TagDataChangedEventArgs>>
+    // Null = the real XYRestricted connection. The dev-PC bench and the tests
+    // pass a FakeXyPlcConnection here; nothing else changes.
+    private readonly Func<IXyPlcConnection>? _connectionFactory = connectionFactory;
+
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<PlcTagUpdate>>
         _pendingReadbacks = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Lock _scanStateLock = new();
 
-    private XY? _xy;
+    private IXyPlcConnection? _xy;
     private bool _hasScanStartState;
     private bool _lastScanStart;
     private bool _scanCycleActive;
@@ -161,7 +167,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
                 DateTime.UtcNow.AddMilliseconds(
                     _settings.StartupNetworkWaitMilliseconds);
 
-            while (!PlcNetwork.IsRequiredNetworkAvailable())
+            while (_connectionFactory is null && !PlcNetwork.IsRequiredNetworkAvailable())
             {
                 token.ThrowIfCancellationRequested();
 
@@ -185,8 +191,8 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
             // IMPORTANT:
             // Create exactly one XY instance and retain it for the
             // application lifetime, per the XYRestricted consumer guide.
-            _xy = new XY();
-            _xy.TagDataChanged += OnTagDataChanged;
+            _xy = _connectionFactory?.Invoke() ?? new XyRestrictedConnection();
+            _xy.TagUpdated += OnTagDataChanged;
 
             bool connected = _xy.IsConnected;
 
@@ -365,14 +371,14 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         if (_xy is null || !_xy.IsConnected)
             throw new InvalidOperationException("PLC connection was lost before readback.");
 
-        var waiters = new List<(string TagName, float[] Expected, TaskCompletionSource<TagDataChangedEventArgs> Waiter)>();
+        var waiters = new List<(string TagName, float[] Expected, TaskCompletionSource<PlcTagUpdate> Waiter)>();
 
         try
         {
             foreach ((XyTag tag, float[] values) in writes)
             {
                 string tagName = tag.ToTagName();
-                var tcs = new TaskCompletionSource<TagDataChangedEventArgs>(
+                var tcs = new TaskCompletionSource<PlcTagUpdate>(
                     TaskCreationOptions.RunContinuationsAsynchronously);
 
                 if (!_pendingReadbacks.TryAdd(tagName, tcs))
@@ -390,9 +396,9 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeoutCts.CancelAfter(_settings.ReadbackTimeoutMilliseconds);
 
-            foreach ((string tagName, float[] expected, TaskCompletionSource<TagDataChangedEventArgs> waiter) in waiters)
+            foreach ((string tagName, float[] expected, TaskCompletionSource<PlcTagUpdate> waiter) in waiters)
             {
-                TagDataChangedEventArgs readback;
+                PlcTagUpdate readback;
 
                 try
                 {
@@ -461,7 +467,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
 
         // Register a waiter for this tag, ask the PLC to read it, and wait for the
         // value to arrive through OnTagDataChanged (or time out).
-        var tcs = new TaskCompletionSource<TagDataChangedEventArgs>(
+        var tcs = new TaskCompletionSource<PlcTagUpdate>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         if (!_pendingReadbacks.TryAdd(tagName, tcs))
@@ -477,7 +483,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeoutCts.CancelAfter(_settings.ReadbackTimeoutMilliseconds);
 
-            TagDataChangedEventArgs readback = await tcs.Task
+            PlcTagUpdate readback = await tcs.Task
                 .WaitAsync(timeoutCts.Token)
                 .ConfigureAwait(false);
 
@@ -512,7 +518,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
     /// </summary>
     /// <param name="sender">The source of the event.</param>
     /// <param name="e">The event data.</param>
-    private void OnTagDataChanged(object? sender, TagDataChangedEventArgs e)
+    private void OnTagDataChanged(object? sender, PlcTagUpdate e)
     {
         if (_disposed)
             return;
@@ -598,11 +604,11 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
     }
 
     /// <summary>
-    /// Flattens the numeric values from the TagDataChangedEventArgs into a single array of doubles, handling nested collections and string representations of numbers.
+    /// Flattens the numeric values from the PlcTagUpdate into a single array of doubles, handling nested collections and string representations of numbers.
     /// </summary>
     /// <param name="e">The event data containing the values to flatten.</param>
     /// <returns>An array of doubles representing the flattened numeric values.</returns>
-    private static double[] FlattenNumericValues(TagDataChangedEventArgs e)
+    private static double[] FlattenNumericValues(PlcTagUpdate e)
     {
         var values = new List<double>();
         AddNumeric(e.Values, values);
@@ -736,7 +742,7 @@ public sealed class XyRestrictedPlcService(PlcIntegrationSettings settings) : ID
         if (_xy is null)
             return;
 
-        _xy.TagDataChanged -= OnTagDataChanged;
+        _xy.TagUpdated -= OnTagDataChanged;
         _xy.Dispose();
         _xy = null;
     }

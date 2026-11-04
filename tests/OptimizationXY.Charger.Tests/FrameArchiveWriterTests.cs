@@ -40,7 +40,7 @@ public class FrameArchiveWriterTests
     }
 
     [Fact]
-    public void AFullQueueWritesTheFrameImmediatelyInsteadOfDroppingIt()
+    public void AForegroundWriteHappensImmediately()
     {
         string folder = Path.Combine(Path.GetTempPath(), "oxy-archive-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -51,7 +51,6 @@ public class FrameArchiveWriterTests
             image.SetTo(new MCvScalar(200));
             string path = Path.Combine(folder, "Frame_0001.png");
 
-            // Capacity 0 counts as 1; force the "written now" path with a backlog check of the result.
             bool queued = FrameArchiveWriter.Write(path, image, inBackground: false, capacity: 1);
 
             Assert.False(queued);
