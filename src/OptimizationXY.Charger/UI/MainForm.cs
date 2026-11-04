@@ -18,6 +18,7 @@ using OptimizationXY.Charger.Services.Configuration;
 using OptimizationXY.Charger.Services.Core;
 using OptimizationXY.Charger.Services.Operator;
 using OptimizationXY.Charger.Services.Plc;
+using OptimizationXY.Charger.Services.Storage;
 using OptimizationXY.Charger.UI.Forms;
 
 namespace OptimizationXY.Charger.UI;
@@ -476,6 +477,9 @@ public partial class MainForm : Form
             {
                 Logger.Warn("The application closed before the last scan record finished saving.");
             }
+
+            // The last blocks' frame PNGs may still be on the archive thread.
+            FrameArchiveWriter.Flush(TimeSpan.FromSeconds(30));
 
             _processingCoordinator = null;
 
