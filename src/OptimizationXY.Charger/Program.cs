@@ -17,6 +17,8 @@
 //        --import-calibration-images ... -> CalibrationImageImportRunner
 //        --replay-batch ...              -> BatchReplayRunner
 //        --replay ...                    -> OfflineReplayRunner
+//        --bench ...                     -> ProductionBench (fake PLC)
+//        --golden-record ...             -> GoldenScans (record expected answers)
 //      (--set Name=Value can be added to replays to try a setting change.)
 //   6. Otherwise opens MainForm, the normal operator screen used on the
 //      production computer.
@@ -101,6 +103,24 @@ internal static class Program
             {
                 Logger.Info("Batch replay requested; the operator form will not be opened.");
                 OptimizationXY.Charger.Services.Replay.BatchReplayRunner.Run(commandLine);
+                return;
+            }
+
+            // Mode 2b - bench: the production cycle (handshake, processing, payload,
+            // stroke guard, readiness, PLC write + readback) on saved scans against
+            // an in-memory PLC. No cameras, no real PLC, no SQL.
+            if (OptimizationXY.Charger.Services.Replay.ProductionBench.IsRequested(commandLine))
+            {
+                Logger.Info("Bench requested; the operator form will not be opened.");
+                OptimizationXY.Charger.Services.Replay.ProductionBench.Run(commandLine);
+                return;
+            }
+
+            // Mode 2c - record the answers of golden scans (see GoldenScans).
+            if (OptimizationXY.Charger.Services.Replay.GoldenScans.IsRecordRequested(commandLine))
+            {
+                Logger.Info("Golden scan recording requested; the operator form will not be opened.");
+                OptimizationXY.Charger.Services.Replay.GoldenScans.Record(commandLine);
                 return;
             }
 

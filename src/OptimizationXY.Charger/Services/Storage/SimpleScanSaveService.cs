@@ -265,13 +265,29 @@ public sealed class SimpleScanSaveService
                     destinationPath,
                     ".png");
 
-                CvInvoke.Imwrite(destinationPath, frame.GrayImage);
+                ScanStorageSettings storage = state.Settings.Storage ?? new();
 
-                if (!File.Exists(destinationPath) ||
-                    new FileInfo(destinationPath).Length == 0)
+                if (storage.BackgroundFrameArchive)
                 {
-                    throw new IOException(
-                        $"Failed to save captured frame {sequenceIndex}.");
+                    // Written on the archive thread (FrameArchiveWriter) so the
+                    // next block does not wait for PNG encoding; a full queue
+                    // writes the frame here instead, so no frame is ever dropped.
+                    FrameArchiveWriter.Write(
+                        destinationPath,
+                        frame.GrayImage,
+                        inBackground: true,
+                        storage.FrameArchiveQueueCapacity);
+                }
+                else
+                {
+                    CvInvoke.Imwrite(destinationPath, frame.GrayImage);
+
+                    if (!File.Exists(destinationPath) ||
+                        new FileInfo(destinationPath).Length == 0)
+                    {
+                        throw new IOException(
+                            $"Failed to save captured frame {sequenceIndex}.");
+                    }
                 }
             }
             else
