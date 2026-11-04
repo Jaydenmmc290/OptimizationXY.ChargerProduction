@@ -1015,6 +1015,17 @@ public sealed class PlcIntegrationSettings
 
     /// <summary>How long to wait for ScanComplete before giving up on the scan, in milliseconds.</summary>
     public int ScanCompleteTimeoutMilliseconds { get; set; } = 30000;
+
+    /// <summary>
+    /// How long the XY PLC waits after its own ScanComplete for this program's
+    /// result before it positions the block on its own fallback (about 18 s,
+    /// measured by the Rebuild program in Sept 2026). Used only to report a late
+    /// result; nothing is blocked.
+    /// </summary>
+    public double PlcResultWindowSeconds { get; set; } = 18.0;
+
+    /// <summary>A result written later than this after ScanComplete is logged as a WARNING.</summary>
+    public double LateResultWarningSeconds { get; set; } = 15.0;
 }
 
 /// <summary>

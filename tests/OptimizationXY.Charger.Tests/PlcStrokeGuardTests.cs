@@ -261,3 +261,18 @@ public class PlcStrokeGuardTests
         Assert.True(Math.Abs(x.XAfterRotationAfter[1]) <= 1.705);
     }
 }
+
+public class PlcResultWindowTests
+{
+    [Theory]
+    [InlineData(4.2, false, "(PLC waits 18 s)")]
+    [InlineData(15.5, true, "close to the PLC's 18 s wait")]
+    [InlineData(21.0, true, "fallback may already have positioned")]
+    public void Describe_SaysHowCloseTheResultCameToThePlcsWait(double seconds, bool late, string expected)
+    {
+        string text = PlcResultWindow.Describe(seconds, 15.0, 18.0, out bool isLate);
+
+        Assert.Equal(late, isLate);
+        Assert.Contains(expected, text);
+    }
+}
